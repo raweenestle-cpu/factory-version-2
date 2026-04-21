@@ -706,15 +706,24 @@ const SCHED={
     document.getElementById('swl').textContent='สัปดาห์ที่ '+wn;
     const ws=S.wkStart;
     const th=document.getElementById('sth');
-    if(th)th.innerHTML=`<tr><th class="sc">กะ / แผนก</th>${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th>${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;}).join('')}</tr>`;
+    if(th)th.innerHTML=`
+      <tr>
+        <th class="sc" rowspan="2">แผนก</th>
+        ${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+          return`<th colspan="3" style="text-align:center">${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;
+        }).join('')}
+      </tr>
+      <tr>
+        ${DAYS.map(()=>SHS.map(sh=>`<th style="font-size:9px;font-weight:700;min-width:85px;background:var(--bg3)">${SHTH[sh].replace('กะ','')}</th>`).join('')).join('')}
+      </tr>`;
     const tb=document.getElementById('stb');if(!tb)return;
     let html='';
-    SHS.forEach(sh=>{
-      depts.forEach(dept=>{
-        const isLocked=LOCK_D.includes(dept)&&S.sys==='fill';
-        html+=`<tr><td class="sn">${SHTH[sh]}<br><span style="font-size:10px;color:var(--text3)">${dept}</span></td>`;
-        for(let di=0;di<6;di++){
-          if(isLocked&&sh!=='morning'){html+=`<td style="background:rgba(255,255,255,.02)"><div style="text-align:center;padding:8px;font-size:10px;color:var(--text3)">🔒</div></td>`;continue;}
+    depts.forEach(dept=>{
+      const isLocked=LOCK_D.includes(dept)&&S.sys==='fill';
+      html+=`<tr><td class="sn">${dept}</td>`;
+      for(let di=0;di<6;di++){
+        SHS.forEach(sh=>{
+          if(isLocked&&sh!=='morning'){html+=`<td style="background:rgba(255,255,255,.02)"><div style="text-align:center;padding:4px;font-size:10px;color:var(--text3)">🔒</div></td>`;return;}
           const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
           let otTime='';
           html+=`<td>${ws2.map(w=>{
@@ -723,9 +732,9 @@ const SCHED={
             const ne=w.name.replace(/'/g,"\\'");
             return `<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">${w.name}${w.ot?`<span class="ot-t">${otTime}</span>`:''}${sg?'✅':w.ot?'✍️':''}</span>`;
           }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
-        }
-        html+='</tr>';
-      });
+        });
+      }
+      html+='</tr>';
     });
     tb.innerHTML=html;
     this.renderAL(sched,wk);
