@@ -472,6 +472,14 @@ const AUTH={
     const pin=document.getElementById('lp').value.trim();
     const err=document.getElementById('le');
     if(this.mode==='admin'){
+      // เช็ค admin pin ของพนักงานแต่ละคนก่อน
+      const allEmps=[...D.getEmps('proc'),...D.getEmps('fill')];
+      const adminEmp=allEmps.find(e=>e.isAdmin&&e.adminPin&&e.adminPin===pin);
+      if(adminEmp){
+        S.user={name:adminEmp.name,isAdmin:true,emp:adminEmp};
+        this.enter();return;
+      }
+      // fallback: master admin pin
       if(pin===D.getPin()){S.user={name:'Admin',isAdmin:true};this.enter();}
       else{err.textContent='❌ รหัสผ่านไม่ถูกต้อง';document.getElementById('lp').value='';}
     }else{
@@ -485,7 +493,7 @@ const AUTH={
     document.getElementById('pg-login').classList.add('hide');
     document.getElementById('app').classList.remove('hide');
     document.getElementById('un').textContent=S.user.name;
-    document.getElementById('ub').textContent=S.user.isAdmin?'ADMIN':'พนักงาน';
+    document.getElementById('ub').textContent=S.user.isAdmin?'👑 ADMIN':'พนักงาน';
     document.getElementById('ub').style.background=S.user.isAdmin?'var(--amber)':'var(--teal)';
     document.getElementById('ua').textContent=S.user.name.charAt(0);
     APP.init();
@@ -1082,6 +1090,17 @@ const EMP={
       <div class="fg"><label class="fl">แผนกสำรอง 1</label><select class="fs" id="ef-s1"><option value="">-- ไม่มี --</option>${depts.map(d=>`<option ${emp?.sub1===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">แผนกสำรอง 2</label><select class="fs" id="ef-s2"><option value="">-- ไม่มี --</option>${depts.map(d=>`<option ${emp?.sub2===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">Lock กะ</label><select class="fs" id="ef-lk"><option value="">-- หมุนปกติ --</option><option value="morning" ${emp?.lockShift==='morning'?'selected':''}>🔒 กะเช้าตลอด</option><option value="afternoon" ${emp?.lockShift==='afternoon'?'selected':''}>🔒 กะบ่ายตลอด</option><option value="night" ${emp?.lockShift==='night'?'selected':''}>🔒 กะดึกตลอด</option></select></div>
+      <div class="fg">
+        <label class="fl">👑 สิทธิ์ Admin</label>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px">
+          <input type="checkbox" id="ef-adm" ${emp?.isAdmin?'checked':''} style="width:18px;height:18px;cursor:pointer" onchange="document.getElementById('ef-adminpin-grp').style.display=this.checked?'block':'none'">
+          <label for="ef-adm" style="font-size:13px;font-weight:700;cursor:pointer">เป็น Admin</label>
+        </div>
+      </div>
+      <div class="fg" id="ef-adminpin-grp" style="${emp?.isAdmin?'':'display:none'}">
+        <label class="fl">PIN Admin (6 หลัก) ${emp?'(ว่าง=ไม่เปลี่ยน)':' *'}</label>
+        <input type="password" class="fi" id="ef-ap" maxlength="6" inputmode="numeric" placeholder="••••••" style="letter-spacing:4px;text-align:center" value="">
+      </div>
       <div class="fg"><label class="fl">รูปโปรไฟล์</label><div style="display:flex;gap:10px;align-items:center">
         <div id="ef-pv" style="width:48px;height:48px;border-radius:50%;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${emp?.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:'📷'}</div>
         <button onclick="document.getElementById('ef-pi').click()" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif">เลือกรูป</button>
@@ -1099,15 +1118,26 @@ const EMP={
     const s1=document.getElementById('ef-s1').value;
     const s2=document.getElementById('ef-s2').value;
     const lk=document.getElementById('ef-lk').value||undefined;
+    const isAdmin=document.getElementById('ef-adm')?.checked||false;
+    const adminPin=document.getElementById('ef-ap')?.value.trim()||'';
     if(!name){toast('❌ ใส่ชื่อ');return;}if(!md){toast('❌ เลือกแผนกหลัก');return;}
     const emps=D.getEmps();
-    if(idx<0&&(!pin||pin.length!==4)){toast('❌ PIN ต้อง 4 หลัก');return;}
+    if(idx<0&&(!pin||pin.length!==4)){toast('❌ PIN พนักงานต้อง 4 หลัก');return;}
     if(idx<0&&emps.find(e=>e.pin===pin)){toast('❌ PIN นี้มีอยู่แล้ว');return;}
+    if(isAdmin&&adminPin&&adminPin.length!==6){toast('❌ PIN Admin ต้อง 6 หลัก');return;}
+    if(isAdmin&&!adminPin&&idx<0){toast('❌ กรุณาใส่ PIN Admin 6 หลัก');return;}
+    // เช็คว่า Admin PIN ซ้ำกับคนอื่นไหม
+    if(adminPin&&adminPin.length===6){
+      const dup=emps.find((e,i)=>i!==idx&&e.adminPin===adminPin);
+      if(dup){toast('❌ PIN Admin ซ้ำกับ '+dup.name);return;}
+    }
     const emp=idx>=0?{...emps[idx]}:{av:Math.floor(Math.random()*8)};
     emp.name=name;emp.dept=md;emp.mainDept=md;
     if(s1)emp.sub1=s1;else delete emp.sub1;
     if(s2)emp.sub2=s2;else delete emp.sub2;
     if(lk)emp.lockShift=lk;else delete emp.lockShift;
+    emp.isAdmin=isAdmin;
+    if(adminPin&&adminPin.length===6)emp.adminPin=adminPin;
     if(pin)emp.pin=pin;
     if(this._photo)emp.photo=this._photo;
     if(idx>=0)emps[idx]=emp;else emps.push(emp);
