@@ -656,16 +656,15 @@ const PLAN={
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">เพิ่ม</button></div></div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};
     const sel=document.getElementById('ps-sel');
+    // ใช้ dp array ดึง count โดยตรงแทน dataset
     sel.onchange=function(){
       document.getElementById('pn-grp').style.display=this.value==='__new__'?'block':'none';
-      const opt=this.options[this.selectedIndex];
-      const cnt=opt.dataset.count;
-      if(cnt)document.getElementById('pc-inp').value=cnt;
+      const found=dp.find(p=>p.name===this.value);
+      if(found) document.getElementById('pc-inp').value=found.count||1;
     };
     // โหลด count ของ product แรกทันทีที่เปิด
-    if(sel.options.length && sel.options[0].value !== '__new__') {
-      const firstCnt = sel.options[0].dataset.count;
-      if(firstCnt) document.getElementById('pc-inp').value = firstCnt;
+    if(dp.length){
+      document.getElementById('pc-inp').value=dp[0].count||1;
     }
     openMo('mo-pr');
   },
