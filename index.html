@@ -655,12 +655,18 @@ const PLAN={
       <div class="fg"><label class="fl">จำนวนคน/กะ</label><input type="number" class="fi" id="pc-inp" value="3" min="1" max="30"></div>
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">เพิ่ม</button></div></div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};
-    document.getElementById('ps-sel').onchange=function(){
-        document.getElementById('pn-grp').style.display=this.value==='__new__'?'block':'none';
-        const opt=this.options[this.selectedIndex];
-        const cnt=opt.dataset.count;
-        if(cnt)document.getElementById('pc-inp').value=cnt;
-      };
+    const sel=document.getElementById('ps-sel');
+    sel.onchange=function(){
+      document.getElementById('pn-grp').style.display=this.value==='__new__'?'block':'none';
+      const opt=this.options[this.selectedIndex];
+      const cnt=opt.dataset.count;
+      if(cnt)document.getElementById('pc-inp').value=cnt;
+    };
+    // โหลด count ของ product แรกทันทีที่เปิด
+    if(sel.options.length && sel.options[0].value !== '__new__') {
+      const firstCnt = sel.options[0].dataset.count;
+      if(firstCnt) document.getElementById('pc-inp').value = firstCnt;
+    }
     openMo('mo-pr');
   },
   confirmAdd(dept,di){
