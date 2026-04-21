@@ -626,22 +626,30 @@ const PLAN={
   setCount(dept,di,ii,v){if(!this.plan[dept])this.plan[dept]={};if(!this.plan[dept][di])this.plan[dept][di]=[];if(this.plan[dept][di][ii])this.plan[dept][di][ii].count=parseInt(v)||1;},
   delProd(dept,di,ii){if(!this.plan[dept]||!this.plan[dept][di])return;this.plan[dept][di].splice(ii,1);D.savePlan(this.plan);this.render();},
   addProd(dept,di){
-    const prods=D.getProds();const dp=prods[dept]||[];
+    const prods=D.getProds();const dp=(prods[dept]||[]).map(x=>typeof x==='object'?x:{name:x,count:3});
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">➕ เพิ่ม Product — ${dept} / ${DAYS[di]}</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div><div class="md-body">
       <div class="fg"><label class="fl">Product</label>
-      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>`<option>${p}</option>`).join(''):'<option value="">ยังไม่มี Product</option>'}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
+      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>`<option value="${p.name}" data-count="${p.count}">${p.name} (${p.count} คน/กะ)</option>`).join(''):'<option value="">ยังไม่มี Product</option>'}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
       <div class="fg" id="pn-grp" style="display:none"><label class="fl">ชื่อใหม่</label><input type="text" class="fi" id="pn-inp" placeholder="ชื่อ Product..."></div>
       <div class="fg"><label class="fl">จำนวนคน/กะ</label><input type="number" class="fi" id="pc-inp" value="3" min="1" max="30"></div>
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">เพิ่ม</button></div></div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};
-    document.getElementById('ps-sel').onchange=function(){document.getElementById('pn-grp').style.display=this.value==='__new__'?'block':'none';};
+    document.getElementById('ps-sel').onchange=function(){
+        document.getElementById('pn-grp').style.display=this.value==='__new__'?'block':'none';
+        const opt=this.options[this.selectedIndex];
+        const cnt=opt.dataset.count;
+        if(cnt)document.getElementById('pc-inp').value=cnt;
+      };
     openMo('mo-pr');
   },
   confirmAdd(dept,di){
     const sel=document.getElementById('ps-sel');let prod=sel.value;
     if(prod==='__new__'){prod=document.getElementById('pn-inp').value.trim();if(!prod){toast('❌ ใส่ชื่อ Product');return;}
-      const prods=D.getProds();if(!prods[dept])prods[dept]=[];if(!prods[dept].includes(prod))prods[dept].push(prod);D.saveProds(prods);}
+      const prods2=D.getProds();if(!prods2[dept])prods2[dept]=[];
+      prods2[dept]=prods2[dept].map(x=>typeof x==='object'?x:{name:x,count:3});
+      if(!prods2[dept].find(x=>x.name===prod))prods2[dept].push({name:prod,count:3});
+      D.saveProds(prods2);}
     if(!prod){toast('❌ เลือก Product');return;}
     const cnt=parseInt(document.getElementById('pc-inp').value)||1;
     if(!this.plan[dept])this.plan[dept]={};if(!this.plan[dept][di])this.plan[dept][di]=[];
@@ -660,7 +668,7 @@ const PLAN={
       Object.entries(plan).forEach(([dept,days])=>{
         for(let di=0;di<6;di++){
           const items=(days[di]||[]);if(!items.length)continue;
-          const need=items.reduce((a,it)=>a+it.count,0);
+          const need=items.reduce((a,it)=>a+(it.count||1),0);
           const cands=emps.filter(e=>!used.has(e.name))
             .filter(e=>{if(e.lockShift&&e.lockShift!==sh)return false;return e.mainDept===dept||e.sub1===dept||e.sub2===dept;})
             .sort((a,b)=>(a.mainDept===dept?0:a.sub1===dept?1:2)-(b.mainDept===dept?0:b.sub1===dept?1:2));
@@ -1123,14 +1131,27 @@ const SET={
       </div>
     </div></div>
     <div class="sg"><div class="sg-t">🏷️ จัดการ Product</div><div style="padding:12px 14px">
-      ${depts.filter(d=>d!==AL&&!LOCK_D.includes(d)).map(dept=>`<div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:800;color:var(--blue2);margin-bottom:5px">${dept}</div>
-        ${(prods[dept]||[]).map((p,pi)=>`<div style="display:flex;gap:5px;margin-bottom:3px;align-items:center">
-          <span style="flex:1;font-size:12px;padding:5px 8px;background:var(--bg3);border-radius:6px">${p}</span>
-          <button onclick="SET.delP('${dept}',${pi})" style="width:26px;height:26px;background:rgba(220,38,38,.15);border:none;border-radius:6px;color:var(--red2);font-size:12px">✕</button>
-        </div>`).join('')}
+      ${depts.filter(d=>d!==AL&&!LOCK_D.includes(d)).map(dept=>`<div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:800;color:var(--blue2);margin-bottom:6px">${dept}</div>
+        ${(prods[dept]||[]).map((p,pi)=>{
+          const pname=typeof p==='object'?p.name:p;
+          const pcount=typeof p==='object'?p.count:3;
+          const dk=dept.replace(/[\s/]/g,'_');
+          return`<div style="display:flex;gap:5px;margin-bottom:5px;align-items:center;padding:7px 9px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+            <span style="flex:1;font-size:12px;font-weight:700">${pname}</span>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <input type="number" min="1" max="50" value="${pcount}"
+                onchange="SET.updPCount('${dept}',${pi},parseInt(this.value)||1)"
+                style="width:48px;padding:4px 6px;background:var(--bg2);border:1.5px solid var(--blue);border-radius:6px;color:var(--text);font-size:12px;text-align:center;font-family:'Sarabun',sans-serif">
+              <label style="font-size:10px;color:var(--text3)">คน/กะ</label>
+            </div>
+            <button onclick="SET.delP('${dept}',${pi})" style="width:26px;height:26px;background:rgba(220,38,38,.15);border:none;border-radius:6px;color:var(--red2);font-size:12px">✕</button>
+          </div>`;
+        }).join('')}
         <div style="display:flex;gap:5px;margin-top:4px">
           <input type="text" class="fi" id="np-${dept.replace(/[\s/]/g,'_')}" placeholder="ชื่อ Product..." style="flex:1;padding:6px 8px;font-size:12px">
+          <input type="number" min="1" max="50" value="3" id="nc-${dept.replace(/[\s/]/g,'_')}" style="width:52px;padding:6px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;text-align:center;font-family:'Sarabun',sans-serif">
+          <label style="font-size:10px;color:var(--text3);align-self:center">คน</label>
           <button onclick="SET.addP('${dept}')" style="padding:6px 10px;background:var(--teal);border:none;border-radius:7px;color:#fff;font-size:12px;font-family:'Sarabun',sans-serif">+</button>
         </div>
       </div>`).join('')}
@@ -1163,8 +1184,29 @@ const SET={
   addD(){const n=document.getElementById('nd').value.trim();if(!n){toast('❌ ใส่ชื่อแผนก');return;}const d=D.getDepts();if(d.includes(n)){toast('❌ มีอยู่แล้ว');return;}d.push(n);D.saveDepts(d);this.render();SCHED.render();toast('✅ เพิ่ม '+n);},
   editD(i){const d=D.getDepts();const n=prompt('แก้ไขชื่อแผนก:',d[i]);if(!n||!n.trim())return;d[i]=n.trim();D.saveDepts(d);this.render();SCHED.render();toast('✅ แก้ไขแล้ว');},
   delD(i){const d=D.getDepts();if(d.length<=1){toast('❌ ต้องมีอย่างน้อย 1');return;}confirm2('ลบแผนก '+d[i]+'?',()=>{d.splice(i,1);D.saveDepts(d);this.render();SCHED.render();toast('🗑️ ลบแล้ว');});},
-  addP(dept){const inp=document.getElementById('np-'+dept.replace(/[\s/]/g,'_'));const n=inp?.value.trim();if(!n){toast('❌ ใส่ชื่อ Product');return;}const p=D.getProds();if(!p[dept])p[dept]=[];if(p[dept].includes(n)){toast('❌ มีอยู่แล้ว');return;}p[dept].push(n);D.saveProds(p);this.render();toast('✅ เพิ่ม '+n);},
-  delP(dept,i){const p=D.getProds();p[dept].splice(i,1);D.saveProds(p);this.render();},
+  updPCount(dept,pi,cnt){
+    const p=D.getProds();
+    if(!p[dept]||!p[dept][pi])return;
+    p[dept]=p[dept].map(x=>typeof x==='object'?x:{name:x,count:3});
+    p[dept][pi].count=cnt;
+    D.saveProds(p);toast('✅ อัพเดท '+p[dept][pi].name+' = '+cnt+' คน/กะ');
+  },
+  addP(dept){
+    const dk=dept.replace(/[\s/]/g,'_');
+    const inp=document.getElementById('np-'+dk);
+    const cinp=document.getElementById('nc-'+dk);
+    const n=inp?.value.trim();
+    if(!n){toast('❌ ใส่ชื่อ Product');return;}
+    const cnt=parseInt(cinp?.value)||3;
+    const p=D.getProds();
+    if(!p[dept])p[dept]=[];
+    // normalize เป็น object
+    p[dept]=p[dept].map(x=>typeof x==='object'?x:{name:x,count:3});
+    if(p[dept].find(x=>x.name===n)){toast('❌ มีอยู่แล้ว');return;}
+    p[dept].push({name:n,count:cnt});
+    D.saveProds(p);this.render();toast('✅ เพิ่ม '+n+' ('+cnt+' คน/กะ)');
+  },
+  delP(dept,i){const p=D.getProds();if(!p[dept])return;p[dept].splice(i,1);D.saveProds(p);this.render();toast('🗑️ ลบแล้ว');},
   chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
