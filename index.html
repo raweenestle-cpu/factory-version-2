@@ -266,6 +266,14 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
       <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">⚡ โหลด</button>
       <button class="btn-p btn-green" onclick="PLAN.save()">💾 บันทึก</button>
     </div>
+    <!-- Team status -->
+    <div id="plan-team-bar" style="padding:10px 14px;background:var(--navy);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:800;color:var(--text2)">สัปดาห์นี้:</span>
+      <span id="plan-team-a" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(37,99,235,.3);color:var(--blue2)">ทีม A: -</span>
+      <span id="plan-team-b" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(13,148,136,.3);color:var(--teal)">ทีม B: -</span>
+      <span id="plan-team-c" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(124,58,237,.3);color:#A78BFA">ทีม C: -</span>
+      <button onclick="PLAN.autoLoad()" style="margin-left:auto;padding:5px 12px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">⚡ โหลดพนักงาน</button>
+    </div>
     <div class="plan-wrap"><table class="plan-tbl"><thead id="pth"></thead><tbody id="ptb"></tbody></table></div>
   </div>
 
@@ -321,6 +329,39 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
     <div class="set-list" id="sl"></div>
   </div>
 
+  <!-- TEAM PAGE -->
+  <div class="page" id="pg-team">
+    <div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:15px;font-weight:900;flex:1">👥 ระบบทีม A/B/C</h2>
+      <button onclick="TEAM.autoLoadAll()" style="padding:8px 14px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">⚡ โหลดทุกทีม</button>
+    </div>
+    <!-- Team config -->
+    <div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;font-weight:700;color:var(--text2)">🔄 หมุนกะทุก</span>
+      <input type="number" min="1" max="52" id="team-rotate-wk" value="2"
+        style="width:50px;padding:5px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;text-align:center;font-family:'Sarabun',sans-serif"
+        onchange="TEAM.saveRotate(this.value)">
+      <span style="font-size:12px;font-weight:700;color:var(--text2)">สัปดาห์</span>
+      <div id="team-cur-label" style="font-size:11px;color:var(--green2);font-weight:700;flex:1;text-align:right"></div>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:14px" id="team-content"></div>
+  </div>
+
+  <!-- LEAVE PAGE -->
+  <div class="page" id="pg-leave">
+    <div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:15px;font-weight:900;flex:1">📋 การขอลา</h2>
+      <div id="leave-pending-badge" style="display:none;background:var(--red2);color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:10px">รออนุมัติ 0</div>
+    </div>
+    <!-- Tabs -->
+    <div style="display:flex;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0">
+      <button class="ot-stab active" id="lv-tab-pending" onclick="LEAVE.setTab('pending')">🟡 รออนุมัติ</button>
+      <button class="ot-stab" id="lv-tab-approved" onclick="LEAVE.setTab('approved')">✅ อนุมัติแล้ว</button>
+      <button class="ot-stab" id="lv-tab-all" onclick="LEAVE.setTab('all')">📋 ทั้งหมด</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;padding:14px" id="leave-list"></div>
+  </div>
+
   <!-- PWA Banner -->
   <div id="pwa-banner" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:500;width:calc(100% - 28px);max-width:380px">
     <div style="background:linear-gradient(135deg,#1E3A5F,#1E293B);border:1px solid rgba(37,99,235,.4);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
@@ -340,6 +381,8 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
     <button class="nav-item" id="nav-sched" onclick="APP.goPage('pg-sched')"><span class="nav-icon">📅</span>ตารางกะ</button>
     <button class="nav-item" id="nav-ot" onclick="APP.goPage('pg-ot')"><span class="nav-icon">👤</span>OT</button>
     <button class="nav-item" id="nav-emp" onclick="APP.goPage('pg-emp')"><span class="nav-icon">👥</span>พนักงาน</button>
+    <button class="nav-item" id="nav-team" onclick="APP.goPage('pg-team',true)"><span class="nav-icon">🔄</span>ทีม</button>
+    <button class="nav-item" id="nav-leave" onclick="APP.goPage('pg-leave')"><span class="nav-icon">📋</span>การลา</button>
     <button class="nav-item" id="nav-settings" onclick="APP.goPage('pg-settings',true)"><span class="nav-icon">⚙️</span>ตั้งค่า</button>
   </div>
 </div>
@@ -442,6 +485,15 @@ const D={
   savePlan(p,sys=S.sys){LS.set('plan_'+sys,p);FB.set(sys+'/plan',p);},
   getSign(k){return LS.get('sg_'+k,null);},
   saveSign(k,v){LS.set('sg_'+k,v);FB.set('signs/'+k,v);},
+  getLeave(){
+    // ดึงเฉพาะที่ approved แล้ว — แปลงเป็น {name:[dates]}
+    const reqs=this.getLeaveReq().filter(r=>r.status==='approved');
+    const result={};
+    reqs.forEach(r=>{if(!result[r.name])result[r.name]=[];result[r.name].push(r.date);});
+    return result;
+  },
+  getLeaveReq(){return LS.get('leave_req',[]);},
+  saveLeaveReq(l){LS.set('leave_req',l);FB.set('leave_req',l);},
   getOTLog(sys=S.sys){return LS.get('otlog_'+sys,[]);},
   saveOTLog(l,sys=S.sys){LS.set('otlog_'+sys,l);FB.set(sys+'/otlog',l);},
 };
@@ -514,7 +566,7 @@ const AUTH={
 const APP={
   init(){
     this.syncFB();
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
+    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();
   },
   syncFB(){
     ['proc','fill'].forEach(sys=>{
@@ -526,6 +578,8 @@ const APP={
       FB.on(sys+'/otlog',v=>{if(v){LS.set('otlog_'+sys,v);DASH.renderPareto();}});
     });
     FB.on('config/admin_pin',v=>{if(v)LS.set('admin_pin',v);});
+    FB.on('team_cfg',v=>{if(v)LS.set('team_cfg',v);});
+    FB.on('leave_req',v=>{if(v){LS.set('leave_req',v);LEAVE.render();LEAVE.updBadge();}});
     FB.on('config/max_ot',v=>{if(v)LS.set('max_ot',v);});
     FB.on('config/ot_reasons',v=>{if(v&&v.length)LS.set('ot_reasons',v);});
     // sched current week
@@ -543,7 +597,7 @@ const APP={
     S.sys=sys;
     document.getElementById('sp').classList.toggle('active',sys==='proc');
     document.getElementById('sf').classList.toggle('active',sys==='fill');
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
+    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();
   },
   goPage(id,adminOnly=false){
     if(adminOnly&&!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}
@@ -558,6 +612,8 @@ const APP={
     else if(id==='pg-ot')OT.render();
     else if(id==='pg-emp')EMP.render();
     else if(id==='pg-settings')SET.render();
+    else if(id==='pg-team')TEAM.render();
+    else if(id==='pg-leave'){LEAVE.render();}
   }
 };
 const DASH={
@@ -643,9 +699,19 @@ const PLAN={
   render(){
     const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));
+    // อัพเดท team bar
+    const shifts=TEAM.getCurShifts();
+    const shTH={'morning':'กะเช้า','afternoon':'กะบ่าย','night':'กะดึก'};
+    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
+    const ta=document.getElementById('plan-team-a');
+    const tb=document.getElementById('plan-team-b');
+    const tc=document.getElementById('plan-team-c');
+    if(ta)ta.textContent='ทีม A: '+shifts.A;
+    if(tb)tb.textContent='ทีม B: '+shifts.B;
+    if(tc)tc.textContent='ทีม C: '+shifts.C;
     const th=document.getElementById('pth');if(th)th.innerHTML=`<tr><th class="dc">แผนก / Line</th>${DAYS.map(d=>`<th>${d}</th>`).join('')}</tr>`;
-    const tb=document.getElementById('ptb');if(!tb)return;
-    tb.innerHTML=depts.map(dept=>`<tr><td class="dn">${dept}</td>${Array.from({length:6},(_,di)=>{
+    const tbEl=document.getElementById('ptb');if(!tbEl)return;
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class="dn">${dept}</td>${Array.from({length:6},(_,di)=>{
       const items=(this.plan[dept]||{})[di]||[];
       const dkey=dept.replace(/[\s/]/g,'_');
       return `<td><div>${items.map((item,ii)=>`<div class="pp"><div class="pp-name">${item.product}</div><div class="pp-count"><input type="number" min="1" max="20" value="${item.count||1}" oninput="PLAN.setCount('${dept}',${di},${ii},this.value)"><label>คน/กะ</label></div><button class="pp-del" onclick="PLAN.delProd('${dept}',${di},${ii})">✕</button></div>`).join('')}<button class="pa-btn" onclick="PLAN.addProd('${dept}',${di})">+ เพิ่ม Product</button></div></td>`;
@@ -693,33 +759,81 @@ const PLAN={
   autoLoad(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
     const emps=D.getEmps();if(!emps.length){alert2('ยังไม่มีพนักงาน','❌');return;}
-    const wk=wKey(S.wkStart);const allSched=D.getSched();if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    const wk=wKey(S.wkStart);const allSched=D.getSched();
+    if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
     Object.keys(sched).forEach(k=>delete sched[k]);
     const plan=this.plan;const used=new Set();const short=[];
-    const empMap=new Map(emps.map(e=>[e.name,e]));
+
+    // ข้อมูลการลา
+    const leaveData=D.getLeave();
+    const allEmpsPool=D.getEmps();
+
+    // helper: หามือรองของแผนก
+    function findSub(dept,di,sh,excludeNames){
+      const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+      const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+      return allEmpsPool.filter(e=>{
+        if(excludeNames.has(e.name))return false;
+        if(e.lockShift&&e.lockShift!==sh)return false;
+        const myLv=leaveData[e.name]||[];if(myLv.includes(dk))return false;
+        return e.sub1===dept||e.sub2===dept;
+      }).sort((a,b)=>(a.sub1===dept?0:1)-(b.sub1===dept?0:1));
+    }
+
+    // ดึง shift ของแต่ละทีมสัปดาห์นี้
+    const teamShifts=TEAM.getCurShifts();
+    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
+
+    // โหลดพนักงานตามทีม — lock กะตามทีม
+    emps.forEach(e=>{
+      if(!e.team)return;
+      const sh=shMap[teamShifts[e.team]];
+      if(!sh)return;
+      // ถ้ามี lockShift ให้ใช้ lockShift แทน
+      const actualSh=e.lockShift||sh;
+      const dept=e.mainDept||e.dept;
+      if(!dept)return;
+      const depts=D.getDepts();
+      if(!depts.includes(dept)&&dept!==AL)return;
+      if(!sched[dept])sched[dept]={};
+      for(let di=0;di<6;di++){
+        if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+        if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
+        if(!used.has(e.name)&&checkRest(e.name,di,actualSh,sched)){
+          if(!sched[dept][di][actualSh].find(w=>w.name===e.name)){
+            sched[dept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+          }
+        }
+      }
+      used.add(e.name);
+    });
+
+    // ตรวจสอบว่า plan มีที่ไหนขาดคนบ้าง
+    const depts2=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
     SHS.forEach(sh=>{
       Object.entries(plan).forEach(([dept,days])=>{
         for(let di=0;di<6;di++){
           const items=(days[di]||[]);if(!items.length)continue;
           const need=items.reduce((a,it)=>a+(it.count||1),0);
-          const cands=emps.filter(e=>!used.has(e.name))
-            .filter(e=>{if(e.lockShift&&e.lockShift!==sh)return false;return e.mainDept===dept||e.sub1===dept||e.sub2===dept;})
-            .sort((a,b)=>(a.mainDept===dept?0:a.sub1===dept?1:2)-(b.mainDept===dept?0:b.sub1===dept?1:2));
-          const valid=cands.filter(e=>checkRest(e.name,di,sh,sched));
-          const picked=valid.slice(0,need);
-          picked.forEach(e=>used.add(e.name));
-          if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
-          sched[dept][di][sh]=picked.map(e=>({name:e.name,ot:false,otHrs:4,av:e.av||0}));
-          if(picked.length<need)short.push(`${dept} ${DAYS[di]} ${SHTH[sh]}: ขาด ${need-picked.length} คน`);
+          const have=(sched[dept]?.[di]?.[sh]||[]).length;
+          if(have<need)short.push(`${dept} ${DAYS[di]} ${SHTH[sh]}: ขาด ${need-have} คน`);
         }
       });
     });
-    // AL
+
+    // คนที่ไม่มีทีมหรือเหลือ → AL
     const alEmps=emps.filter(e=>!used.has(e.name));
     if(!sched[AL])sched[AL]={};
-    for(let di=0;di<6;di++){sched[AL][di]={morning:[],afternoon:[],night:[]};
-      SHS.forEach(sh=>{sched[AL][di][sh]=alEmps.filter(e=>!e.lockShift||(e.lockShift===sh)).map(e=>({name:e.name,ot:false,otHrs:4,av:e.av||0}));});
+    for(let di=0;di<6;di++){
+      if(!sched[AL][di])sched[AL][di]={morning:[],afternoon:[],night:[]};
+      alEmps.forEach(e=>{
+        const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:'morning');
+        if(!sched[AL][di][sh])sched[AL][di][sh]=[];
+        if(!sched[AL][di][sh].find(w=>w.name===e.name))
+          sched[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+      });
     }
+
     allSched[wk]=sched;D.saveSched(allSched);SCHED.render();
     if(short.length)alert2('⚠️ พนักงานไม่พอ:\n\n'+short.join('\n'),'😟');
     else toast('✅ โหลดพนักงานสำเร็จ!');
@@ -1069,6 +1183,7 @@ const EMP={
           <div class="e-tags">${tags.map(t=>`<span class="e-tag ${t.c}">${t.l}</span>`).join('')}</div>
         </div>
         <div class="e-acts">
+          ${(!S.user?.isAdmin&&S.user?.emp?.name===e.name)||S.user?.isAdmin?`<button class="e-btn" onclick="EMP.openLeave('${e.name.replace(/'/g,"\'")}',${ri})" title="แจ้งลา" style="color:var(--amber)">📅</button>`:''}
           <button class="e-btn" onclick="EMP.toggleLock(${ri})" style="border-color:${e.lockShift?'var(--green)':'var(--border)'};color:${e.lockShift?'var(--green2)':'var(--text3)'}">🔒</button>
           <button class="e-btn" onclick="EMP.openEdit(${ri})">✏️</button>
           <button class="e-btn" onclick="EMP.del(${ri})" style="color:var(--red2)">✕</button>
@@ -1094,6 +1209,14 @@ const EMP={
       <div class="fg"><label class="fl">แผนกหลัก *</label><select class="fs" id="ef-md"><option value="">-- เลือก --</option>${depts.map(d=>`<option ${emp?.mainDept===d||emp?.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">แผนกสำรอง 1</label><select class="fs" id="ef-s1"><option value="">-- ไม่มี --</option>${depts.map(d=>`<option ${emp?.sub1===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">แผนกสำรอง 2</label><select class="fs" id="ef-s2"><option value="">-- ไม่มี --</option>${depts.map(d=>`<option ${emp?.sub2===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">👥 ทีม</label>
+        <select class="fs" id="ef-team">
+          <option value="">-- ไม่ระบุทีม --</option>
+          <option value="A" ${emp?.team==='A'?'selected':''}>ทีม A</option>
+          <option value="B" ${emp?.team==='B'?'selected':''}>ทีม B</option>
+          <option value="C" ${emp?.team==='C'?'selected':''}>ทีม C</option>
+        </select>
+      </div>
       <div class="fg"><label class="fl">Lock กะ</label><select class="fs" id="ef-lk"><option value="">-- หมุนปกติ --</option><option value="morning" ${emp?.lockShift==='morning'?'selected':''}>🔒 กะเช้าตลอด</option><option value="afternoon" ${emp?.lockShift==='afternoon'?'selected':''}>🔒 กะบ่ายตลอด</option><option value="night" ${emp?.lockShift==='night'?'selected':''}>🔒 กะดึกตลอด</option></select></div>
       <div class="fg">
         <label class="fl">👑 สิทธิ์ Admin</label>
@@ -1159,6 +1282,7 @@ const EMP={
     const s1=document.getElementById('ef-s1').value;
     const s2=document.getElementById('ef-s2').value;
     const lk=document.getElementById('ef-lk').value||undefined;
+    const team=document.getElementById('ef-team').value||undefined;
     const isAdmin=document.getElementById('ef-adm')?.checked||false;
     if(!name){toast('❌ ใส่ชื่อ');return;}
     if(!md){toast('❌ เลือกแผนกหลัก');return;}
@@ -1176,6 +1300,7 @@ const EMP={
     if(s1)emp.sub1=s1;else delete emp.sub1;
     if(s2)emp.sub2=s2;else delete emp.sub2;
     if(lk)emp.lockShift=lk;else delete emp.lockShift;
+    if(team)emp.team=team;else delete emp.team;
     emp.isAdmin=isAdmin;
     if(pin)emp.pin=pin;
     if(this._photo)emp.photo=this._photo;
@@ -1184,6 +1309,70 @@ const EMP={
     D.saveEmps(emps);closeMo('mo-e');this.render();toast('✅ '+(idx>=0?'แก้ไข':'เพิ่ม')+name);
   },
   del(i){const emps=D.getEmps();confirm2('ลบ '+emps[i].name+'?',()=>{emps.splice(i,1);D.saveEmps(emps);this.render();toast('🗑️ ลบแล้ว');});},
+  openLeave(name){
+    const leave=D.getLeave();const myLeave=leave[name]||[];
+    const ws=S.wkStart;
+    const mo=document.getElementById('mo-e');
+    mo.innerHTML=`<div class="md">
+      <div class="md-handle"></div>
+      <div class="md-hdr">
+        <div class="md-title">📅 แจ้งลา — ${name}</div>
+        <button class="md-close" onclick="closeMo('mo-e')">✕</button>
+      </div>
+      <div class="md-body">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">เลือกวันที่จะลา ระบบจะดึงมือรองมาแทนอัตโนมัติ</div>
+        ${Array.from({length:6},(_,di)=>{
+          const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+          const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+          const isLv=myLeave.includes(dk);
+          return`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isLv?'rgba(245,158,11,.1)':'var(--bg3)'};border:1.5px solid ${isLv?'var(--amber)':'var(--border)'};border-radius:10px;margin-bottom:6px">
+            <input type="checkbox" id="lv-${di}" ${isLv?'checked':''} style="width:18px;height:18px;cursor:pointer">
+            <label for="lv-${di}" style="flex:1;font-size:13px;font-weight:700;cursor:pointer">${DAYS[di]} ${d2.getDate()}/${d2.getMonth()+1}</label>
+            ${isLv?'<span style="font-size:11px;color:var(--amber);font-weight:700">🏖️ ลา</span>':''}
+          </div>`;
+        }).join('')}
+        <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--amber)">
+          ℹ️ วันที่ลา ระบบจะดึงมือรองมาแทน ถ้าไม่มีมือรอง Admin จะได้รับแจ้งเตือน
+        </div>
+      </div>
+      <div class="md-foot">
+        <button class="btn-cancel" onclick="closeMo('mo-e')">ยกเลิก</button>
+        <button class="btn-confirm" onclick="EMP.saveLeave('${name}')">✅ บันทึกการลา</button>
+      </div>
+    </div>`;
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};openMo('mo-e');
+  },
+
+  saveLeave(name){
+    const ws=S.wkStart;
+    const leaveReq=D.getLeaveReq();
+    const emp=D.getEmps().find(e=>e.name===name);
+    const days=[];
+    for(let di=0;di<6;di++){
+      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+      const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+      if(document.getElementById('lv-'+di)?.checked)days.push(dk);
+    }
+    if(!days.length){toast('❌ เลือกวันที่จะลาก่อน');return;}
+    // เพิ่ม request ใหม่
+    days.forEach(dk=>{
+      const existing=leaveReq.findIndex(r=>r.name===name&&r.date===dk);
+      if(existing>=0)return; // มีอยู่แล้ว
+      leaveReq.push({
+        id:Date.now()+'_'+dk,
+        name,
+        dept:emp?.mainDept||emp?.dept||'-',
+        date:dk,
+        status:'pending', // รออนุมัติ
+        requestAt:new Date().toISOString()
+      });
+    });
+    D.saveLeaveReq(leaveReq);
+    closeMo('mo-e');this.render();
+    LEAVE.render();
+    toast('✅ ส่งคำขอลา '+days.length+' วัน รออนุมัติจาก Admin');
+  },
+
   toggleLock(i){
     const emps=D.getEmps();const shs=[undefined,'morning','afternoon','night'];
     const cur=shs.indexOf(emps[i].lockShift);const next=shs[(cur+1)%shs.length];
@@ -1379,6 +1568,181 @@ function installPWA() {
 if('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
+
+const LEAVE={
+  tab:'pending',
+  setTab(t){
+    this.tab=t;
+    ['pending','approved','all'].forEach(x=>document.getElementById('lv-tab-'+x)?.classList.toggle('active',x===t));
+    this.render();
+  },
+  updBadge(){
+    const cnt=D.getLeaveReq().filter(r=>r.status==='pending').length;
+    const badge=document.getElementById('leave-pending-badge');
+    if(badge){badge.style.display=cnt>0?'block':'none';badge.textContent='รออนุมัติ '+cnt;}
+  },
+  render(){
+    const el=document.getElementById('leave-list');if(!el)return;
+    this.updBadge();
+    const all=D.getLeaveReq();
+    const filtered=this.tab==='pending'?all.filter(r=>r.status==='pending')
+      :this.tab==='approved'?all.filter(r=>r.status==='approved')
+      :all;
+    // เรียงตามวันที่
+    filtered.sort((a,b)=>a.date.localeCompare(b.date));
+    if(!filtered.length){
+      el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">
+        ${this.tab==='pending'?'ไม่มีคำขอรออนุมัติ':this.tab==='approved'?'ยังไม่มีการอนุมัติ':'ยังไม่มีคำขอลา'}
+      </div>`;return;
+    }
+    // จัดกลุ่มตามวันที่
+    const byDate={};
+    filtered.forEach(r=>{if(!byDate[r.date])byDate[r.date]=[];byDate[r.date].push(r);});
+    el.innerHTML=Object.entries(byDate).map(([date,reqs])=>{
+      const d=new Date(date);const ds=d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543);
+      return`<div style="margin-bottom:14px">
+        <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px;padding:6px 10px;background:var(--bg2);border-radius:8px">${DAYS[d.getDay()===0?5:d.getDay()-1]} ${ds}</div>
+        ${reqs.map(r=>{
+          const isPending=r.status==='pending';
+          const isApproved=r.status==='approved';
+          const isRejected=r.status==='rejected';
+          return`<div style="background:var(--card);border:1px solid ${isPending?'rgba(245,158,11,.4)':isApproved?'rgba(22,163,74,.4)':'rgba(220,38,38,.4)'};border-radius:12px;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${r.name.charAt(0)}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:800">${r.name}</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px">${r.dept}</div>
+            </div>
+            <div style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:8px;
+              background:${isPending?'rgba(245,158,11,.15)':isApproved?'rgba(22,163,74,.15)':'rgba(220,38,38,.15)'};
+              color:${isPending?'var(--amber)':isApproved?'var(--green2)':'var(--red2)'}">
+              ${isPending?'🟡 รออนุมัติ':isApproved?'✅ อนุมัติ':'❌ ปฏิเสธ'}
+            </div>
+            ${S.user?.isAdmin&&isPending?`
+              <button onclick="LEAVE.approve('${r.id}')" style="padding:6px 10px;background:rgba(22,163,74,.2);border:1px solid var(--green);border-radius:8px;color:var(--green2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ อนุมัติ</button>
+              <button onclick="LEAVE.reject('${r.id}')" style="padding:6px 10px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:8px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">❌ ปฏิเสธ</button>
+            `:''}
+            ${S.user?.isAdmin&&!isPending?`
+              <button onclick="LEAVE.del('${r.id}')" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px">✕</button>
+            `:''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+  },
+  approve(id){
+    const reqs=D.getLeaveReq();
+    const r=reqs.find(x=>x.id===id);if(!r)return;
+    r.status='approved';r.approvedAt=new Date().toISOString();r.approvedBy=S.user?.name||'Admin';
+    D.saveLeaveReq(reqs);this.render();
+    toast('✅ อนุมัติการลาของ '+r.name+' แล้ว');
+  },
+  reject(id){
+    const reqs=D.getLeaveReq();
+    const r=reqs.find(x=>x.id===id);if(!r)return;
+    r.status='rejected';D.saveLeaveReq(reqs);this.render();
+    toast('❌ ปฏิเสธการลาของ '+r.name);
+  },
+  del(id){
+    const reqs=D.getLeaveReq();
+    const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;
+    reqs.splice(idx,1);D.saveLeaveReq(reqs);this.render();
+    toast('🗑️ ลบแล้ว');
+  }
+};
+
+const TEAM={
+  getConfig(){return LS.get('team_cfg',{rotateSW:2,startWk:1});},
+  saveConfig(cfg){LS.set('team_cfg',cfg);FB.set('team_cfg',cfg);},
+  saveRotate(v){const cfg=this.getConfig();cfg.rotateSW=parseInt(v)||2;cfg.startWk=wNum(S.wkStart);this.saveConfig(cfg);this.render();toast('✅ หมุนทุก '+v+' สัปดาห์');},
+
+  getCurShifts(){
+    const cfg=this.getConfig();
+    const wn=wNum(S.wkStart);
+    const rot=Math.floor((wn-(cfg.startWk||1))/(cfg.rotateSW||2));
+    return{
+      A:['ดึก','บ่าย','เช้า'][rot%3],
+      B:['บ่าย','เช้า','ดึก'][rot%3],
+      C:['เช้า','ดึก','บ่าย'][rot%3],
+    };
+  },
+
+  render(){
+    const el=document.getElementById('team-content');if(!el)return;
+    const emps=D.getEmps();
+    const shifts=this.getCurShifts();
+    const cfg=this.getConfig();
+    // update rotate input
+    const ri=document.getElementById('team-rotate-wk');
+    if(ri)ri.value=cfg.rotateSW||2;
+    // update label
+    const lbl=document.getElementById('team-cur-label');
+    if(lbl)lbl.textContent=`สัปดาห์นี้: A=${shifts.A} B=${shifts.B} C=${shifts.C}`;
+
+    const teams={A:[],B:[],C:[],none:[]};
+    emps.forEach(e=>{if(e.team&&teams[e.team])teams[e.team].push(e);else teams.none.push(e);});
+
+    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
+    const colors={A:'var(--blue)',B:'var(--teal)',C:'var(--purple)'};
+
+    el.innerHTML=['A','B','C'].map(t=>`
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden">
+        <div style="background:${colors[t]};padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:14px;font-weight:900;color:#fff">ทีม ${t} — ${teams[t].length} คน</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700">กะนี้: ${shifts[t]}</div>
+        </div>
+        <div style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px">
+          ${teams[t].length?teams[t].map(e=>`
+            <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700">
+              ${e.name}<span style="font-size:10px;color:var(--text3);margin-left:4px">${e.mainDept||''}</span>
+            </div>`).join(''):'<div style="font-size:11px;color:var(--text3)">ยังไม่มีสมาชิก</div>'}
+        </div>
+        <div style="padding:0 14px 12px">
+          <button onclick="TEAM.loadTeam('${t}')" style="width:100%;padding:8px;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">
+            → โหลดทีม ${t} เข้ากะ${shifts[t]}
+          </button>
+        </div>
+      </div>`).join('')+
+      (teams.none.length?`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
+        <div style="font-size:12px;font-weight:800;color:var(--text3);margin-bottom:8px">ยังไม่ได้กำหนดทีม (${teams.none.length} คน)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${teams.none.map(e=>`<span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px">${e.name}</span>`).join('')}</div>
+      </div>`:'');
+  },
+
+  loadTeam(teamName){
+    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
+    const emps=D.getEmps();
+    const shifts=this.getCurShifts();
+    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
+    const sh=shMap[shifts[teamName]];
+    const members=emps.filter(e=>e.team===teamName);
+    if(!members.length){toast('❌ ทีม '+teamName+' ไม่มีสมาชิก');return;}
+    const wk=wKey(S.wkStart);const allSched=D.getSched();
+    if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    // กระจายสมาชิกตามแผนกหลัก
+    members.forEach(emp=>{
+      const dept=emp.mainDept||emp.dept;
+      if(!dept||!depts.includes(dept))return;
+      if(!sched[dept])sched[dept]={};
+      for(let di=0;di<6;di++){
+        if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+        if(!sched[dept][di][sh])sched[dept][di][sh]=[];
+        if(!sched[dept][di][sh].find(w=>w.name===emp.name)){
+          sched[dept][di][sh].push({name:emp.name,ot:false,otHrs:4,av:emp.av||0});
+        }
+      }
+    });
+    allSched[wk]=sched;D.saveSched(allSched);
+    SCHED.render();toast('✅ โหลดทีม '+teamName+' เข้ากะ'+shifts[teamName]+' แล้ว');
+    APP.goPage('pg-sched');
+  },
+
+  autoLoadAll(){
+    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
+    ['A','B','C'].forEach(t=>this.loadTeam(t));
+    toast('✅ โหลดทุกทีมแล้ว');
+  }
+};
 
 document.addEventListener('DOMContentLoaded',()=>{
   initFB();
