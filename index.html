@@ -618,6 +618,16 @@ const APP={
     LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
   },
   syncFB(){
+    // โหลดตารางกะสัปดาห์ปัจจุบันจาก Firebase ก่อนเสมอ
+    const wkNow=wKey(S.wkStart);
+    ['proc','fill'].forEach(sys=>{
+      FB.get(sys+'/sched/'+wkNow).then(v=>{
+        if(!v)return;
+        const all=LS.get('sched_'+sys,{});
+        all[wkNow]=v;LS.set('sched_'+sys,all);
+        if(sys===S.sys)SCHED.render();
+      });
+    });
     ['proc','fill'].forEach(sys=>{
       FB.on(sys+'/depts',v=>{if(v&&v.length){LS.set('depts_'+sys,v);if(sys===S.sys){SCHED.render();SET.render();}}});
       FB.on(sys+'/emps',v=>{if(v&&v.length){LS.set('emps_'+sys,v);if(sys===S.sys)EMP.render();updEmpCnt();}});
@@ -1159,7 +1169,7 @@ const SCHED={
       D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);
       markSaved();toast('✅ บันทึกสำเร็จ');DASH.render();
     };
-    this.showOTReason(pct,tgt,doSave,prevReasons,pct<=tgt);
+    this.showOTReason(pct,tgt,doSave,prevReasons,false); // บังคับใส่เสมอ
   },
   showOTReason(pct,tgt,onSave,existingReasons=[],canSkip=false){
     const reasons=D.getReasons();
@@ -1219,7 +1229,7 @@ const SCHED={
       <div id="or-rows"></div>
       <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ เพิ่มเหตุผล / comment</button>
     </div><div class="md-foot">
-      <button class="btn-cancel" onclick="closeMo('mo-or');${canSkip?'if(SCHED._onSave)SCHED._onSave()':''}">${canSkip?'ข้าม':'ยกเลิก'}</button>
+      <button class="btn-cancel" onclick="closeMo('mo-or')">ยกเลิก</button>
       <button class="btn-confirm" onclick="SCHED.saveOR(${pct})">💾 บันทึก</button>
     </div></div>`;
     openMo('mo-or');renderR();this._onSave=onSave;window._onSave=onSave;
@@ -1229,8 +1239,13 @@ const SCHED={
     const usedH=reasons.reduce((a,r)=>a+r.hours,0);
     const totalOTH=window._totalOTH||0;
     const remainH=totalOTH-usedH;
-    // ถ้า OT เกิน target ต้องกระจายให้ครบก่อน
-    if(pct>parseFloat(document.getElementById('set-target')?.value||15)){
+    // บังคับใส่อย่างน้อย 1 เหตุผลทุกครั้ง
+    if(!reasons.length){
+      toast('❌ กรุณาใส่อย่างน้อย 1 เหตุผล',3000);return;
+    }
+    // ถ้า OT เกิน target ต้องกระจายให้ครบ
+    const tgt2=D.getTarget();
+    if(pct>tgt2){
       if(remainH>0){
         toast('❌ ยังกระจายไม่ครบ — เหลืออีก '+remainH+' ชม.',3000);return;
       }
