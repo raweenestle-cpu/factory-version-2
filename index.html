@@ -1277,7 +1277,7 @@ const EMP={
           })()}
         </div>
         <div class="e-acts">
-          ${(!S.user?.isAdmin&&S.user?.emp?.name===e.name)||S.user?.isAdmin?`<button class="e-btn" data-name="${e.name}" data-idx="${ri}" onclick="EMP.openLeave(this.dataset.name)" title="แจ้งลา" style="color:var(--amber)">📅</button>`:''}
+          ${(!S.user?.isAdmin&&S.user?.emp?.name===e.name)||S.user?.isAdmin?`<button class="e-btn" onclick="EMP.openLeave(${ri})" title="แจ้งลา" style="color:var(--amber)">📅</button>`:''}
           <button class="e-btn" onclick="EMP.toggleLock(${ri})" style="border-color:${e.lockShift?'var(--green)':'var(--border)'};color:${e.lockShift?'var(--green2)':'var(--text3)'}">🔒</button>
           <button class="e-btn" onclick="EMP.openEdit(${ri})">✏️</button>
           <button class="e-btn" onclick="EMP.del(${ri})" style="color:var(--red2)">✕</button>
@@ -1403,61 +1403,53 @@ const EMP={
     D.saveEmps(emps);closeMo('mo-e');this.render();toast('✅ '+(idx>=0?'แก้ไข':'เพิ่ม')+name);
   },
   del(i){const emps=D.getEmps();confirm2('ลบ '+emps[i].name+'?',()=>{emps.splice(i,1);D.saveEmps(emps);this.render();toast('🗑️ ลบแล้ว');});},
-  openLeave(name){
-    const reqs=D.getLeaveReq().filter(r=>r.name===name&&r.status!=='rejected');
-    const pendingDates=reqs.filter(r=>r.status==='pending').map(r=>r.date);
-    const approvedDates=reqs.filter(r=>r.status==='approved').map(r=>r.date);
+  openLeave(idx){
+    const emps=D.getEmps();
+    const emp=typeof idx==='number'?emps[idx]:emps.find(e=>e.name===idx);
+    if(!emp){toast('❌ ไม่พบพนักงาน');return;}
+    const name=emp.name;
+    const reqs=D.getLeaveReq().filter(r=>r.name===name);
     const today=new Date();
     const minDate=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
     const mo=document.getElementById('mo-e');
-    mo.innerHTML=`<div class="md">
-      <div class="md-handle"></div>
-      <div class="md-hdr">
-        <div class="md-title">📅 แจ้งลา — ${name}</div>
-        <button class="md-close" onclick="closeMo('mo-e')">✕</button>
-      </div>
-      <div class="md-body">
-        <div class="fg">
-          <label class="fl">เลือกวันที่จะลา</label>
-          <input type="date" class="fi" id="lv-date" min="${minDate}"
-            data-name="${name}"
-            style="font-size:14px;padding:10px"
-            onchange="EMP.onLeaveDate(this.value,this.dataset.name)">
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">เลือกได้ล่วงหน้าไม่จำกัด</div>
-        </div>
-        <div id="lv-selected" style="margin-top:4px">
-          ${pendingDates.length||approvedDates.length?`
-            <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">วันที่ขอลาแล้ว:</div>
-${(()=>{
-              return myReqs.sort((a,b)=>a.date.localeCompare(b.date)).map(r=>{
-                const dt=new Date(r.date);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
-                const dayName=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'][dt.getDay()];
-                const isPend=r.status==='pending';const isApp=r.status==='approved';const isCan=r.status==='cancel_req';
-                const col=isPend?'#F59E0B':isApp?'#16A34A':isCan?'#DC2626':'#334155';
-                const bg=isPend?'rgba(245,158,11,.1)':isApp?'rgba(22,163,74,.1)':isCan?'rgba(220,38,38,.1)':'var(--bg3)';
-                const ic=isPend?'🟡 รออนุมัติ':isApp?'✅ อนุมัติ':isCan?'🔴 ขอยกเลิก':'';
-                const btnCancel=isPend?'<button data-date="'+r.date+'" data-name="'+name+'" onclick="EMP.cancelLeaveDate(this.dataset.date,this.dataset.name)" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:#EF4444;font-size:12px">✕</button>':'';
-                const btnReqCancel=isApp?'<button data-id="'+r.id+'" data-name="'+name+'" onclick="EMP.reqCancelLeave(this.dataset.id,this.dataset.name)" style="padding:3px 8px;background:rgba(220,38,38,.15);border:1px solid #DC2626;border-radius:6px;color:#EF4444;font-size:10px;font-weight:700;font-family:Sarabun,sans-serif">ขอยกเลิก</button>':'';
-                const lblWait=isCan?'<span style="font-size:10px;color:#64748B">รอ Admin</span>':'';
-                return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:'+bg+';border:1px solid '+col+';border-radius:8px;margin-bottom:4px">'+
-                  '<span style="flex:1;font-size:12px;font-weight:700">'+dayName+' '+ds+'</span>'+
-                  '<span style="font-size:10px;font-weight:800;color:'+col+'">'+ic+'</span>'+
-                  btnCancel+btnReqCancel+lblWait+'</div>';
-              }).join('');
-            })()}
-          `:'<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">ยังไม่มีคำขอลา</div>'}
-        </div>
-        <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--amber)">
-          ℹ️ หลังเลือกวัน ระบบจะส่งคำขอให้ Admin อนุมัติก่อน
-        </div>
-      </div>
-      <div class="md-foot">
-        <button class="btn-cancel" onclick="closeMo('mo-e')">ปิด</button>
-      </div>
-    </div>`;
-    mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};openMo('mo-e');
+    const listHTML=(()=>{
+      const active=reqs.filter(r=>r.status!=='rejected').sort((a,b)=>a.date.localeCompare(b.date));
+      if(!active.length)return '<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">ยังไม่มีคำขอลา</div>';
+      return active.map(r=>{
+        const dt=new Date(r.date);
+        const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+        const dayN=['อา','จ','อ','พ','พฤ','ศ','ส'][dt.getDay()];
+        const isPend=r.status==='pending';
+        const isApp=r.status==='approved';
+        const isCan=r.status==='cancel_req';
+        const col=isPend?'#F59E0B':isApp?'#16A34A':isCan?'#DC2626':'#334155';
+        const bg=isPend?'rgba(245,158,11,.1)':isApp?'rgba(22,163,74,.1)':isCan?'rgba(220,38,38,.1)':'var(--bg3)';
+        const ic=isPend?'🟡 รออนุมัติ':isApp?'✅ อนุมัติ':isCan?'🔴 ขอยกเลิก':'';
+        let btns='';
+        if(isPend) btns='<button data-date="'+r.date+'" data-name="'+name+'" onclick="EMP.cancelLeaveDate(this.dataset.date,this.dataset.name)" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:#EF4444;font-size:12px">✕</button>';
+        if(isApp) btns='<button data-id="'+r.id+'" data-idx="'+idx+'" onclick="EMP.reqCancelLeave(this.dataset.id,this.dataset.idx)" style="padding:3px 8px;background:rgba(220,38,38,.15);border:1px solid #DC2626;border-radius:6px;color:#EF4444;font-size:10px;font-weight:700;font-family:Sarabun,sans-serif">ขอยกเลิก</button>';
+        if(isCan) btns='<span style="font-size:10px;color:#64748B">รอ Admin</span>';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:'+bg+';border:1px solid '+col+';border-radius:8px;margin-bottom:4px">'+
+          '<span style="flex:1;font-size:12px;font-weight:700">'+dayN+' '+ds+'</span>'+
+          '<span style="font-size:10px;font-weight:800;color:'+col+'">'+ic+'</span>'+btns+'</div>';
+      }).join('');
+    })();
+    mo.innerHTML='<div class="md"><div class="md-handle"></div>'+
+      '<div class="md-hdr"><div class="md-title">📅 แจ้งลา — '+name+'</div>'+
+      '<button class="md-close" onclick="closeMo(&quot;mo-e&quot;)">✕</button></div>'+
+      '<div class="md-body">'+
+      '<div class="fg"><label class="fl">เลือกวันที่จะลา</label>'+
+      '<input type="date" class="fi" id="lv-date" min="'+minDate+'" data-name="'+name+'" style="font-size:14px;padding:10px" onchange="EMP.onLeaveDate(this.value,this.dataset.name)">'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:4px">เลือกได้ล่วงหน้าไม่จำกัด</div></div>'+
+      '<div style="margin-top:4px">'+
+      (reqs.filter(r=>r.status!=='rejected').length?'<div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">วันที่ขอลาแล้ว:</div>':'')+
+      listHTML+'</div>'+
+      '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--amber)">'+
+      'ℹ️ หลังเลือกวัน ระบบจะส่งคำขอให้ Admin อนุมัติก่อน</div>'+
+      '</div><div class="md-foot"><button class="btn-cancel" onclick="closeMo(&quot;mo-e&quot;)">ปิด</button></div></div>';
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};
+    openMo('mo-e');
   },
-
   onLeaveDate(date,name){
     if(!date)return;
     // เช็คซ้ำ
@@ -1475,29 +1467,30 @@ ${(()=>{
     });
     D.saveLeaveReq(reqs);
     LEAVE.render();LEAVE.updBadge();
-    // refresh modal
-    this.openLeave(name);
+    const emps2=D.getEmps();const ei2=emps2.findIndex(e=>e.name===name);
+    this.openLeave(ei2);
     const dt=new Date(date);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
     toast('✅ ส่งคำขอลาวัน '+ds+' แล้ว รออนุมัติ');
   },
 
-  reqCancelLeave(id,name){
+  reqCancelLeave(id,idx){
     const reqs=D.getLeaveReq();
     const r=reqs.find(x=>x.id===id);if(!r)return;
     r.status='cancel_req';
     r.cancelReqAt=new Date().toISOString();
     D.saveLeaveReq(reqs);
     LEAVE.render();LEAVE.updBadge();
-    this.openLeave(name);
+    this.openLeave(parseInt(idx));
     toast('✅ ส่งคำขอยกเลิกแล้ว รอ Admin อนุมัติ');
   },
   cancelLeaveDate(date,name){
     const reqs=D.getLeaveReq();
-    const idx=reqs.findIndex(r=>r.name===name&&r.date===date&&r.status==='pending');
-    if(idx<0)return;
-    reqs.splice(idx,1);D.saveLeaveReq(reqs);
+    const idx2=reqs.findIndex(r=>r.name===name&&r.date===date&&r.status==='pending');
+    if(idx2<0)return;
+    reqs.splice(idx2,1);D.saveLeaveReq(reqs);
     LEAVE.render();LEAVE.updBadge();
-    this.openLeave(name);
+    const emps=D.getEmps();const ei=emps.findIndex(e=>e.name===name);
+    this.openLeave(ei);
     toast('✅ ยกเลิกคำขอลาแล้ว');
   },
 
