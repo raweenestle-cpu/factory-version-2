@@ -362,6 +362,28 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
     <div style="overflow-y:auto;flex:1;padding:14px" id="leave-list"></div>
   </div>
 
+  <!-- LEAVE HISTORY PAGE -->
+  <div class="page" id="pg-lhist">
+    <div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:15px;font-weight:900;flex:1">📊 ประวัติการลา</h2>
+    </div>
+    <!-- Filters -->
+    <div style="padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap">
+      <select id="lh-year" onchange="LHIST.render()" style="padding:6px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;flex:1">
+      </select>
+      <select id="lh-dept" onchange="LHIST.render()" style="padding:6px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;flex:1">
+        <option value="">ทุกแผนก</option>
+      </select>
+      <select id="lh-emp" onchange="LHIST.render()" style="padding:6px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;flex:1">
+        <option value="">พนักงานทั้งหมด</option>
+      </select>
+    </div>
+    <!-- Summary bar -->
+    <div id="lh-summary" style="padding:10px 14px;background:var(--navy);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:12px"></div>
+    <!-- List -->
+    <div style="overflow-y:auto;flex:1;padding:14px" id="lh-list"></div>
+  </div>
+
   <!-- PWA Banner -->
   <div id="pwa-banner" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:500;width:calc(100% - 28px);max-width:380px">
     <div style="background:linear-gradient(135deg,#1E3A5F,#1E293B);border:1px solid rgba(37,99,235,.4);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.5)">
@@ -383,6 +405,7 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
     <button class="nav-item" id="nav-emp" onclick="APP.goPage('pg-emp')"><span class="nav-icon">👥</span>พนักงาน</button>
     <button class="nav-item" id="nav-team" onclick="APP.goPage('pg-team',true)"><span class="nav-icon">🔄</span>ทีม</button>
     <button class="nav-item" id="nav-leave" onclick="APP.goPage('pg-leave')"><span class="nav-icon">📋</span>การลา</button>
+    <button class="nav-item" id="nav-lhist" onclick="APP.goPage('pg-lhist')"><span class="nav-icon">📊</span>ประวัติลา</button>
     <button class="nav-item" id="nav-settings" onclick="APP.goPage('pg-settings',true)"><span class="nav-icon">⚙️</span>ตั้งค่า</button>
   </div>
 </div>
@@ -494,6 +517,8 @@ const D={
   },
   getLeaveReq(){return LS.get('leave_req',[]);},
   saveLeaveReq(l){LS.set('leave_req',l);FB.set('leave_req',l);},
+  getLeaveHist(){return LS.get('leave_hist',[]);},
+  saveLeaveHist(l){LS.set('leave_hist',l);FB.set('leave_hist',l);},
   getOTLog(sys=S.sys){return LS.get('otlog_'+sys,[]);},
   saveOTLog(l,sys=S.sys){LS.set('otlog_'+sys,l);FB.set(sys+'/otlog',l);},
 };
@@ -566,7 +591,7 @@ const AUTH={
 const APP={
   init(){
     this.syncFB();
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();
+    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();LEAVE.archivePast();
   },
   syncFB(){
     ['proc','fill'].forEach(sys=>{
@@ -580,6 +605,7 @@ const APP={
     FB.on('config/admin_pin',v=>{if(v)LS.set('admin_pin',v);});
     FB.on('team_cfg',v=>{if(v)LS.set('team_cfg',v);});
     FB.on('leave_req',v=>{if(v){LS.set('leave_req',v);LEAVE.render();LEAVE.updBadge();}});
+    FB.on('leave_hist',v=>{if(v)LS.set('leave_hist',v);});
     FB.on('config/max_ot',v=>{if(v)LS.set('max_ot',v);});
     FB.on('config/ot_reasons',v=>{if(v&&v.length)LS.set('ot_reasons',v);});
     // sched current week
@@ -597,7 +623,7 @@ const APP={
     S.sys=sys;
     document.getElementById('sp').classList.toggle('active',sys==='proc');
     document.getElementById('sf').classList.toggle('active',sys==='fill');
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();
+    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();LEAVE.archivePast();
   },
   goPage(id,adminOnly=false){
     if(adminOnly&&!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}
@@ -614,6 +640,7 @@ const APP={
     else if(id==='pg-settings')SET.render();
     else if(id==='pg-team')TEAM.render();
     else if(id==='pg-leave'){LEAVE.render();}
+    else if(id==='pg-lhist'){LHIST.render();}
   }
 };
 const DASH={
@@ -1601,6 +1628,95 @@ if('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 
+const LHIST={
+  render(){
+    // Archive past approved leaves ก่อน
+    LEAVE.archivePast();
+    const hist=D.getLeaveHist();
+    const emps=D.getEmps();
+    const depts=D.getDepts();
+    const el=document.getElementById('lh-list');if(!el)return;
+
+    // ดึงปีที่มีข้อมูล
+    const years=[...new Set(hist.map(r=>new Date(r.date).getFullYear()))].sort((a,b)=>b-a);
+    const curYr=parseInt(document.getElementById('lh-year')?.value)||new Date().getFullYear();
+
+    // อัพเดท year dropdown
+    const yrSel=document.getElementById('lh-year');
+    if(yrSel&&yrSel.options.length===0){
+      const allYears=[...new Set([new Date().getFullYear(),...years])].sort((a,b)=>b-a);
+      yrSel.innerHTML=allYears.map(y=>`<option value="${y}" ${y===curYr?'selected':''}>${y+543}</option>`).join('');
+    }
+
+    // อัพเดท dept dropdown
+    const deptSel=document.getElementById('lh-dept');
+    if(deptSel&&deptSel.options.length<=1){
+      deptSel.innerHTML='<option value="">ทุกแผนก</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');
+    }
+
+    // อัพเดท emp dropdown
+    const empSel=document.getElementById('lh-emp');
+    if(empSel&&empSel.options.length<=1){
+      empSel.innerHTML='<option value="">พนักงานทั้งหมด</option>'+emps.map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
+    }
+
+    const selDept=document.getElementById('lh-dept')?.value||'';
+    const selEmp=document.getElementById('lh-emp')?.value||'';
+
+    // filter
+    let filtered=hist.filter(r=>new Date(r.date).getFullYear()===curYr);
+    if(selDept)filtered=filtered.filter(r=>r.dept===selDept);
+    if(selEmp)filtered=filtered.filter(r=>r.name===selEmp);
+    filtered.sort((a,b)=>b.date.localeCompare(a.date));
+
+    // summary
+    const summary=document.getElementById('lh-summary');
+    if(summary){
+      const totalDays=filtered.length;
+      const uniqueEmps=new Set(filtered.map(r=>r.name)).size;
+      const avgDays=uniqueEmps>0?(totalDays/uniqueEmps).toFixed(1):0;
+      summary.innerHTML=`
+        <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${totalDays}</div><div style="font-size:10px;color:var(--text2)">วันลารวม</div></div>
+        <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${uniqueEmps}</div><div style="font-size:10px;color:var(--text2)">คนที่ลา</div></div>
+        <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${avgDays}</div><div style="font-size:10px;color:var(--text2)">เฉลี่ย วัน/คน</div></div>`;
+    }
+
+    if(!filtered.length){
+      el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">ไม่มีประวัติการลา</div>';
+      return;
+    }
+
+    // จัดกลุ่มตามพนักงาน
+    const byEmp={};
+    filtered.forEach(r=>{if(!byEmp[r.name])byEmp[r.name]=[];byEmp[r.name].push(r);});
+
+    el.innerHTML=Object.entries(byEmp).sort((a,b)=>b[1].length-a[1].length).map(([name,recs])=>{
+      const emp=emps.find(e=>e.name===name);
+      return`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden">
+        <div style="padding:10px 14px;background:var(--bg2);display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0;overflow:hidden">
+            ${emp?.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:name.charAt(0)}
+          </div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:800">${name}</div><div style="font-size:11px;color:var(--text2)">${emp?.mainDept||emp?.dept||'-'}</div></div>
+          <div style="text-align:right">
+            <div style="font-size:18px;font-weight:900;color:var(--amber)">${recs.length}</div>
+            <div style="font-size:10px;color:var(--text3)">วัน</div>
+          </div>
+        </div>
+        <div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:4px">
+          ${recs.map(r=>{
+            const dt=new Date(r.date);
+            const ds=dt.getDate()+'/'+(dt.getMonth()+1);
+            const dayN=['อา','จ','อ','พ','พฤ','ศ','ส'][dt.getDay()];
+            return`<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(245,158,11,.15);color:var(--amber)">${dayN} ${ds}</span>`;
+          }).join('')}
+        </div>
+        <div style="padding:4px 14px 10px;font-size:10px;color:var(--text3)">อนุมัติโดย: ${recs[0]?.approvedBy||'Admin'}</div>
+      </div>`;
+    }).join('');
+  }
+};
+
 const LEAVE={
   tab:'pending',
   setTab(t){
@@ -1665,7 +1781,10 @@ const LEAVE={
     const reqs=D.getLeaveReq();
     const r=reqs.find(x=>x.id===id);if(!r)return;
     r.status='approved';r.approvedAt=new Date().toISOString();r.approvedBy=S.user?.name||'Admin';
-    D.saveLeaveReq(reqs);this.render();
+    D.saveLeaveReq(reqs);
+    // ถ้าวันลาผ่านไปแล้วให้ย้ายไปประวัติทันที
+    LEAVE.archivePast();
+    this.render();
     toast('✅ อนุมัติการลาของ '+r.name+' แล้ว');
   },
   reject(id){
@@ -1673,6 +1792,25 @@ const LEAVE={
     const r=reqs.find(x=>x.id===id);if(!r)return;
     r.status='rejected';D.saveLeaveReq(reqs);this.render();
     toast('❌ ปฏิเสธการลาของ '+r.name);
+  },
+  archivePast(){
+    const today=new Date();today.setHours(0,0,0,0);
+    const reqs=D.getLeaveReq();
+    const hist=D.getLeaveHist();
+    const remaining=[];
+    reqs.forEach(r=>{
+      const d=new Date(r.date);
+      if(r.status==='approved'&&d<today){
+        // ย้ายไปประวัติ
+        hist.push({...r,archivedAt:new Date().toISOString()});
+      } else {
+        remaining.push(r);
+      }
+    });
+    if(hist.length>D.getLeaveHist().length){
+      D.saveLeaveHist(hist);
+      D.saveLeaveReq(remaining);
+    }
   },
   del(id){
     const reqs=D.getLeaveReq();
