@@ -1116,9 +1116,40 @@ const EMP={
         <button onclick="document.getElementById('ef-pi').click()" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif">เลือกรูป</button>
         <input type="file" id="ef-pi" accept="image/*" style="display:none" onchange="EMP.onPhoto(this)">
       </div></div>
+      <div class="fg">
+        <label class="fl">✍️ ลายเซ็น (อัปโหลดรูป)</label>
+        <div style="background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;overflow:hidden;min-height:80px;display:flex;align-items:center;justify-content:center" id="ef-sv">
+          ${emp?.signature
+            ? `<img src="${emp.signature}" style="max-width:100%;max-height:120px;object-fit:contain;padding:8px">`
+            : `<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">ยังไม่มีลายเซ็น</div>`}
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button onclick="document.getElementById('ef-si').click()" style="flex:1;padding:8px;background:rgba(37,99,235,.15);border:1px solid var(--blue);border-radius:8px;color:var(--blue2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif">📷 อัปโหลดลายเซ็น</button>
+          <button onclick="EMP.clearSig()" style="padding:8px 12px;background:rgba(220,38,38,.15);border:1px solid var(--red);border-radius:8px;color:var(--red2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif">ล้าง</button>
+        </div>
+        <input type="file" id="ef-si" accept="image/*" style="display:none" onchange="EMP.onSig(this)">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">เซ็นบนกระดาษขาว → ถ่ายรูป → อัปโหลด</div>
+      </div>
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-e')">ยกเลิก</button><button class="btn-confirm" onclick="EMP.save(${idx})">บันทึก</button></div></div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};
-    this._photo=emp?.photo||null;openMo('mo-e');
+    this._photo=emp?.photo||null;this._sig=emp?.signature||null;openMo('mo-e');
+  },
+  onSig(inp){
+    const f=inp.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=e=>{
+      this._sig=e.target.result;
+      const sv=document.getElementById('ef-sv');
+      if(sv)sv.innerHTML=`<img src="${e.target.result}" style="max-width:100%;max-height:120px;object-fit:contain;padding:8px">`;
+    };
+    r.readAsDataURL(f);
+  },
+  clearSig(){
+    this._sig=null;
+    const sv=document.getElementById('ef-sv');
+    if(sv)sv.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">ยังไม่มีลายเซ็น</div>';
+    document.getElementById('ef-si').value='';
+    toast('✅ ล้างลายเซ็นแล้ว');
   },
   onPhoto(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{this._photo=e.target.result;const pv=document.getElementById('ef-pv');if(pv)pv.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};r.readAsDataURL(f);},
   save(idx){
@@ -1148,6 +1179,7 @@ const EMP={
     emp.isAdmin=isAdmin;
     if(pin)emp.pin=pin;
     if(this._photo)emp.photo=this._photo;
+    if(this._sig!==null)emp.signature=this._sig||null;
     if(idx>=0)emps[idx]=emp;else emps.push(emp);
     D.saveEmps(emps);closeMo('mo-e');this.render();toast('✅ '+(idx>=0?'แก้ไข':'เพิ่ม')+name);
   },
@@ -1289,7 +1321,8 @@ const PRINT={
     for(let di=0;di<6;di++){const d2=new Date(ws);d2.setDate(ws.getDate()+di);const ds=dStr(d2);
       SHS.forEach(sh=>depts.forEach(dept=>(sched[dept]?.[di]?.[sh]||[]).forEach(w=>{if(!w.ot)return;
         const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh)||'';
-        rows.push({name:w.name,dept,ds,sh:SHTH[sh],hrs:w.otHrs||4,sg});
+        const empData=[...D.getEmps('proc'),...D.getEmps('fill')].find(e=>e.name===w.name);
+        rows.push({name:w.name,dept,ds,sh:SHTH[sh],hrs:w.otHrs||4,sg,sigImg:empData?.signature||null});
       })));
     }
     document.getElementById('print-area').innerHTML=`
@@ -1297,7 +1330,7 @@ const PRINT={
       <div style="font-size:11pt;color:#666;margin-bottom:8px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)} - ${dStr(we)}</div>
       <div style="background:#f0f0f0;padding:7px 10px;border-radius:5px;margin-bottom:10px;font-size:11pt">OT%: <strong>${pct}%</strong> | Target: ${tgt}% | ${pct>tgt?'⚠️ เกิน':'✅ ปกติ'}</div>
       <table><thead><tr><th>#</th><th>ชื่อพนักงาน</th><th>แผนก</th><th>วันที่</th><th>กะ</th><th>ชม.</th><th>ลายมือชื่อ</th></tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${r.name}</td><td>${r.dept}</td><td>${r.ds}</td><td>${r.sh}</td><td style="text-align:center">${r.hrs}</td><td><span class="signature">${r.sg}</span></td></tr>`).join('')}
+      <tbody>${rows.map((r,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${r.name}</td><td>${r.dept}</td><td>${r.ds}</td><td>${r.sh}</td><td style="text-align:center">${r.hrs}</td><td style="text-align:center">${r.sigImg?`<img src="${r.sigImg}" style="max-height:40px;max-width:100px;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${r.sg}</span>`:''}</td></tr>`).join('')}
       <tr style="font-weight:900;background:#f0f0f0"><td colspan="5" style="text-align:right">รวม</td><td style="text-align:center">${rows.reduce((a,r)=>a+r.hrs,0)}</td><td></td></tr>
       </tbody></table>
       <div style="margin-top:16px;display:flex;justify-content:space-between;font-size:11pt">
