@@ -1196,26 +1196,47 @@ const PLAN={
   autoLoad(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
     const emps=D.getEmps();if(!emps.length){alert2('ยังไม่มีพนักงาน','❌');return;}
-    // ถ้าเป็น Process ให้โหลดแผน Filling ก่อน
+    // ถ้าเป็น Process ให้โหลดแผน Filling ก่อน แล้วจัดคนตาม shiftPeople
     if(S.sys==='proc'){
-      this.loadFromFilling();
+      if(!this._dayData)this.loadFromFilling();
       if(this._dayData){
-        // จัดคนตาม shiftPeople
-        const wk=wKey(S.wkStart);const allSched=D.getSched();
-        if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+        const wk2=wKey(S.wkStart);const allSched2=D.getSched();
+        if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
+        Object.keys(sched2).forEach(k=>delete sched2[k]);
         const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+        const used2=new Set();const short2=[];
         this._dayData.forEach(d=>{
           SHS.forEach(sh=>{
-            const need=d.shiftPeople?.[sh]||d.totalP;
-            const units=d.shiftUnits?.[sh]||1;
-            // จัดคนตามจำนวนที่ต้องการ
+            const needPpl=d.units===0?0:(d.shiftPeople?.[sh]||d.totalP);
+            if(!needPpl)return;
+            // หาพนักงาน Process ที่ว่างอยู่
+            const cands=emps.filter(e=>!used2.has(e.name+'_'+d.di+'_'+sh))
+              .filter(e=>{
+                if(e.lockShift&&e.lockShift!==sh)return false;
+                return procDepts.includes(e.mainDept||e.dept);
+              });
+            const valid=cands.filter(e=>checkRest(e.name,d.di,sh,sched2));
+            // กระจายตามแผนก
             procDepts.forEach(dept=>{
-              if(!sched[dept])sched[dept]={};
-              if(!sched[dept][d.di])sched[dept][d.di]={morning:[],afternoon:[],night:[]};
+              if(!sched2[dept])sched2[dept]={};
+              if(!sched2[dept][d.di])sched2[dept][d.di]={morning:[],afternoon:[],night:[]};
+              const deptEmps=valid.filter(e=>(e.mainDept||e.dept)===dept||e.sub1===dept||e.sub2===dept);
+              deptEmps.forEach(e=>{
+                if(!sched2[dept][d.di][sh].find(w=>w.name===e.name)){
+                  sched2[dept][d.di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+                  used2.add(e.name+'_'+d.di+'_'+sh);
+                }
+              });
             });
+            // เช็คขาดคน
+            const got=procDepts.reduce((a,dept)=>(sched2[dept]?.[d.di]?.[sh]||[]).length+a,0);
+            if(got<needPpl)short.push(`Process ${DAYS[d.di]} ${SHTH[sh]}: ขาด ${needPpl-got} คน`);
           });
         });
+        allSched2[wk2]=sched2;D.saveSched(allSched2);
+        markUnsaved();
       }
+      return;
     }
     const wk=wKey(S.wkStart);const allSched=D.getSched();
     if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
@@ -1311,7 +1332,7 @@ const PLAN={
       });
     }
 
-    allSched[wk]=sched;D.saveSched(allSched);SCHED.render();
+    allSched[wk]=sched;D.saveSched(allSched);markUnsaved();SCHED.render();
     // แจ้งเตือนคนว่าง
     if(idleEmps.length>0){
       toast('ℹ️ มีพนักงานว่าง '+idleEmps.length+' คน — ดูได้ที่ด้านล่างตาราง',4000);
