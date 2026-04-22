@@ -256,7 +256,7 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
       <div class="pareto-hdr">
         <h3>📈 Pareto — เหตุผล OT เกิน</h3>
         <select id="pp-period" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif">
-          <option value="week">สัปดาห์นี้</option><option value="month">เดือนนี้</option><option value="year">ปีนี้</option>
+          <option value="week">สัปดาห์นี้</option><option value="month" selected>เดือนนี้</option><option value="year">ปีนี้</option>
         </select>
       </div>
       <div class="pareto-body" id="pb"><div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">ยังไม่มีข้อมูล</div></div>
@@ -741,7 +741,7 @@ const DASH={
     ce.style.position='relative';ce.appendChild(tl);
   },
   renderPareto(){
-    const per=document.getElementById('pp-period')?.value||'week';
+    const per=document.getElementById('pp-period')?.value||'month';
     const logs=[...D.getOTLog('proc'),...D.getOTLog('fill')];
     const now=new Date();
     const flt=logs.filter(l=>{
@@ -757,29 +757,66 @@ const DASH={
     if(!items.length){body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">ยังไม่มีข้อมูล OT เกิน</div>';return;}
     const total=items.reduce((a,[,v])=>a+v,0);
     const COLS=['#EF4444','#F97316','#F59E0B','#22C55E','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
-    // คำนวณ % แบบ Largest Remainder เพื่อให้รวมได้ 100% เสมอ
+    // Largest Remainder
     let rawPcts=items.map(([,h])=>h/total*100);
     let floored=rawPcts.map(p=>Math.floor(p));
-    let remainders=rawPcts.map((p,i)=>({i,r:p-floored[i]}));
     let deficit=100-floored.reduce((a,b)=>a+b,0);
-    remainders.sort((a,b)=>b.r-a.r).slice(0,deficit).forEach(({i})=>floored[i]++);
+    rawPcts.map((p,i)=>({i,r:p-floored[i]})).sort((a,b)=>b.r-a.r).slice(0,deficit).forEach(({i})=>floored[i]++);
     let cum=0;
-    body.innerHTML=items.map(([r,h],i)=>{
-      const pct=floored[i];
-      cum+=pct;
-      const cp=i===items.length-1?100:cum; // อันสุดท้าย = 100% เสมอ
-      const barW=Math.max(pct,2);
-      return `<div class="p-row">
-        <div class="p-label">${r}</div>
-        <div class="p-bar-wrap">
-          <div class="p-bar" style="width:${barW}%;background:${COLS[i%8]}">
-            <span>${h}ชม. (${pct}%)</span>
-          </div>
-          <div style="position:absolute;top:0;height:100%;border-right:2px solid var(--amber);left:${cp}%;pointer-events:none"></div>
+    const maxH=items[0][1]; // ค่าสูงสุด = item แรก (เรียงแล้ว)
+
+    body.innerHTML=`
+      <!-- Summary -->
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <div style="flex:1;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:10px 12px;text-align:center">
+          <div style="font-size:20px;font-weight:900;color:#EF4444">${total}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px">ชม. OT รวม</div>
         </div>
-        <div class="p-pct">${cp}%</div>
-      </div>`;
-    }).join('');
+        <div style="flex:1;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 12px;text-align:center">
+          <div style="font-size:20px;font-weight:900;color:var(--amber)">${items.length}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px">เหตุผล</div>
+        </div>
+        <div style="flex:1;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:10px;padding:10px 12px;text-align:center">
+          <div style="font-size:20px;font-weight:900;color:var(--blue2)">${flt.length}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:2px">สัปดาห์</div>
+        </div>
+      </div>
+      <!-- Bars -->
+      ${items.map(([r,h],i)=>{
+        const pct=floored[i];
+        cum+=pct;
+        const cp=i===items.length-1?100:cum;
+        const barW=Math.max(h/maxH*100,4);
+        const col=COLS[i%8];
+        return `<div style="margin-bottom:14px">
+          <!-- Label row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:12px;height:12px;border-radius:3px;background:${col};flex-shrink:0"></div>
+              <span style="font-size:12px;font-weight:800;color:var(--text)">${r}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;font-weight:900;color:${col}">${h} ชม.</span>
+              <span style="font-size:11px;font-weight:700;color:var(--text3)">${pct}%</span>
+              <span style="font-size:10px;font-weight:700;color:var(--amber);background:rgba(245,158,11,.15);padding:2px 7px;border-radius:10px">สะสม ${cp}%</span>
+            </div>
+          </div>
+          <!-- Bar -->
+          <div style="height:28px;background:var(--bg3);border-radius:8px;overflow:hidden;position:relative">
+            <div style="height:100%;width:${barW}%;background:${col};border-radius:8px;display:flex;align-items:center;padding-left:10px;transition:width .4s">
+              ${barW>20?`<span style="font-size:11px;font-weight:800;color:#fff">${h} ชม.</span>`:''}
+            </div>
+            <!-- Cumulative line -->
+            <div style="position:absolute;top:0;bottom:0;left:${cp}%;border-left:2px dashed var(--amber);pointer-events:none"></div>
+          </div>
+        </div>`;
+      }).join('')}
+      <!-- Cumulative legend -->
+      <div style="display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <div style="width:20px;border-top:2px dashed var(--amber)"></div>
+        <span style="font-size:10px;color:var(--text3)">เส้นประ = % สะสม (Cumulative)</span>
+      </div>
+    `;
   }
 };
 
@@ -1262,8 +1299,23 @@ const SCHED={
   },
   clearWk(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
-    confirm2('ล้างตารางกะสัปดาห์นี้?',()=>{
-      const wk=wKey(S.wkStart);const all=D.getSched();delete all[wk];D.saveSched(all);FB.remove(S.sys+'/sched/'+wk);this.render();toast('🗑️ ล้างแล้ว');
+    confirm2('ล้างตารางกะสัปดาห์นี้?\n(รวม OT Log และ Comment ด้วย)',()=>{
+      const wk=wKey(S.wkStart);
+      // ลบตารางกะ
+      const all=D.getSched();delete all[wk];D.saveSched(all);FB.remove(S.sys+'/sched/'+wk);
+      // ลบ OT Log ของสัปดาห์นี้
+      const log=D.getOTLog();
+      const newLog=log.filter(l=>!(l.wk===wk&&l.sys===S.sys));
+      D.saveOTLog(newLog);
+      // ลบ signs ของสัปดาห์นี้
+      Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_'+wk)).forEach(k=>localStorage.removeItem(k));
+      FB.remove('signs/'+wk);
+      // reset unsaved
+      markSaved();
+      this.render();
+      DASH.renderPareto();
+      DASH.render();
+      toast('🗑️ ล้างตารางกะและ OT Log แล้ว');
     });
   },
   printSched(){PRINT.sched();},
