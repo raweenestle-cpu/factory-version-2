@@ -1044,21 +1044,21 @@ const SCHED={
       if(cnt>=max){alert2('🚫 OT เต็มแล้ว!\n\n'+name+' ทำ OT ครบ '+max+' วันแล้ว','❌');return;}
     }
     w.ot=!w.ot;if(!w.ot)w.otHrs=4;
-    all[wk]=sched;D.saveSched(all);this.render();toast(w.ot?'✅ เปิด OT':'✅ ปิด OT');
+    all[wk]=sched;D.saveSched(all);this.render();markUnsaved();toast(w.ot?'✅ เปิด OT':'✅ ปิด OT');
   },
   setH(name,dept,di,sh,h){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const w=(sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);
-    if(w){w.otHrs=h;all[wk]=sched;D.saveSched(all);this.render();}
+    if(w){w.otHrs=h;all[wk]=sched;D.saveSched(all);this.render();markUnsaved();}
   },
   setSR(name,dept,di,range){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const w=(sched[dept]?.[di]?.['afternoon']||sched[dept]?.[String(di)]?.['afternoon']||[]).find(x=>x.name===name);
-    if(w){w.sr=range;if(range!=='14-22'){w.ot=true;w.otHrs=4;}all[wk]=sched;D.saveSched(all);this.render();closeMo('mo-w');toast('✅ อัพเดทช่วงเวลา');}
+    if(w){w.sr=range;if(range!=='14-22'){w.ot=true;w.otHrs=4;}all[wk]=sched;D.saveSched(all);this.render();markUnsaved();closeMo('mo-w');toast('✅ อัพเดทช่วงเวลา');}
   },
   sign(name,dept,di,sh){
     if(!S.user?.isAdmin&&S.user?.emp?.name!==name){toast('❌ เซ็นได้เฉพาะตัวเอง');return;}
-    const wk=wKey(S.wkStart);D.saveSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh,name);this.render();toast('✅ ยินยอม OT — '+name);
+    const wk=wKey(S.wkStart);D.saveSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh,name);this.render();markUnsaved();toast('✅ ยินยอม OT — '+name);
   },
   removeW(name,dept,di,sh){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
@@ -1131,28 +1131,17 @@ const SCHED={
     let tH=0,oH=0;
     D.getDepts().forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched[d]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
     const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
+    // popup ขึ้นเสมอทุกครั้งที่ Save
     const log=D.getOTLog();
     const existIdx=log.findIndex(l=>l.wk===wk&&l.sys===S.sys);
-    if(pct>tgt){
-      // เกิน Target — popup ใส่/แก้เหตุผล พร้อมโหลดเหตุผลเดิมถ้ามี
-      const prevReasons=existIdx>=0?log[existIdx].reasons:[];
-      this.showOTReason(pct,tgt,()=>{
-        D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);
-        toast('✅ บันทึกสำเร็จ');DASH.render();
-      }, prevReasons);
-    } else {
-      // ไม่เกิน Target — อัพเดท pct ใหม่ถ้ามี Log เดิม ไม่ลบ
-      if(existIdx>=0){
-        log[existIdx].pct=pct;
-        log[existIdx].updatedAt=new Date().toISOString();
-        D.saveOTLog(log);
-        DASH.renderPareto();
-      }
+    const prevReasons=existIdx>=0?log[existIdx].reasons:[];
+    const doSave=()=>{
       D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);
-      toast('✅ บันทึกสำเร็จ');DASH.render();
-    }
+      markSaved();toast('✅ บันทึกสำเร็จ');DASH.render();
+    };
+    this.showOTReason(pct,tgt,doSave,prevReasons,pct<=tgt);
   },
-  showOTReason(pct,tgt,onSave,existingReasons=[]){
+  showOTReason(pct,tgt,onSave,existingReasons=[],canSkip=false){
     const reasons=D.getReasons();
     let rows=existingReasons.length?existingReasons.map(r=>({...r})):[{reason:reasons[0]||'',hours:0}];
     const renderR=()=>{
@@ -1165,12 +1154,17 @@ const SCHED={
     };
     window._or=rows;window._rr=renderR;
     const mo=document.getElementById('mo-or');
-    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">⚠️ OT เกิน Target</div><button class="md-close" onclick="closeMo('mo-or')">✕</button></div><div class="md-body">
-      <div class="ot-warn"><div class="ot-warn-t">OT ${pct}% เกิน Target ${tgt}%</div><div style="font-size:12px;color:var(--text2)">กรุณาระบุเหตุผล</div></div>
+    const overText=pct>tgt?`<div class="ot-warn"><div class="ot-warn-t">OT ${pct}% เกิน Target ${tgt}%</div><div style="font-size:12px;color:var(--text2)">กรุณาระบุเหตุผล</div></div>`
+      :`<div style="background:rgba(22,163,74,.1);border:1.5px solid rgba(22,163,74,.3);border-radius:12px;padding:12px;margin-bottom:14px"><div style="font-size:13px;font-weight:800;color:var(--green2)">✅ OT ${pct}% อยู่ใน Target ${tgt}%</div><div style="font-size:11px;color:var(--text2);margin-top:4px">ใส่ comment ไว้เป็นข้อมูลหรือกดข้ามได้เลย</div></div>`;
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${pct>tgt?'⚠️ OT เกิน Target':'📝 บันทึก Comment OT'}</div><button class="md-close" onclick="closeMo('mo-or')">✕</button></div><div class="md-body">
+      ${overText}
       <div id="or-rows"></div>
-      <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ เพิ่มเหตุผล</button>
-    </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-or')">ยกเลิก</button><button class="btn-confirm" onclick="SCHED.saveOR(${pct})">บันทึก</button></div></div>`;
-    openMo('mo-or');renderR();this._onSave=onSave;
+      <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ เพิ่มเหตุผล / comment</button>
+    </div><div class="md-foot">
+      <button class="btn-cancel" onclick="closeMo('mo-or');${canSkip?'if(SCHED._onSave)SCHED._onSave()':''}">${canSkip?'ข้าม':'ยกเลิก'}</button>
+      <button class="btn-confirm" onclick="SCHED.saveOR(${pct})">💾 บันทึก</button>
+    </div></div>`;
+    openMo('mo-or');renderR();this._onSave=onSave;window._onSave=onSave;
   },
   saveOR(pct){
     const reasons=window._or.filter(r=>r.reason&&r.hours>0);
