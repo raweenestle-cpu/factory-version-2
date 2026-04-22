@@ -1797,7 +1797,7 @@ const SET={
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
-    FB.remove('signs');SCHED.render();DASH.render();toast('✅ ล้างทั้งหมดแล้ว');
+    FB.remove('signs');SCHED.render();DASH.render();DASH.renderPareto();toast('✅ ล้างทั้งหมดแล้ว');
   });},
   resetDepts(){confirm2('รีเซ็ตแผนกเป็นค่าเริ่มต้น?',()=>{D.saveDepts([...PDEPT],'proc');D.saveDepts([...FDEPT],'fill');this.render();SCHED.render();toast('✅ รีเซ็ตแล้ว');});}
 };
