@@ -591,7 +591,8 @@ const AUTH={
 const APP={
   init(){
     this.syncFB();
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();LEAVE.archivePast();
+    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
+    LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
   },
   syncFB(){
     ['proc','fill'].forEach(sys=>{
@@ -623,7 +624,8 @@ const APP={
     S.sys=sys;
     document.getElementById('sp').classList.toggle('active',sys==='proc');
     document.getElementById('sf').classList.toggle('active',sys==='fill');
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();LEAVE.updBadge();LEAVE.archivePast();
+    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
+    LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
   },
   goPage(id,adminOnly=false){
     if(adminOnly&&!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}
@@ -1409,6 +1411,7 @@ const EMP={
     reqs.push({
       id:Date.now()+'_'+date+'_'+name,
       name,dept:emp?.mainDept||emp?.dept||'-',
+      sys:S.sys,
       date,status:'pending',
       requestAt:new Date().toISOString()
     });
@@ -1632,9 +1635,10 @@ const LHIST={
   render(){
     // Archive past approved leaves ก่อน
     LEAVE.archivePast();
+    // ประวัติรวมทั้ง Process และ Filling
     const hist=D.getLeaveHist();
-    const emps=D.getEmps();
-    const depts=D.getDepts();
+    const emps=[...D.getEmps('proc'),...D.getEmps('fill')];
+    const depts=[...new Set([...D.getDepts('proc'),...D.getDepts('fill')])];
     const el=document.getElementById('lh-list');if(!el)return;
 
     // ดึงปีที่มีข้อมูล
@@ -1648,15 +1652,15 @@ const LHIST={
       yrSel.innerHTML=allYears.map(y=>`<option value="${y}" ${y===curYr?'selected':''}>${y+543}</option>`).join('');
     }
 
-    // อัพเดท dept dropdown
+    // อัพเดท dept dropdown (reset ทุกครั้ง)
     const deptSel=document.getElementById('lh-dept');
-    if(deptSel&&deptSel.options.length<=1){
+    if(deptSel){
       deptSel.innerHTML='<option value="">ทุกแผนก</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');
     }
 
-    // อัพเดท emp dropdown
+    // อัพเดท emp dropdown (reset ทุกครั้ง)
     const empSel=document.getElementById('lh-emp');
-    if(empSel&&empSel.options.length<=1){
+    if(empSel){
       empSel.innerHTML='<option value="">พนักงานทั้งหมด</option>'+emps.map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
     }
 
@@ -1725,14 +1729,17 @@ const LEAVE={
     this.render();
   },
   updBadge(){
-    const cnt=D.getLeaveReq().filter(r=>r.status==='pending').length;
+    const myEmps=new Set(D.getEmps().map(e=>e.name));
+    const cnt=D.getLeaveReq().filter(r=>r.status==='pending'&&myEmps.has(r.name)).length;
     const badge=document.getElementById('leave-pending-badge');
     if(badge){badge.style.display=cnt>0?'block':'none';badge.textContent='รออนุมัติ '+cnt;}
   },
   render(){
     const el=document.getElementById('leave-list');if(!el)return;
     this.updBadge();
-    const all=D.getLeaveReq();
+    // กรองตาม sys ปัจจุบัน
+    const empNames=new Set(D.getEmps().map(e=>e.name));
+    const all=D.getLeaveReq().filter(r=>empNames.has(r.name));
     const filtered=this.tab==='pending'?all.filter(r=>r.status==='pending')
       :this.tab==='approved'?all.filter(r=>r.status==='approved')
       :all;
