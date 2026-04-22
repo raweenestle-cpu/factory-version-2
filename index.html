@@ -496,6 +496,28 @@ function wNum(d){const s=new Date(d.getFullYear(),0,1);return Math.ceil(((d-s)/8
 function dStr(d){return d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543);}
 
 let _tt=null;
+function calcShiftUnits(startTime, hoursNeeded, units){
+  // คำนวณว่าแต่ละกะต้องใช้กี่ชุด
+  // กะเช้า 06:00-14:00, กะบ่าย 14:00-22:00, กะดึก 22:00-06:00
+  const shifts=[
+    {name:'morning', start:6*60, end:14*60},
+    {name:'afternoon', start:14*60, end:22*60},
+    {name:'night', start:22*60, end:30*60} // 30*60 = 06:00 วันถัดไป
+  ];
+  const [sh,sm]=startTime.split(':').map(Number);
+  const startMin=sh*60+sm;
+  const endMin=startMin+(hoursNeeded*60);
+  const result={morning:1,afternoon:1,night:1}; // default 1 ชุด
+  if(units<=1)return result; // ถ้าแค่ 1 ชุด ทุกกะ = 1 ชุด
+  // ช่วงที่เปิด 2 ชุด = startMin ถึง endMin
+  shifts.forEach(sh2=>{
+    // เช็คว่ากะนี้ overlap กับช่วงเปิด 2 ชุดไหม
+    const overlap=sh2.start<endMin&&sh2.end>startMin;
+    if(overlap)result[sh2.name]=2;
+  });
+  return result;
+}
+
 function calcMixingPlan(dayData){
   // dayData = [{di, totalLiter, hasOreo}] เรียงจันทร์-เสาร์
   // Process ต้องผลิตล่วงหน้า 1 วัน
@@ -518,10 +540,24 @@ function calcMixingPlan(dayData){
     const stockAfter=Math.max(0,stock-demandLiter);
 
     // เวลาทำงานต่อวัน
+    // จันทร์ 08:00 → +72ชม. = พฤหัส 08:00 หยุดล้าง 2 ชม.
+    // เสาร์จบสัปดาห์ หยุดล้างเก็บ 2 ชม.
     let workH=24,startTime='06:00';
-    if(d.di===0){workH=16;startTime='08:00';} // จันทร์ เริ่ม 08:00
-    else if(d.di>=1&&d.di<=4) workH=24-cfg.breakH; // อังคาร-ศุกร์ หัก break
-    else if(d.di===5) workH=24+cfg.bufferH; // เสาร์ เพิ่ม buffer
+    if(d.di===0){
+      workH=16;startTime='08:00'; // จันทร์ เริ่ม 08:00 → 16 ชม.
+    } else if(d.di===1){
+      workH=24; // อังคาร เต็ม 24 ชม.
+    } else if(d.di===2){
+      workH=24; // พุธ เต็ม 24 ชม.
+    } else if(d.di===3){
+      // พฤหัส: ทำถึง 08:00 หยุดล้าง 2 ชม. → workH = 24 - 2 = 22 ชม.
+      workH=24-cfg.breakH;
+    } else if(d.di===4){
+      workH=24; // ศุกร์ เต็ม 24 ชม.
+    } else if(d.di===5){
+      // เสาร์: หัก 2 ชม.ล้างเก็บ + เพิ่ม buffer
+      workH=24-cfg.bufferH;
+    }
 
     // คำนวณชุดและชั่วโมง
     let units=0,hoursNeeded=0;
@@ -554,7 +590,15 @@ function calcMixingPlan(dayData){
     const produced=units===0?0:hoursNeeded*(units===1?cfg.cap2:(cfg.cap2+cfg.cap1));
     stock=stockAfter+produced;
 
-    return{...d,demandLiter,needed,produced,units,hoursNeeded,startTime,endTime,totalP,oreoP,stockAfter};
+    // คำนวณกะที่ต้องเปิด 2 ชุด
+    const shiftUnits=calcShiftUnits(startTime,hoursNeeded,units);
+    const cfg3=D.getMixingCfg();
+    const shiftPeople={
+      morning:(shiftUnits.morning===2?cfg3.mix2people:cfg3.mix1people)+(d.hasOreo?1:0),
+      afternoon:(shiftUnits.afternoon===2?cfg3.mix2people:cfg3.mix1people)+(d.hasOreo?1:0),
+      night:(shiftUnits.night===2?cfg3.mix2people:cfg3.mix1people)+(d.hasOreo?1:0),
+    };
+    return{...d,demandLiter,needed,produced,units,hoursNeeded,startTime,endTime,totalP,oreoP,stockAfter,shiftUnits,shiftPeople};
   });
 }
 
@@ -1099,6 +1143,18 @@ const PLAN={
             ${d.units>0?`<div style="font-size:10px;color:var(--text2)">${d.startTime} - ${d.endTime}</div><div style="font-size:11px;color:var(--blue2);font-weight:800">${d.hoursNeeded} ชม.</div>`:''}
             <div style="font-size:12px;font-weight:900;color:#fff;margin-top:3px">${d.totalP} คน</div>
             ${d.hasOreo&&d.units>0?`<div style="font-size:9px;color:var(--amber);margin-top:2px">🍪 +Oreo</div>`:''}
+            ${d.units>0?`
+            <div style="border-top:1px solid rgba(255,255,255,.1);margin-top:5px;padding-top:5px">
+              ${['morning','afternoon','night'].map(sh=>{
+                const u=d.shiftUnits[sh];const p=d.shiftPeople[sh];
+                const shName={morning:'เช้า',afternoon:'บ่าย',night:'ดึก'}[sh];
+                const col=u===2?'#EF4444':'#22C55E';
+                return`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:2px">
+                  <span style="color:var(--text3)">${shName}</span>
+                  <span style="color:${col};font-weight:800">${u===2?'2ชุด':'1ชุด'} ${p}คน</span>
+                </div>`;
+              }).join('')}
+            </div>`:''}
             <div style="font-size:9px;color:var(--text3);margin-top:3px">Stock หลังผลิต</div>
             <div style="font-size:10px;color:var(--green2);font-weight:700">${Math.round(d.stockAfter+d.produced).toLocaleString()} ล.</div>
           </div>`;
@@ -1141,7 +1197,26 @@ const PLAN={
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
     const emps=D.getEmps();if(!emps.length){alert2('ยังไม่มีพนักงาน','❌');return;}
     // ถ้าเป็น Process ให้โหลดแผน Filling ก่อน
-    if(S.sys==='proc'&&!this._dayData)this.loadFromFilling();
+    if(S.sys==='proc'){
+      this.loadFromFilling();
+      if(this._dayData){
+        // จัดคนตาม shiftPeople
+        const wk=wKey(S.wkStart);const allSched=D.getSched();
+        if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+        const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+        this._dayData.forEach(d=>{
+          SHS.forEach(sh=>{
+            const need=d.shiftPeople?.[sh]||d.totalP;
+            const units=d.shiftUnits?.[sh]||1;
+            // จัดคนตามจำนวนที่ต้องการ
+            procDepts.forEach(dept=>{
+              if(!sched[dept])sched[dept]={};
+              if(!sched[dept][d.di])sched[dept][d.di]={morning:[],afternoon:[],night:[]};
+            });
+          });
+        });
+      }
+    }
     const wk=wKey(S.wkStart);const allSched=D.getSched();
     if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
     Object.keys(sched).forEach(k=>delete sched[k]);
@@ -1976,10 +2051,10 @@ const SET={
         <div class="sr"><div><div class="sr-lbl">⏰ เริ่มวันจันทร์</div><div class="sr-sub">เวลาเริ่ม Mixing</div></div>
           <div class="sr-ctrl"><input type="time" value="${cfg.startMon||'08:00'}" style="width:90px;text-align:center"
             onchange="(function(){const c=D.getMixingCfg();c.startMon=this.value;D.saveMixingCfg(c);toast('✅');}).call(this)"></div></div>
-        <div class="sr"><div><div class="sr-lbl">☕ Break กลางสัปดาห์</div><div class="sr-sub">ชั่วโมงหยุดพัก</div></div>
+        <div class="sr"><div><div class="sr-lbl">☕ ล้างกลางสัปดาห์ (พฤหัส)</div><div class="sr-sub">ชม. หยุดล้างระบบ ทุก 72 ชม.</div></div>
           <div class="sr-ctrl"><input type="number" value="${cfg.breakH||2}" min="0" max="8" style="width:60px"
             onchange="(function(){const c=D.getMixingCfg();c.breakH=parseInt(this.value)||2;D.saveMixingCfg(c);toast('✅');}).call(this)"></div></div>
-        <div class="sr"><div><div class="sr-lbl">🪣 Buffer ปลายสัปดาห์</div><div class="sr-sub">ชั่วโมงเพิ่มสต็อก</div></div>
+        <div class="sr"><div><div class="sr-lbl">🧹 ล้างเก็บปลายสัปดาห์</div><div class="sr-sub">ชม. หยุดล้างเก็บวันเสาร์</div></div>
           <div class="sr-ctrl"><input type="number" value="${cfg.bufferH||2}" min="0" max="8" style="width:60px"
             onchange="(function(){const c=D.getMixingCfg();c.bufferH=parseInt(this.value)||2;D.saveMixingCfg(c);toast('✅');}).call(this)"></div></div>
         `})()}
