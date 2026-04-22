@@ -297,21 +297,67 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 }::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media print{#pg-login,#app .topbar,#app .bottomnav,.mo,.toast{display:none!important}#print-area{display:block!important}@page{size:A4 landscape;margin:8mm}body{background:#fff!important;color:#000!important}}
 #print-area{display:none;font-family:'Sarabun',sans-serif;font-size:12pt;color:#000;background:#fff}
-#print-area .pr-header{border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px}
-#print-area .pr-title{font-size:18pt;font-weight:900;margin-bottom:2px}
-#print-area .pr-sub{font-size:12pt;color:#444}
-#print-area .pr-section{margin-bottom:14px}
-#print-area .pr-sec-title{font-size:13pt;font-weight:800;background:#1e40af;color:#fff;padding:4px 10px;border-radius:4px;margin-bottom:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-#print-area .pr-shift-title{font-size:12pt;font-weight:700;background:#f0f0f0;padding:3px 8px;margin-bottom:4px;border-left:3px solid #1e40af}
-#print-area table.pr-tbl{table-layout:fixed;width:100%;border-collapse:collapse;font-size:11pt;margin-bottom:8px}
-#print-area table.pr-tbl th{background:#e8edf8;border:1px solid #aaa;padding:5px 8px;font-weight:700;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-#print-area table.pr-tbl td{border:1px solid #ccc;padding:5px 8px;vertical-align:middle}
-#print-area .pr-summary{background:#f8f8f8;border:1px solid #ccc;border-radius:4px;padding:8px 10px;margin-bottom:12px;font-size:11pt}
-#print-area .pr-footer{border-top:1.5px solid #000;padding-top:8px;margin-top:12px;font-size:11pt;display:flex;justify-content:space-between}
-#print-area .day-block{border:2px solid #000;border-radius:4px;margin-bottom:12px;page-break-inside:avoid}
-#print-area .day-block-header{background:#1e3a5f;color:#fff;padding:6px 10px;font-weight:900;font-size:12pt;border-bottom:2px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-#print-area .day-block-header.over{background:#dc2626!important}
-#print-area .day-block-header.ok{background:#16a34a!important}
+/* Print Styles */
+#print-area .pr-header{
+  border-bottom:3px solid #1e3a5f;
+  padding-bottom:10px;margin-bottom:16px;
+  display:flex;align-items:flex-start;justify-content:space-between;
+}
+#print-area .pr-header-left{}
+#print-area .pr-title{font-size:18pt;font-weight:900;color:#1e3a5f;margin-bottom:3px}
+#print-area .pr-sub{font-size:11pt;color:#555;margin-bottom:2px}
+#print-area .pr-header-right{text-align:right;font-size:10pt;color:#666}
+#print-area .pr-section{margin-bottom:18px;page-break-inside:avoid}
+#print-area .pr-sec-title{
+  font-size:12pt;font-weight:900;
+  background:#1e3a5f;color:#fff;
+  padding:6px 12px;margin-bottom:0;
+  -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  border-radius:4px 4px 0 0;
+}
+#print-area .pr-summary{
+  background:#f0f4ff;border:1px solid #c7d3f0;
+  border-top:none;padding:8px 12px;margin-bottom:8px;
+  font-size:10pt;display:flex;gap:16px;align-items:center;
+  border-radius:0 0 4px 4px;
+}
+#print-area .pr-sum-item{text-align:center}
+#print-area .pr-sum-val{font-size:16pt;font-weight:900;display:block}
+#print-area .pr-sum-lbl{font-size:8pt;color:#666}
+#print-area table.pr-tbl{
+  table-layout:fixed;width:100%;border-collapse:collapse;
+  font-size:10pt;margin-bottom:0;
+  border:1px solid #b0b8d0;
+}
+#print-area table.pr-tbl thead tr{background:#2c4a8f;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#print-area table.pr-tbl th{
+  color:#fff;border:1px solid #3a5aa0;
+  padding:7px 8px;font-weight:700;text-align:center;
+  font-size:10pt;
+}
+#print-area table.pr-tbl th.left{text-align:left}
+#print-area table.pr-tbl tbody tr:nth-child(even){background:#f7f9ff}
+#print-area table.pr-tbl tbody tr:last-child{background:#e8edf8;font-weight:900}
+#print-area table.pr-tbl td{
+  border:1px solid #c8cfe8;padding:7px 8px;
+  vertical-align:middle;font-size:10pt;
+}
+#print-area table.pr-tbl td.center{text-align:center}
+#print-area .sig-cell{
+  width:110pt;height:45pt;
+  text-align:center;vertical-align:middle;
+  border:1px solid #c8cfe8;
+}
+#print-area .sig-cell img{max-height:40pt;max-width:105pt;object-fit:contain}
+#print-area .pr-footer{
+  border-top:2px solid #1e3a5f;padding-top:10px;margin-top:16px;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:10pt;
+}
+#print-area .pr-sign-box{
+  border:1px solid #aaa;border-radius:4px;
+  padding:8px;text-align:center;min-height:60px;
+}
+#print-area .pr-sign-box-label{font-size:9pt;color:#666;margin-top:4px}
 #print-area table{width:100%;border-collapse:collapse;margin-bottom:10px}
 #print-area th{background:#1e3a5f!important;color:#fff!important;padding:6px 8px;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 #print-area td{border:1px solid #ccc;padding:5px 8px;font-size:10pt}
@@ -2505,8 +2551,15 @@ const PRINT={
     if(!wKeys.length)return '<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล</div>';
     const sysList=sys==='both'?['proc','fill']:sys==='proc'?['proc']:['fill'];
     let html=`<div class="pr-header">
-      <div class="pr-title">📋 บิล OT${sys==='both'?' รวมทุกระบบ':sys==='proc'?' — Process':' — Filling'}</div>
-      <div class="pr-sub">${titleSub} · พิมพ์วันที่: ${dateStr}</div>
+      <div class="pr-header-left">
+        <div class="pr-title">บันทึกการทำงานล่วงเวลา (OT)</div>
+        <div class="pr-sub">${sys==='both'?'Process & Filling':sys==='proc'?'แผนก Process':'แผนก Filling'}</div>
+        <div class="pr-sub">${titleSub}</div>
+      </div>
+      <div class="pr-header-right">
+        <div>พิมพ์วันที่: ${dateStr}</div>
+        <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
+      </div>
     </div>`;
     sysList.forEach(s2=>{
       const sysName=s2==='proc'?'Process':'Filling';
@@ -2544,39 +2597,70 @@ const PRINT={
       html+=`<div class="pr-section">
         <div class="pr-sec-title">${sysName}</div>
         <div class="pr-summary">
-          OT รวม <strong>${oH}</strong> ชม. | OT% = <strong style="color:${isOver?'#dc2626':'#16a34a'}">${pct}%</strong> | Target ${tgt}% | ${isOver?'⚠️ เกิน Target':'✅ ปกติ'}
+          <div class="pr-sum-item">
+            <span class="pr-sum-val" style="color:#1e3a5f">${oH}</span>
+            <span class="pr-sum-lbl">ชม. OT รวม</span>
+          </div>
+          <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
+          <div class="pr-sum-item">
+            <span class="pr-sum-val" style="color:${isOver?'#dc2626':'#16a34a'}">${pct}%</span>
+            <span class="pr-sum-lbl">OT%</span>
+          </div>
+          <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
+          <div class="pr-sum-item">
+            <span class="pr-sum-val">${tgt}%</span>
+            <span class="pr-sum-lbl">Target</span>
+          </div>
+          <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
+          <div class="pr-sum-item">
+            <span class="pr-sum-val" style="color:${isOver?'#dc2626':'#16a34a'};font-size:12pt">${isOver?'⚠️ เกิน':'✅ ปกติ'}</span>
+            <span class="pr-sum-lbl">สถานะ</span>
+          </div>
         </div>
         <table class="pr-tbl">
           <thead><tr>
-            <th style="width:30px">#</th>
-            <th>ชื่อพนักงาน</th>
-            <th>แผนก</th>
-            <th>วัน/กะ</th>
-            <th style="width:50px;text-align:center">ชม.</th>
-            <th style="width:120px;text-align:center">ลายมือชื่อ</th>
+            <th class="left" style="width:28pt">#</th>
+            <th class="left" style="width:90pt">ชื่อ-นามสกุล</th>
+            <th class="left" style="width:70pt">แผนก</th>
+            <th class="left" style="width:55pt">วันที่</th>
+            <th class="left" style="width:50pt">กะ</th>
+            <th style="width:35pt">ชม.</th>
+            <th style="width:110pt">ลายมือชื่อ</th>
           </tr></thead>
           <tbody>
             ${rows.map((r,i)=>`<tr>
-              <td style="text-align:center">${i+1}</td>
-              <td>${r.name}</td>
-              <td>${r.dept}</td>
-              <td>${r.dayN} ${r.ds} ${r.sh}</td>
-              <td style="text-align:center">${r.hrs}</td>
-              <td style="text-align:center;height:45px">
-                ${r.sigImg?`<img src="${r.sigImg}" style="max-height:40px;max-width:110px;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${r.sg}</span>`:''}
+              <td class="center">${i+1}</td>
+              <td style="font-weight:700;white-space:nowrap">${r.name}</td>
+              <td style="white-space:nowrap">${r.dept}</td>
+              <td style="white-space:nowrap">${r.ds}</td>
+              <td style="white-space:nowrap">${r.sh}</td>
+              <td class="center" style="font-weight:700">${r.hrs}</td>
+              <td class="sig-cell">
+                ${r.sigImg?`<img src="${r.sigImg}">`
+                  :r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:13pt;color:#1e3a5f">${r.sg}</span>`
+                  :''}
               </td>
             </tr>`).join('')}
-            <tr style="font-weight:900;background:#f0f0f0">
-              <td colspan="4" style="text-align:right">รวม</td>
-              <td style="text-align:center">${rows.reduce((a,r)=>a+r.hrs,0)}</td>
+            <tr>
+              <td colspan="5" style="text-align:right;font-weight:900;padding-right:12px">รวมชั่วโมง OT</td>
+              <td class="center" style="font-weight:900;font-size:12pt;color:#1e3a5f">${rows.reduce((a,r)=>a+r.hrs,0)}</td>
               <td></td>
             </tr>
           </tbody>
         </table>
         <div class="pr-footer">
-          <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
-          <div>วันที่: ${dateStr}</div>
-          <div>ผู้อนุมัติ: ________________________</div>
+          <div class="pr-sign-box">
+            <div style="height:40px"></div>
+            <div class="pr-sign-box-label">ผู้จัดทำ: ${S.user?.name||'Admin'}</div>
+          </div>
+          <div class="pr-sign-box">
+            <div style="height:40px"></div>
+            <div class="pr-sign-box-label">ผู้ตรวจสอบ</div>
+          </div>
+          <div class="pr-sign-box">
+            <div style="height:40px"></div>
+            <div class="pr-sign-box-label">ผู้อนุมัติ</div>
+          </div>
         </div>
       </div>`;
     });
