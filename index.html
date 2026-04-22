@@ -448,7 +448,7 @@ const SHTIME={morning:'06:00-14:00',afternoon:'14:00-22:00',night:'22:00-06:00'}
 const MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const PDEPT=['Oreo Coating','Mixing','Flavor','CIP Man','Transfer Rework','AL'];
 const FDEPT=['Polo 12A','Polo 12B','Comet','Mach','Sandwich','Hoyer','Extrud 3','Glacé','Scooping','Curve','ห้องน้ำยา','AL'];
-const LOCK_D=['Curve','ห้องน้ำยา'];
+const LOCK_D=[];
 const AL='AL';
 const SHST={morning:6*60,afternoon:14*60,night:22*60};
 const SHEN={morning:14*60,afternoon:22*60,night:30*60};
@@ -1277,7 +1277,7 @@ const EMP={
           })()}
         </div>
         <div class="e-acts">
-          ${(!S.user?.isAdmin&&S.user?.emp?.name===e.name)||S.user?.isAdmin?`<button class="e-btn" onclick="EMP.openLeave('${e.name.replace(/'/g,"\'")}',${ri})" title="แจ้งลา" style="color:var(--amber)">📅</button>`:''}
+          ${(!S.user?.isAdmin&&S.user?.emp?.name===e.name)||S.user?.isAdmin?`<button class="e-btn" data-name="${e.name}" data-idx="${ri}" onclick="EMP.openLeave(this.dataset.name)" title="แจ้งลา" style="color:var(--amber)">📅</button>`:''}
           <button class="e-btn" onclick="EMP.toggleLock(${ri})" style="border-color:${e.lockShift?'var(--green)':'var(--border)'};color:${e.lockShift?'var(--green2)':'var(--text3)'}">🔒</button>
           <button class="e-btn" onclick="EMP.openEdit(${ri})">✏️</button>
           <button class="e-btn" onclick="EMP.del(${ri})" style="color:var(--red2)">✕</button>
@@ -1420,8 +1420,9 @@ const EMP={
         <div class="fg">
           <label class="fl">เลือกวันที่จะลา</label>
           <input type="date" class="fi" id="lv-date" min="${minDate}"
+            data-name="${name}"
             style="font-size:14px;padding:10px"
-            onchange="EMP.onLeaveDate(this.value,'${name}')">
+            onchange="EMP.onLeaveDate(this.value,this.dataset.name)">
           <div style="font-size:11px;color:var(--text3);margin-top:4px">เลือกได้ล่วงหน้าไม่จำกัด</div>
         </div>
         <div id="lv-selected" style="margin-top:4px">
@@ -1435,8 +1436,8 @@ ${(()=>{
                 const col=isPend?'#F59E0B':isApp?'#16A34A':isCan?'#DC2626':'#334155';
                 const bg=isPend?'rgba(245,158,11,.1)':isApp?'rgba(22,163,74,.1)':isCan?'rgba(220,38,38,.1)':'var(--bg3)';
                 const ic=isPend?'🟡 รออนุมัติ':isApp?'✅ อนุมัติ':isCan?'🔴 ขอยกเลิก':'';
-                const btnCancel=isPend?'<button onclick="EMP.cancelLeaveDate(\''+r.date+'\',\''+name+'\')" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:#EF4444;font-size:12px">✕</button>':'';
-                const btnReqCancel=isApp?'<button onclick="EMP.reqCancelLeave(\''+r.id+'\',\''+name+'\')" style="padding:3px 8px;background:rgba(220,38,38,.15);border:1px solid #DC2626;border-radius:6px;color:#EF4444;font-size:10px;font-weight:700;font-family:Sarabun,sans-serif">ขอยกเลิก</button>':'';
+                const btnCancel=isPend?'<button data-date="'+r.date+'" data-name="'+name+'" onclick="EMP.cancelLeaveDate(this.dataset.date,this.dataset.name)" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:#EF4444;font-size:12px">✕</button>':'';
+                const btnReqCancel=isApp?'<button data-id="'+r.id+'" data-name="'+name+'" onclick="EMP.reqCancelLeave(this.dataset.id,this.dataset.name)" style="padding:3px 8px;background:rgba(220,38,38,.15);border:1px solid #DC2626;border-radius:6px;color:#EF4444;font-size:10px;font-weight:700;font-family:Sarabun,sans-serif">ขอยกเลิก</button>':'';
                 const lblWait=isCan?'<span style="font-size:10px;color:#64748B">รอ Admin</span>':'';
                 return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:'+bg+';border:1px solid '+col+';border-radius:8px;margin-bottom:4px">'+
                   '<span style="flex:1;font-size:12px;font-weight:700">'+dayName+' '+ds+'</span>'+
