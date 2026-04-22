@@ -504,14 +504,17 @@ function calcMixingPlan(dayData){
   let stock=parseFloat(LS.get('mix_stock',0)||0); // Stock ตั้งต้น
 
   return dayData.map((d,idx)=>{
-    // ความต้องการของวันถัดไป (Process ผลิตล่วงหน้า 1 วัน)
+    // 1. จ่าย Stock ให้ Filling วันนี้ก่อน
+    const todayDemand=d.totalLiter;
+    stock=Math.max(0,stock-todayDemand);
+
+    // 2. คำนวณว่าต้องผลิตเพื่อให้พอสำหรับวันถัดไป
     const nextDay=dayData[idx+1];
-    const demandLiter=nextDay?nextDay.totalLiter:stock*0.5; // เสาร์ = Buffer 50% ของ stock
+    const demandLiter=nextDay?nextDay.totalLiter:cfg.bufferH*cfg.cap2; // เสาร์ = Buffer
     const hasOreoNext=nextDay?nextDay.hasOreo:d.hasOreo;
 
-    // หัก Stock ที่มี
+    // 3. ต้องผลิตเพิ่มเท่าไหร่ = ความต้องการวันถัดไป - Stock ที่เหลือ
     const needed=Math.max(0,demandLiter-stock);
-    // Stock ที่เหลือหลังจ่ายให้วันถัดไป
     const stockAfter=Math.max(0,stock-demandLiter);
 
     // เวลาทำงานต่อวัน
