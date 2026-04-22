@@ -574,6 +574,7 @@ const AUTH={
     document.getElementById('ub').style.background=S.user.isAdmin?'var(--amber)':'var(--teal)';
     document.getElementById('ua').textContent=S.user.name.charAt(0);
     APP.init();
+    resetSessionTimer();
   },
   logout(){
     confirm2('ออกจากระบบ?',()=>{
@@ -1475,6 +1476,9 @@ const SET={
         <div class="sr-ctrl"><input type="number" value="${D.getTarget()}" min="0" max="100" onchange="D.saveTarget(parseInt(this.value)||15);DASH.render();toast('✅')"></div></div>
       <div class="sr"><div><div class="sr-lbl">📅 จำกัด OT/สัปดาห์</div><div class="sr-sub">สูงสุดกี่วันต่อคน</div></div>
         <div class="sr-ctrl"><input type="number" value="${D.getMaxOT()}" min="1" max="7" onchange="D.saveMaxOT(parseInt(this.value)||3);toast('✅')"></div></div>
+      <div class="sr"><div><div class="sr-lbl">⏰ หมดเวลา Logout</div><div class="sr-sub">ไม่ใช้งานกี่นาที</div></div>
+        <div class="sr-ctrl"><input type="number" value="30" min="5" max="120" id="set-timeout"
+          onchange="window.SESSION_TIMEOUT=parseInt(this.value)*60000;resetSessionTimer();toast('✅ ตั้งค่าแล้ว')"></div></div>
     </div>
     <div class="sg"><div class="sg-t">📋 เหตุผล OT เกิน</div><div style="padding:12px 14px">
       ${reasons.map((r,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
@@ -1628,6 +1632,33 @@ const PRINT={
   }
 };
 
+// ══ SESSION TIMEOUT ══
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 นาที
+let _sessionTimer = null;
+let _lastActivity = Date.now();
+
+function resetSessionTimer() {
+  _lastActivity = Date.now();
+  clearTimeout(_sessionTimer);
+  _sessionTimer = setTimeout(() => {
+    if(S.user) {
+      S.user = null;
+      document.getElementById('app').classList.add('hide');
+      document.getElementById('pg-login').classList.remove('hide');
+      document.getElementById('lp').value = '';
+      document.getElementById('le').textContent = '';
+      // แสดง popup แจ้งเตือน
+      document.getElementById('le').textContent = '⏰ หมดเวลาใช้งาน กรุณา Login ใหม่';
+    }
+  }, SESSION_TIMEOUT);
+}
+
+// track activity ทุก interaction
+['click','touchstart','keydown','scroll'].forEach(evt => {
+  document.addEventListener(evt, resetSessionTimer, {passive:true});
+});
+
+// ══ PWA Install ══
 // PWA Install
 let _deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
@@ -1955,6 +1986,16 @@ const TEAM={
     toast('✅ โหลดทุกทีมแล้ว');
   }
 };
+
+// เช็ค session ทุก 1 นาที แสดงเตือนเมื่อเหลือ 5 นาที
+setInterval(()=>{
+  if(!S.user) return;
+  const remaining = SESSION_TIMEOUT - (Date.now() - _lastActivity);
+  if(remaining < 5*60*1000 && remaining > 0) {
+    const mins = Math.ceil(remaining/60000);
+    toast('⏰ จะ Logout อัตโนมัติใน '+mins+' นาที กรุณาบันทึกงาน');
+  }
+}, 60000);
 
 document.addEventListener('DOMContentLoaded',()=>{
   initFB();
