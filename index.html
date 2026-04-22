@@ -1378,15 +1378,23 @@ const EMP={
         <div id="lv-selected" style="margin-top:4px">
           ${pendingDates.length||approvedDates.length?`
             <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">วันที่ขอลาแล้ว:</div>
-            ${[...pendingDates.map(d=>({d,status:'pending'})),...approvedDates.map(d=>({d,status:'approved'}))].sort((a,b)=>a.d.localeCompare(b.d)).map(({d,status})=>{
-              const dt=new Date(d);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
-              const dayName=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'][dt.getDay()];
-              return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${status==='approved'?'rgba(22,163,74,.1)':'rgba(245,158,11,.1)'};border:1px solid ${status==='approved'?'var(--green)':'var(--amber)'};border-radius:8px;margin-bottom:4px">
-                <span style="flex:1;font-size:12px;font-weight:700">${dayName} ${ds}</span>
-                <span style="font-size:10px;font-weight:800;color:${status==='approved'?'var(--green2)':'var(--amber)'}">${status==='approved'?'✅ อนุมัติ':'🟡 รอ'}</span>
-                ${status==='pending'?`<button onclick="EMP.cancelLeaveDate('${d}','${name}')" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:var(--red2);font-size:12px">✕</button>`:''}
-              </div>`;
-            }).join('')}
+${(()=>{
+              return myReqs.sort((a,b)=>a.date.localeCompare(b.date)).map(r=>{
+                const dt=new Date(r.date);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+                const dayName=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'][dt.getDay()];
+                const isPend=r.status==='pending';const isApp=r.status==='approved';const isCan=r.status==='cancel_req';
+                const col=isPend?'#F59E0B':isApp?'#16A34A':isCan?'#DC2626':'#334155';
+                const bg=isPend?'rgba(245,158,11,.1)':isApp?'rgba(22,163,74,.1)':isCan?'rgba(220,38,38,.1)':'var(--bg3)';
+                const ic=isPend?'🟡 รออนุมัติ':isApp?'✅ อนุมัติ':isCan?'🔴 ขอยกเลิก':'';
+                const btnCancel=isPend?'<button onclick="EMP.cancelLeaveDate(\''+r.date+'\',\''+name+'\')" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:#EF4444;font-size:12px">✕</button>':'';
+                const btnReqCancel=isApp?'<button onclick="EMP.reqCancelLeave(\''+r.id+'\',\''+name+'\')" style="padding:3px 8px;background:rgba(220,38,38,.15);border:1px solid #DC2626;border-radius:6px;color:#EF4444;font-size:10px;font-weight:700;font-family:Sarabun,sans-serif">ขอยกเลิก</button>':'';
+                const lblWait=isCan?'<span style="font-size:10px;color:#64748B">รอ Admin</span>':'';
+                return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:'+bg+';border:1px solid '+col+';border-radius:8px;margin-bottom:4px">'+
+                  '<span style="flex:1;font-size:12px;font-weight:700">'+dayName+' '+ds+'</span>'+
+                  '<span style="font-size:10px;font-weight:800;color:'+col+'">'+ic+'</span>'+
+                  btnCancel+btnReqCancel+lblWait+'</div>';
+              }).join('');
+            })()}
           `:'<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">ยังไม่มีคำขอลา</div>'}
         </div>
         <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--amber)">
@@ -1423,6 +1431,16 @@ const EMP={
     toast('✅ ส่งคำขอลาวัน '+ds+' แล้ว รออนุมัติ');
   },
 
+  reqCancelLeave(id,name){
+    const reqs=D.getLeaveReq();
+    const r=reqs.find(x=>x.id===id);if(!r)return;
+    r.status='cancel_req';
+    r.cancelReqAt=new Date().toISOString();
+    D.saveLeaveReq(reqs);
+    LEAVE.render();LEAVE.updBadge();
+    this.openLeave(name);
+    toast('✅ ส่งคำขอยกเลิกแล้ว รอ Admin อนุมัติ');
+  },
   cancelLeaveDate(date,name){
     const reqs=D.getLeaveReq();
     const idx=reqs.findIndex(r=>r.name===name&&r.date===date&&r.status==='pending');
@@ -1730,7 +1748,7 @@ const LEAVE={
   },
   updBadge(){
     const myEmps=new Set(D.getEmps().map(e=>e.name));
-    const cnt=D.getLeaveReq().filter(r=>r.status==='pending'&&myEmps.has(r.name)).length;
+    const cnt=D.getLeaveReq().filter(r=>(r.status==='pending'||r.status==='cancel_req')&&myEmps.has(r.name)).length;
     const badge=document.getElementById('leave-pending-badge');
     if(badge){badge.style.display=cnt>0?'block':'none';badge.textContent='รออนุมัติ '+cnt;}
   },
@@ -1740,7 +1758,7 @@ const LEAVE={
     // กรองตาม sys ปัจจุบัน
     const empNames=new Set(D.getEmps().map(e=>e.name));
     const all=D.getLeaveReq().filter(r=>empNames.has(r.name));
-    const filtered=this.tab==='pending'?all.filter(r=>r.status==='pending')
+    const filtered=this.tab==='pending'?all.filter(r=>r.status==='pending'||r.status==='cancel_req')
       :this.tab==='approved'?all.filter(r=>r.status==='approved')
       :all;
     // เรียงตามวันที่
@@ -1761,6 +1779,7 @@ const LEAVE={
           const isPending=r.status==='pending';
           const isApproved=r.status==='approved';
           const isRejected=r.status==='rejected';
+          const isCancelReq=r.status==='cancel_req';
           return`<div style="background:var(--card);border:1px solid ${isPending?'rgba(245,158,11,.4)':isApproved?'rgba(22,163,74,.4)':'rgba(220,38,38,.4)'};border-radius:12px;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
             <div style="width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${r.name.charAt(0)}</div>
             <div style="flex:1;min-width:0">
@@ -1768,13 +1787,16 @@ const LEAVE={
               <div style="font-size:11px;color:var(--text2);margin-top:2px">${r.dept}</div>
             </div>
             <div style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:8px;
-              background:${isPending?'rgba(245,158,11,.15)':isApproved?'rgba(22,163,74,.15)':'rgba(220,38,38,.15)'};
-              color:${isPending?'var(--amber)':isApproved?'var(--green2)':'var(--red2)'}">
-              ${isPending?'🟡 รออนุมัติ':isApproved?'✅ อนุมัติ':'❌ ปฏิเสธ'}
+              background:${isPending?'rgba(245,158,11,.15)':isApproved?'rgba(22,163,74,.15)':isRejected?'rgba(220,38,38,.15)':'rgba(220,38,38,.1)'};
+              color:${isPending?'var(--amber)':isApproved?'var(--green2)':isRejected?'var(--red2)':'var(--red2)'}">
+              ${isPending?'🟡 รออนุมัติ':isApproved?'✅ อนุมัติ':isRejected?'❌ ปฏิเสธ':'🔴 ขอยกเลิก'}
             </div>
             ${S.user?.isAdmin&&isPending?`
               <button onclick="LEAVE.approve('${r.id}')" style="padding:6px 10px;background:rgba(22,163,74,.2);border:1px solid var(--green);border-radius:8px;color:var(--green2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ อนุมัติ</button>
               <button onclick="LEAVE.reject('${r.id}')" style="padding:6px 10px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:8px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">❌ ปฏิเสธ</button>
+            `:''}
+            ${S.user?.isAdmin&&r.status==='cancel_req'?`
+              <button onclick="LEAVE.confirmCancel('${r.id}')" style="padding:6px 10px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:8px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ ยืนยันยกเลิก</button>
             `:''}
             ${S.user?.isAdmin&&!isPending?`
               <button onclick="LEAVE.del('${r.id}')" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px">✕</button>
@@ -1793,6 +1815,19 @@ const LEAVE={
     LEAVE.archivePast();
     this.render();
     toast('✅ อนุมัติการลาของ '+r.name+' แล้ว');
+  },
+  confirmCancel(id){
+    const reqs=D.getLeaveReq();
+    const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;
+    const r=reqs[idx];
+    reqs.splice(idx,1);
+    D.saveLeaveReq(reqs);
+    this.render();
+    // โหลดพนักงานใหม่อัตโนมัติ
+    const dt=new Date(r.date);
+    const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+    toast('✅ ยกเลิกการลาของ '+r.name+' วัน '+ds+' แล้ว — กำลังโหลดตารางใหม่...');
+    setTimeout(()=>{ PLAN.autoLoad(); }, 800);
   },
   reject(id){
     const reqs=D.getLeaveReq();
