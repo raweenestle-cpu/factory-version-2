@@ -1107,11 +1107,14 @@ const PLAN={
     confirm2('ล้างแผนการผลิตสัปดาห์นี้?\n(ล้าง Product, Volume ทุก Line\nตารางกะไม่ถูกแตะ)',()=>{
       // ล้าง Plan
       this.plan={};
-      D.savePlan({});
+      LS.set('plan_'+S.sys,{});
+      FB.set(S.sys+'/plan',{});
       // ล้าง Volume
-      D.saveVolume({});
+      LS.set('fill_volume',{});
+      FB.set('fill/volume',{});
       // ล้าง Stock ตั้งต้น
       LS.set('mix_stock',0);
+      FB.set('config/mix_stock',0);
       // ล้าง mixing summary
       const ms=document.getElementById('mixing-summary');
       if(ms)ms.style.display='none';
