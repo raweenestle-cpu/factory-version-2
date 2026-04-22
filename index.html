@@ -745,10 +745,30 @@ const DASH={
     const items=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
     const body=document.getElementById('pb');if(!body)return;
     if(!items.length){body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">ยังไม่มีข้อมูล OT เกิน</div>';return;}
-    const total=items.reduce((a,[,v])=>a+v,0);let cum=0;
+    const total=items.reduce((a,[,v])=>a+v,0);
     const COLS=['#EF4444','#F97316','#F59E0B','#22C55E','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
-    body.innerHTML=items.map(([r,h],i)=>{cum+=h;const pct=Math.round(h/total*100);const cp=Math.round(cum/total*100);
-      return `<div class="p-row"><div class="p-label">${r}</div><div class="p-bar-wrap"><div class="p-bar" style="width:${Math.max(pct,2)}%;background:${COLS[i%8]}"><span>${h}ชม.</span></div><div style="position:absolute;top:0;height:100%;border-right:1.5px solid var(--amber);left:${cp}%;pointer-events:none"></div></div><div class="p-pct">${cp}%</div></div>`;
+    // คำนวณ % แบบ Largest Remainder เพื่อให้รวมได้ 100% เสมอ
+    let rawPcts=items.map(([,h])=>h/total*100);
+    let floored=rawPcts.map(p=>Math.floor(p));
+    let remainders=rawPcts.map((p,i)=>({i,r:p-floored[i]}));
+    let deficit=100-floored.reduce((a,b)=>a+b,0);
+    remainders.sort((a,b)=>b.r-a.r).slice(0,deficit).forEach(({i})=>floored[i]++);
+    let cum=0;
+    body.innerHTML=items.map(([r,h],i)=>{
+      const pct=floored[i];
+      cum+=pct;
+      const cp=i===items.length-1?100:cum; // อันสุดท้าย = 100% เสมอ
+      const barW=Math.max(pct,2);
+      return `<div class="p-row">
+        <div class="p-label">${r}</div>
+        <div class="p-bar-wrap">
+          <div class="p-bar" style="width:${barW}%;background:${COLS[i%8]}">
+            <span>${h}ชม. (${pct}%)</span>
+          </div>
+          <div style="position:absolute;top:0;height:100%;border-right:2px solid var(--amber);left:${cp}%;pointer-events:none"></div>
+        </div>
+        <div class="p-pct">${cp}%</div>
+      </div>`;
     }).join('');
   }
 };
