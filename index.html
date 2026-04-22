@@ -196,6 +196,8 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;z-index:9999;white-space:nowrap;box-shadow:var(--shadow);opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
 .av0{background:linear-gradient(135deg,#2563EB,#3B82F6)}.av1{background:linear-gradient(135deg,#0D9488,#14B8A6)}.av2{background:linear-gradient(135deg,#7C3AED,#8B5CF6)}.av3{background:linear-gradient(135deg,#DC2626,#EF4444)}.av4{background:linear-gradient(135deg,#D97706,#F59E0B)}.av5{background:linear-gradient(135deg,#059669,#10B981)}.av6{background:linear-gradient(135deg,#DB2777,#EC4899)}.av7{background:linear-gradient(135deg,#0369A1,#0EA5E9)}
+@keyframes pulse-save{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{opacity:.8;box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+.btn-unsaved{animation:pulse-save 1.5s ease-in-out infinite!important;background:var(--red2)!important}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media print{#pg-login,#app .topbar,#app .bottomnav,.mo,.toast{display:none!important}#print-area{display:block!important}@page{size:A4 landscape;margin:8mm}body{background:#fff!important;color:#000!important}}
 #print-area{display:none;font-family:'Sarabun',sans-serif;font-size:12pt;color:#000;background:#fff}
@@ -288,7 +290,10 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
         </div>
       </div>
       <div class="sched-btns">
-        <button onclick="SCHED.save()" style="background:rgba(37,99,235,.8);color:#fff">💾 บันทึก</button>
+        <button id="sched-save-btn" onclick="SCHED.save()" style="background:rgba(37,99,235,.8);color:#fff;position:relative">
+          💾 บันทึก
+          <span id="unsaved-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:#EF4444;border-radius:50%;border:2px solid var(--bg2)"></span>
+        </button>
         <button onclick="SCHED.printSched()" style="background:rgba(15,52,96,.9);color:#fff;border:1px solid rgba(6,182,212,.4)">🖨️ ตาราง</button>
         <button onclick="SCHED.printOT()" style="background:rgba(0,0,0,.3);color:#fff;border:1px solid rgba(245,158,11,.4)">🖨️ OT</button>
         <button onclick="SCHED.clearWk()" style="background:rgba(217,119,6,.2);color:var(--amber);border:1px solid rgba(217,119,6,.3)">🗑️ ล้าง</button>
@@ -454,6 +459,7 @@ const SHST={morning:6*60,afternoon:14*60,night:22*60};
 const SHEN={morning:14*60,afternoon:22*60,night:30*60};
 
 let S={sys:'proc',user:null,wkStart:getMonday(new Date()),yr:new Date().getFullYear()+543};
+let _unsaved=false;
 
 function getMonday(d){const dt=new Date(d);const dy=dt.getDay();dt.setDate(dt.getDate()+(dy===0?-6:1-dy));dt.setHours(0,0,0,0);return dt;}
 function wKey(d){const m=getMonday(d);return m.getFullYear()+'-'+String(m.getMonth()+1).padStart(2,'0')+'-'+String(m.getDate()).padStart(2,'0');}
@@ -461,6 +467,18 @@ function wNum(d){const s=new Date(d.getFullYear(),0,1);return Math.ceil(((d-s)/8
 function dStr(d){return d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543);}
 
 let _tt=null;
+function markUnsaved(){
+  _unsaved=true;
+  const btn=document.getElementById('sched-save-btn');
+  if(btn){btn.classList.add('btn-unsaved');btn.textContent='💾 บันทึก !';}
+  document.getElementById('unsaved-dot')?.style.setProperty('display','block');
+}
+function markSaved(){
+  _unsaved=false;
+  const btn=document.getElementById('sched-save-btn');
+  if(btn){btn.classList.remove('btn-unsaved');btn.innerHTML='💾 บันทึก<span id="unsaved-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:#EF4444;border-radius:50%;border:2px solid var(--bg2)"></span>';}
+  document.getElementById('unsaved-dot')?.style.setProperty('display','none');
+}
 function toast(m,t=2500){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('show'),t);}
 function openMo(id){document.getElementById(id)?.classList.remove('hide');}
 function closeMo(id){document.getElementById(id)?.classList.add('hide');}
@@ -632,8 +650,15 @@ const APP={
     DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
     LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
   },
-  goPage(id,adminOnly=false){
+  goPage(id,adminOnly=false,force=false){
     if(adminOnly&&!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}
+    // เตือนถ้ายังไม่ได้ Save ตารางกะ
+    if(_unsaved&&id!=='pg-sched'&&!force){
+      showConfirm('⚠️ ยังไม่ได้บันทึกตารางกะ\n\nออกจากหน้านี้โดยไม่บันทึก?',()=>{
+        APP.goPage(id,adminOnly,true);
+      });
+      return;
+    }
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
     document.getElementById(id)?.classList.add('active');
@@ -1039,7 +1064,7 @@ const SCHED={
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const arr=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-    const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;D.saveSched(all);this.render();toast('🗑️ ลบ '+name);}
+    const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;D.saveSched(all);this.render();markUnsaved();toast('🗑️ ลบ '+name);}
   },
   openAdd(dept,di,sh){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
@@ -1075,7 +1100,7 @@ const SCHED={
     if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
     if(!sched[dept][di][sh])sched[dept][di][sh]=[];
     if(!sched[dept][di][sh].find(w=>w.name===name))sched[dept][di][sh].push({name,ot:false,otHrs:4,av:emp.av||0});
-    all[wk]=sched;D.saveSched(all);closeMo('mo-w');this.render();toast('✅ เพิ่ม '+name);
+    all[wk]=sched;D.saveSched(all);closeMo('mo-w');this.render();markUnsaved();toast('✅ เพิ่ม '+name);
   },
   openAL(name){
     const mo=document.getElementById('mo-w');
@@ -1106,11 +1131,30 @@ const SCHED={
     let tH=0,oH=0;
     D.getDepts().forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched[d]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
     const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
-    if(pct>tgt){this.showOTReason(pct,tgt,()=>{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('✅ บันทึกสำเร็จ');DASH.render();});}
-    else{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('✅ บันทึกสำเร็จ');DASH.render();}
+    const log=D.getOTLog();
+    const existIdx=log.findIndex(l=>l.wk===wk&&l.sys===S.sys);
+    if(pct>tgt){
+      // เกิน Target — popup ใส่/แก้เหตุผล พร้อมโหลดเหตุผลเดิมถ้ามี
+      const prevReasons=existIdx>=0?log[existIdx].reasons:[];
+      this.showOTReason(pct,tgt,()=>{
+        D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);
+        toast('✅ บันทึกสำเร็จ');DASH.render();
+      }, prevReasons);
+    } else {
+      // ไม่เกิน Target — อัพเดท pct ใหม่ถ้ามี Log เดิม ไม่ลบ
+      if(existIdx>=0){
+        log[existIdx].pct=pct;
+        log[existIdx].updatedAt=new Date().toISOString();
+        D.saveOTLog(log);
+        DASH.renderPareto();
+      }
+      D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);
+      toast('✅ บันทึกสำเร็จ');DASH.render();
+    }
   },
-  showOTReason(pct,tgt,onSave){
-    const reasons=D.getReasons();let rows=[{reason:reasons[0]||'',hours:0}];
+  showOTReason(pct,tgt,onSave,existingReasons=[]){
+    const reasons=D.getReasons();
+    let rows=existingReasons.length?existingReasons.map(r=>({...r})):[{reason:reasons[0]||'',hours:0}];
     const renderR=()=>{
       document.getElementById('or-rows').innerHTML=rows.map((r,i)=>`<div class="ot-rrow">
         <select onchange="window._or[${i}].reason=this.value">${reasons.map(re=>`<option value="${re}" ${r.reason===re?'selected':''}>${re}</option>`).join('')}</select>
