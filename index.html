@@ -2570,8 +2570,9 @@ const PRINT={
     sysList.forEach(s2=>{
       const sysName=s2==='proc'?'Process':'Filling';
       const depts=D.getDepts(s2);
-      // รวบรวมพนักงาน OT
-      const rows=[];
+      // รวบรวมพนักงาน OT จัดกลุ่มตามวัน
+      let tH=0,oH=0;
+      const dayRows={}; // {di: {dayN, ds, shifts: {sh: [{dept,name,hrs,sg,sigImg}]}}}
       wKeys.forEach(wk4=>{
         const sched=D.getSched(s2)[wk4]||{};
         const wp=wk4.split('-');const ws4=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
@@ -2581,88 +2582,78 @@ const PRINT={
           SHS.forEach(sh=>{
             depts.forEach(dept=>{
               (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
-                if(!w.ot)return;
+                const h=w.ot?(w.otHrs||4):0;tH+=8+h;if(!w.ot)return;oH+=h;
+                if(!dayRows[di])dayRows[di]={dayN,ds:ds2,shifts:{}};
+                if(!dayRows[di].shifts[sh])dayRows[di].shifts[sh]=[];
                 const sgKey=wk4+'_'+w.name+'_'+dept+'_'+di+'_'+sh;
                 const sg=D.getSign(sgKey);
                 const emp=D.getEmps(s2).find(e=>e.name===w.name);
-                rows.push({name:w.name,dept,ds:ds2,dayN,sh:SHTH[sh],hrs:w.otHrs||4,sg,sigImg:emp?.signature||null});
+                dayRows[di].shifts[sh].push({dept,name:w.name,hrs:w.otHrs||4,sg,sigImg:emp?.signature||null});
               });
             });
           });
         }
       });
-      if(!rows.length)return;
-      // คำนวณ OT%
-      let tH=0,oH=0;
-      wKeys.forEach(wk5=>{
-        const sched2=D.getSched(s2)[wk5]||{};
-        depts.forEach(d3=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched2[d3]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
-      });
-      const pct=tH>0?Math.round(oH/tH*100):0;
-      const isOver=pct>tgt;
-      html+=`<div class="pr-section">
-        <div style="font-size:12pt;font-weight:900;background:#1e3a5f;color:#fff;padding:6px 12px;margin-bottom:0;border-radius:4px 4px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">${sysName}</div>
-        <div style="background:#f0f4ff;border:1px solid #c7d3f0;border-top:none;padding:10px 14px;margin-bottom:10px;display:flex;gap:20px;align-items:center;border-radius:0 0 4px 4px">
-          <div style="text-align:center">
-            <div style="font-size:20pt;font-weight:900;color:#1e3a5f;line-height:1">${oH}</div>
-            <div style="font-size:9pt;color:#555">ชม. OT รวม</div>
-          </div>
-          <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
-          <div style="text-align:center">
-            <div style="font-size:20pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'};line-height:1">${pct}%</div>
-            <div style="font-size:9pt;color:#555">OT%</div>
-          </div>
-          <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
-          <div style="text-align:center">
-            <div style="font-size:20pt;font-weight:900;color:#000;line-height:1">${tgt}%</div>
-            <div style="font-size:9pt;color:#555">Target</div>
-          </div>
-          <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
-          <div style="text-align:center">
-            <div style="font-size:14pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'};line-height:1">${isOver?'⚠️ เกิน Target':'✅ ปกติ'}</div>
-            <div style="font-size:9pt;color:#555">สถานะ</div>
-          </div>
+      if(!oH)return;
+      const pct=tH>0?Math.round(oH/tH*100):0;const isOver=pct>tgt;
+      html+=`<div style="margin-bottom:20px;page-break-inside:avoid">
+        <!-- Section Header -->
+        <div style="background:#1e3a5f;color:#fff;padding:8px 14px;border-radius:6px 6px 0 0;font-size:13pt;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          ${sysName}
         </div>
-        <table style="table-layout:fixed;width:100%;border-collapse:collapse;font-size:10pt;color:#000;margin-bottom:0">
-          <thead>
-            <tr style="background:#1e3a5f;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-              <th style="width:28pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:center">#</th>
-              <th style="width:90pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">ชื่อ-นามสกุล</th>
-              <th style="width:70pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">แผนก</th>
-              <th style="width:55pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">วันที่</th>
-              <th style="width:50pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">กะ</th>
-              <th style="width:35pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:center">ชม.</th>
-              <th style="width:110pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:center">ลายมือชื่อ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#ffffff':'#e8eeff'}">
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;text-align:center">${i+1}</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;font-weight:700;white-space:nowrap">${r.name}</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;white-space:nowrap">${r.dept}</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;white-space:nowrap">${r.ds}</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;white-space:nowrap">${r.sh}</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;font-weight:700;text-align:center">${r.hrs}</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;text-align:center;height:45pt">
-                ${r.sigImg
-                  ?`<img src="${r.sigImg}" style="max-height:40pt;max-width:105pt;object-fit:contain">`
-                  :r.sg
-                    ?`<span style="font-family:'Brush Script MT',cursive;font-size:13pt;color:#1e3a5f">${r.sg}</span>`
-                    :''}
-              </td>
-            </tr>`).join('')}
-            <tr style="background:#dde4f5">
-              <td colspan="5" style="border:1px solid #8090b0;padding:7px 12px;color:#000;font-weight:900;text-align:right">รวมชั่วโมง OT</td>
-              <td style="border:1px solid #8090b0;padding:7px 6px;color:#1e3a5f;font-weight:900;font-size:13pt;text-align:center">${rows.reduce((a,r)=>a+r.hrs,0)}</td>
-              <td style="border:1px solid #8090b0"></td>
-            </tr>
-          </tbody>
-        </table>
-        <div style="border-top:2px solid #1e3a5f;padding-top:12px;margin-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-          ${['ผู้จัดทำ: '+( S.user?.name||'Admin'),'ผู้ตรวจสอบ','ผู้อนุมัติ'].map(lbl=>`
+        <!-- Summary -->
+        <div style="background:#f0f4ff;border:1px solid #b0c0e8;border-top:none;padding:10px 14px;display:flex;gap:20px;align-items:center;margin-bottom:12px;border-radius:0 0 6px 6px">
+          <div style="text-align:center"><div style="font-size:18pt;font-weight:900;color:#1e3a5f">${oH}</div><div style="font-size:9pt;color:#555">ชม. OT</div></div>
+          <div style="width:1px;background:#b0c0e8;align-self:stretch"></div>
+          <div style="text-align:center"><div style="font-size:18pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'}">${pct}%</div><div style="font-size:9pt;color:#555">OT%</div></div>
+          <div style="width:1px;background:#b0c0e8;align-self:stretch"></div>
+          <div style="text-align:center"><div style="font-size:18pt;font-weight:900;color:#333">${tgt}%</div><div style="font-size:9pt;color:#555">Target</div></div>
+          <div style="width:1px;background:#b0c0e8;align-self:stretch"></div>
+          <div style="text-align:center"><div style="font-size:12pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'}">${isOver?'⚠️ เกิน':'✅ ปกติ'}</div><div style="font-size:9pt;color:#555">สถานะ</div></div>
+        </div>
+        <!-- แยกตามวัน -->
+        ${Object.entries(dayRows).map(([di,day])=>`
+          <div style="border:2px solid #1e3a5f;border-radius:6px;margin-bottom:10px;overflow:hidden;page-break-inside:avoid">
+            <!-- Day Header -->
+            <div style="background:#2c4a8f;color:#fff;padding:7px 12px;font-size:12pt;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+              ${day.dayN} ${day.ds}
+            </div>
+            ${Object.entries(day.shifts).map(([sh,emps2])=>`
+              <!-- Shift -->
+              <div style="background:#f0f4ff;padding:5px 12px;font-size:10pt;font-weight:700;color:#1e3a5f;border-top:1px solid #b0c0e8;border-bottom:1px solid #b0c0e8">
+                ${SHTH[sh]}
+              </div>
+              <table style="width:100%;border-collapse:collapse;font-size:10pt">
+                <thead>
+                  <tr style="background:#e8eeff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+                    <th style="width:30pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700">#</th>
+                    <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left;font-weight:700">ชื่อ-นามสกุล</th>
+                    <th style="width:80pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left;font-weight:700">แผนก</th>
+                    <th style="width:40pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700">ชม.</th>
+                    <th style="width:120pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700">ลายมือชื่อ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${emps2.map((e2,ei)=>`<tr style="background:${ei%2===0?'#fff':'#f5f7ff'}">
+                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000;text-align:center">${ei+1}</td>
+                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000;font-weight:700">${e2.name}</td>
+                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000">${e2.dept}</td>
+                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000;text-align:center;font-weight:700">${e2.hrs}</td>
+                    <td style="border:1px solid #8090b0;padding:7px 8px;text-align:center;height:45pt">
+                      ${e2.sigImg?`<img src="${e2.sigImg}" style="max-height:40pt;max-width:115pt;object-fit:contain">`:e2.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${e2.sg}</span>`:''}
+                    </td>
+                  </tr>`).join('')}
+                </tbody>
+              </table>
+            `).join('')}
+          </div>
+        `).join('')}
+        <!-- ลงนาม -->
+        <div style="border-top:2px solid #1e3a5f;padding-top:12px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          ${['ผู้จัดทำ: '+(S.user?.name||'Admin'),'ผู้ตรวจสอบ','ผู้อนุมัติ'].map(lbl=>`
             <div style="border:1px solid #aaa;border-radius:4px;padding:10px;text-align:center">
               <div style="height:50px"></div>
-              <div style="border-top:1px solid #aaa;padding-top:6px;font-size:9pt;color:#555">${lbl}</div>
+              <div style="border-top:1px solid #aaa;padding-top:6px;font-size:9pt;color:#000">${lbl}</div>
             </div>`).join('')}
         </div>
       </div>`;
