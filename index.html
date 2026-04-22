@@ -1099,13 +1099,14 @@ const PLAN={
         totalMl+=boxes*mlPerBox;
       });
       const totalVol=Math.round(totalMl/1000); // แปลงเป็นลิตร
-      // เช็ค Oreo
-      const oreoLine=cfg.oreoLine||'Sandwich';
-      const fillDepts=D.getDepts('fill');
-      const hasOreo=fillDepts.some(dept=>{
+      // เช็ค Oreo เฉพาะ Extrud 3 และ Glacé เท่านั้น
+      const oreoLines=['Extrud 3','Glacé'];
+      const hasOreo=oreoLines.some(dept=>{
         const items=(fillPlan[dept]||{})[di]||[];
-        return items.some(it=>it.product&&it.product.toLowerCase().includes('oreo'))
-          ||(dept===oreoLine&&((fillPlan[dept]||{})[di]||[]).length>0);
+        return items.some(it=>{
+          const name=typeof it==='object'?it.product:it;
+          return name&&name.toLowerCase().includes('oreo');
+        });
       });
       // คำนวณ Mixing
       const need2=(totalVol>cfg.threshold)||hasOreo;
@@ -2060,7 +2061,7 @@ const SET={
         <div class="sr"><div><div class="sr-lbl">👥 Mixing 2 ชุด</div><div class="sr-sub">จำนวนคน Process</div></div>
           <div class="sr-ctrl"><input type="number" value="${cfg.mix2}" min="1" max="30" style="width:60px"
             onchange="(function(){const c=D.getMixingCfg();c.mix2=parseInt(this.value)||12;D.saveMixingCfg(c);toast('✅');}).call(this)"></div></div>
-        <div class="sr"><div><div class="sr-lbl">🍪 Line ที่ผลิต Oreo</div><div class="sr-sub">ชื่อ Line ใน Filling</div></div>
+        <div class="sr"><div><div class="sr-lbl">🍪 Line Oreo (Filling)</div><div class="sr-sub">ตรวจ Extrud 3 และ Glacé อัตโนมัติ</div></div>
           <div class="sr-ctrl"><input type="text" value="${cfg.oreoLine}" style="width:100px;text-align:left"
             onchange="(function(){const c=D.getMixingCfg();c.oreoLine=this.value;D.saveMixingCfg(c);toast('✅');}).call(this)"></div></div>
         <div class="sr"><div><div class="sr-lbl">💧 Capacity Mixing 2</div><div class="sr-sub">ลิตร/ชั่วโมง (ชุดเสริม)</div></div>
