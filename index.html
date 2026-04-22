@@ -1181,6 +1181,22 @@ const EMP={
         <div class="e-av ${AV[(e.av||0)%8]}" ${e.photo?'style="background:transparent"':''}>${e.photo?`<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:e.name.charAt(0)}</div>
         <div class="e-info"><div class="e-name">${e.name}</div><div class="e-dept">${e.dept||e.mainDept||'-'}</div>
           <div class="e-tags">${tags.map(t=>`<span class="e-tag ${t.c}">${t.l}</span>`).join('')}</div>
+          ${(()=>{
+            if(!S.user||S.user.isAdmin||S.user.emp?.name!==e.name)return '';
+            const myReqs=D.getLeaveReq().filter(r=>r.name===e.name);
+            const today=new Date();today.setHours(0,0,0,0);
+            const upcoming=myReqs.filter(r=>new Date(r.date)>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
+            if(!upcoming.length)return '';
+            const badges=upcoming.map(r=>{
+              const dt=new Date(r.date);
+              const ds=dt.getDate()+'/'+(dt.getMonth()+1);
+              const dayN=['อา','จ','อ','พ','พฤ','ศ','ส'][dt.getDay()];
+              const col=r.status==='approved'?'#22C55E':r.status==='pending'?'#F59E0B':'#EF4444';
+              const ic=r.status==='approved'?'✅':r.status==='pending'?'🟡':'❌';
+              return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.08);color:'+col+';margin-right:3px">'+ic+' '+dayN+' '+ds+'</span>';
+            }).join('');
+            return '<div style="margin-top:6px">'+badges+'</div>';
+          })()}
         </div>
         <div class="e-acts">
           ${(!S.user?.isAdmin&&S.user?.emp?.name===e.name)||S.user?.isAdmin?`<button class="e-btn" onclick="EMP.openLeave('${e.name.replace(/'/g,"\'")}',${ri})" title="แจ้งลา" style="color:var(--amber)">📅</button>`:''}
@@ -1310,8 +1326,11 @@ const EMP={
   },
   del(i){const emps=D.getEmps();confirm2('ลบ '+emps[i].name+'?',()=>{emps.splice(i,1);D.saveEmps(emps);this.render();toast('🗑️ ลบแล้ว');});},
   openLeave(name){
-    const leave=D.getLeave();const myLeave=leave[name]||[];
-    const ws=S.wkStart;
+    const reqs=D.getLeaveReq().filter(r=>r.name===name&&r.status!=='rejected');
+    const pendingDates=reqs.filter(r=>r.status==='pending').map(r=>r.date);
+    const approvedDates=reqs.filter(r=>r.status==='approved').map(r=>r.date);
+    const today=new Date();
+    const minDate=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
     const mo=document.getElementById('mo-e');
     mo.innerHTML=`<div class="md">
       <div class="md-handle"></div>
@@ -1320,58 +1339,71 @@ const EMP={
         <button class="md-close" onclick="closeMo('mo-e')">✕</button>
       </div>
       <div class="md-body">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">เลือกวันที่จะลา ระบบจะดึงมือรองมาแทนอัตโนมัติ</div>
-        ${Array.from({length:6},(_,di)=>{
-          const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-          const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-          const isLv=myLeave.includes(dk);
-          return`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isLv?'rgba(245,158,11,.1)':'var(--bg3)'};border:1.5px solid ${isLv?'var(--amber)':'var(--border)'};border-radius:10px;margin-bottom:6px">
-            <input type="checkbox" id="lv-${di}" ${isLv?'checked':''} style="width:18px;height:18px;cursor:pointer">
-            <label for="lv-${di}" style="flex:1;font-size:13px;font-weight:700;cursor:pointer">${DAYS[di]} ${d2.getDate()}/${d2.getMonth()+1}</label>
-            ${isLv?'<span style="font-size:11px;color:var(--amber);font-weight:700">🏖️ ลา</span>':''}
-          </div>`;
-        }).join('')}
+        <div class="fg">
+          <label class="fl">เลือกวันที่จะลา</label>
+          <input type="date" class="fi" id="lv-date" min="${minDate}"
+            style="font-size:14px;padding:10px"
+            onchange="EMP.onLeaveDate(this.value,'${name}')">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">เลือกได้ล่วงหน้าไม่จำกัด</div>
+        </div>
+        <div id="lv-selected" style="margin-top:4px">
+          ${pendingDates.length||approvedDates.length?`
+            <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">วันที่ขอลาแล้ว:</div>
+            ${[...pendingDates.map(d=>({d,status:'pending'})),...approvedDates.map(d=>({d,status:'approved'}))].sort((a,b)=>a.d.localeCompare(b.d)).map(({d,status})=>{
+              const dt=new Date(d);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+              const dayName=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'][dt.getDay()];
+              return`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${status==='approved'?'rgba(22,163,74,.1)':'rgba(245,158,11,.1)'};border:1px solid ${status==='approved'?'var(--green)':'var(--amber)'};border-radius:8px;margin-bottom:4px">
+                <span style="flex:1;font-size:12px;font-weight:700">${dayName} ${ds}</span>
+                <span style="font-size:10px;font-weight:800;color:${status==='approved'?'var(--green2)':'var(--amber)'}">${status==='approved'?'✅ อนุมัติ':'🟡 รอ'}</span>
+                ${status==='pending'?`<button onclick="EMP.cancelLeaveDate('${d}','${name}')" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:var(--red2);font-size:12px">✕</button>`:''}
+              </div>`;
+            }).join('')}
+          `:'<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">ยังไม่มีคำขอลา</div>'}
+        </div>
         <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--amber)">
-          ℹ️ วันที่ลา ระบบจะดึงมือรองมาแทน ถ้าไม่มีมือรอง Admin จะได้รับแจ้งเตือน
+          ℹ️ หลังเลือกวัน ระบบจะส่งคำขอให้ Admin อนุมัติก่อน
         </div>
       </div>
       <div class="md-foot">
-        <button class="btn-cancel" onclick="closeMo('mo-e')">ยกเลิก</button>
-        <button class="btn-confirm" onclick="EMP.saveLeave('${name}')">✅ บันทึกการลา</button>
+        <button class="btn-cancel" onclick="closeMo('mo-e')">ปิด</button>
       </div>
     </div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};openMo('mo-e');
   },
 
-  saveLeave(name){
-    const ws=S.wkStart;
-    const leaveReq=D.getLeaveReq();
-    const emp=D.getEmps().find(e=>e.name===name);
-    const days=[];
-    for(let di=0;di<6;di++){
-      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-      if(document.getElementById('lv-'+di)?.checked)days.push(dk);
+  onLeaveDate(date,name){
+    if(!date)return;
+    // เช็คซ้ำ
+    const reqs=D.getLeaveReq();
+    if(reqs.find(r=>r.name===name&&r.date===date&&r.status!=='rejected')){
+      toast('❌ ขอลาวันนี้ไปแล้ว');return;
     }
-    if(!days.length){toast('❌ เลือกวันที่จะลาก่อน');return;}
-    // เพิ่ม request ใหม่
-    days.forEach(dk=>{
-      const existing=leaveReq.findIndex(r=>r.name===name&&r.date===dk);
-      if(existing>=0)return; // มีอยู่แล้ว
-      leaveReq.push({
-        id:Date.now()+'_'+dk,
-        name,
-        dept:emp?.mainDept||emp?.dept||'-',
-        date:dk,
-        status:'pending', // รออนุมัติ
-        requestAt:new Date().toISOString()
-      });
+    const emp=D.getEmps().find(e=>e.name===name);
+    reqs.push({
+      id:Date.now()+'_'+date+'_'+name,
+      name,dept:emp?.mainDept||emp?.dept||'-',
+      date,status:'pending',
+      requestAt:new Date().toISOString()
     });
-    D.saveLeaveReq(leaveReq);
-    closeMo('mo-e');this.render();
-    LEAVE.render();
-    toast('✅ ส่งคำขอลา '+days.length+' วัน รออนุมัติจาก Admin');
+    D.saveLeaveReq(reqs);
+    LEAVE.render();LEAVE.updBadge();
+    // refresh modal
+    this.openLeave(name);
+    const dt=new Date(date);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+    toast('✅ ส่งคำขอลาวัน '+ds+' แล้ว รออนุมัติ');
   },
+
+  cancelLeaveDate(date,name){
+    const reqs=D.getLeaveReq();
+    const idx=reqs.findIndex(r=>r.name===name&&r.date===date&&r.status==='pending');
+    if(idx<0)return;
+    reqs.splice(idx,1);D.saveLeaveReq(reqs);
+    LEAVE.render();LEAVE.updBadge();
+    this.openLeave(name);
+    toast('✅ ยกเลิกคำขอลาแล้ว');
+  },
+
+
 
   toggleLock(i){
     const emps=D.getEmps();const shs=[undefined,'morning','afternoon','night'];
