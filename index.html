@@ -469,6 +469,15 @@ function wNum(d){const s=new Date(d.getFullYear(),0,1);return Math.ceil(((d-s)/8
 function dStr(d){return d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543);}
 
 let _tt=null;
+function getProdLabel(prodName){
+  const master=D.getProductMaster();
+  const p=master.find(m=>m.name===prodName);
+  if(!p)return prodName;
+  const mode=D.getDisplayMode();
+  if(mode==='mat')return p.mat||prodName;
+  if(mode==='both')return (p.mat?p.mat+' / ':'')+prodName;
+  return prodName; // default = name
+}
 function markUnsaved(){
   _unsaved=true;
   const btn=document.getElementById('sched-save-btn');
@@ -521,7 +530,18 @@ const D={
   getReasons(){return LS.get('ot_reasons',['เครื่องเสีย','Order เร่งด่วน','พนักงานขาด','เปลี่ยน Product','อื่นๆ']);},
   saveReasons(r){LS.set('ot_reasons',r);FB.set('config/ot_reasons',r);},
   getProds(sys=S.sys){return LS.get('prods_'+sys,{});},
-  saveProds(p,sys=S.sys){LS.set('prods_'+sys,p);FB.set(sys+'/products',p);},
+  saveProds(p,sys=S.sys){
+    LS.set('prods_'+sys,p);FB.set(sys+'/products',p);
+    // sync ไป Product Master อัตโนมัติ
+    const master=this.getProductMaster();
+    Object.values(p).forEach(arr=>(arr||[]).forEach(item=>{
+      const name=typeof item==='object'?item.name:item;
+      if(name&&!master.find(m=>m.name===name)){
+        master.push({mat:'',name,ml:0});
+      }
+    }));
+    this.saveProductMaster(master);
+  },
   getSched(sys=S.sys){return LS.get('sched_'+sys,{});},
   saveSched(sc,sys=S.sys){
     LS.set('sched_'+sys,sc);
@@ -543,6 +563,10 @@ const D={
   saveLeaveReq(l){LS.set('leave_req',l);FB.set('leave_req',l);},
   getLeaveHist(){return LS.get('leave_hist',[]);},
   saveLeaveHist(l){LS.set('leave_hist',l);FB.set('leave_hist',l);},
+  getProductMaster(){return LS.get('product_master',[]);},
+  saveProductMaster(v){LS.set('product_master',v);FB.set('product_master',v);},
+  getDisplayMode(){return LS.get('prod_display','name');}, // 'mat','name','both'
+  saveDisplayMode(v){LS.set('prod_display',v);FB.set('config/prod_display',v);},
   getMixingCfg(){return LS.get('mixing_cfg',{threshold:10000,mix1:9,mix2:12,oreoLine:'Sandwich'});},
   saveMixingCfg(v){LS.set('mixing_cfg',v);FB.set('config/mixing_cfg',v);},
   getVolume(){return LS.get('fill_volume',{});},
@@ -854,10 +878,10 @@ const PLAN={
       const dkey=dept.replace(/[\s/]/g,'_');
       const curVolKey=dept.replace(/[\s/]/g,'_');
       const curVol=(vol[dept]||{})[di]||0;
-      const volInput=isFill?`<input type="number" min="0" value="${curVol}" placeholder="Volume"
+      const volInput=isFill?`<input type="number" min="0" value="${curVol}" placeholder="กล่อง/วัน"
         oninput="PLAN.setVol('${dept}',${di},this.value)"
         style="width:100%;padding:3px 6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:5px;color:var(--amber);font-size:11px;font-weight:700;text-align:center;font-family:'Sarabun',sans-serif;margin-bottom:4px">`:'' ;
-      return `<td><div>${volInput}${items.map((item,ii)=>`<div class="pp"><div class="pp-name">${item.product}</div><button class="pp-del" onclick="PLAN.delProd('${dept}',${di},${ii})">✕</button></div>`).join('')}<button class="pa-btn" onclick="PLAN.addProd('${dept}',${di})">+ เพิ่ม Product</button></div></td>`;
+      return `<td><div>${volInput}${items.map((item,ii)=>`<div class="pp"><div class="pp-name">${getProdLabel(item.product)}</div><button class="pp-del" onclick="PLAN.delProd('${dept}',${di},${ii})">✕</button></div>`).join('')}<button class="pa-btn" onclick="PLAN.addProd('${dept}',${di})">+ เพิ่ม Product</button></div></td>`;
     }).join('')}</tr>`).join('');
   },
   setVol(dept,di,v){
@@ -874,7 +898,7 @@ const PLAN={
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">➕ เพิ่ม Product — ${dept} / ${DAYS[di]}</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div><div class="md-body">
       <div class="fg"><label class="fl">Product</label>
-      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>`<option value="${p.name}" data-count="${p.count}">${p.name} (${p.count} คน/กะ)</option>`).join(''):'<option value="">ยังไม่มี Product</option>'}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
+      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>{const lbl=getProdLabel(p.name);return`<option value="${p.name}" data-count="${p.count}">${lbl} (${p.count} คน/กะ)</option>`;}).join(''):'<option value="">ยังไม่มี Product</option>'}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
       <div class="fg" id="pn-grp" style="display:none"><label class="fl">ชื่อใหม่</label><input type="text" class="fi" id="pn-inp" placeholder="ชื่อ Product..."></div>
       <div class="fg"><label class="fl">จำนวนคน/กะ</label><input type="number" class="fi" id="pc-inp" value="3" min="1" max="30"></div>
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">เพิ่ม</button></div></div>`;
@@ -915,8 +939,21 @@ const PLAN={
     summary.style.display='block';
     // คำนวณแต่ละวัน
     const dayData=Array.from({length:6},(_,di)=>{
-      // รวม volume
-      const totalVol=Object.values(fillVol).reduce((a,dv)=>a+(parseInt(dv[di])||0),0);
+      // รวม volume โดยคำนวณจากกล่อง × มล./กล่อง
+      const master=D.getProductMaster();
+      let totalMl=0;
+      const fillDepts2=D.getDepts('fill');
+      fillDepts2.forEach(dept=>{
+        const items=(fillPlan[dept]||{})[di]||[];
+        const boxes=parseInt((fillVol[dept]||{})[di])||0;
+        if(!boxes||!items.length)return;
+        // หา ml/กล่อง จาก Product แรกของ Line นั้น
+        const prodName=typeof items[0]==='object'?items[0].product:items[0];
+        const pm=master.find(m=>m.name===prodName);
+        const mlPerBox=pm?.ml||0;
+        totalMl+=boxes*mlPerBox;
+      });
+      const totalVol=Math.round(totalMl/1000); // แปลงเป็นลิตร
       // เช็ค Oreo
       const oreoLine=cfg.oreoLine||'Sandwich';
       const fillDepts=D.getDepts('fill');
@@ -939,7 +976,7 @@ const PLAN={
           const col=d.need2?'var(--red2)':'var(--green2)';
           return `<div style="flex-shrink:0;background:rgba(0,0,0,.3);border:1px solid ${col};border-radius:10px;padding:8px 10px;min-width:90px;text-align:center">
             <div style="font-size:11px;font-weight:800;color:var(--text2)">${DAYS[d.di]}</div>
-            <div style="font-size:10px;color:var(--amber);margin:2px 0">${d.totalVol.toLocaleString()} Vol</div>
+            <div style="font-size:10px;color:var(--amber);margin:2px 0">${d.totalVol.toLocaleString()} ลิตร</div>
             <div style="font-size:12px;font-weight:900;color:${col}">${d.need2?'2 ชุด':'1 ชุด'}</div>
             <div style="font-size:11px;color:#fff;font-weight:800">${d.totalPpl} คน</div>
             ${d.hasOreo?`<div style="font-size:9px;color:var(--amber);margin-top:2px">🍪 +Oreo</div>`:''}
@@ -947,7 +984,7 @@ const PLAN={
         }).join('')}
       </div>
       <div style="margin-top:8px;font-size:10px;color:var(--text3)">
-        Threshold: ${cfg.threshold.toLocaleString()} Vol | Mixing 1 ชุด: ${cfg.mix1} คน | Mixing 2 ชุด: ${cfg.mix2} คน
+        Threshold: ${cfg.threshold.toLocaleString()} ลิตร/วัน | Mixing 1 ชุด: ${cfg.mix1} คน | Mixing 2 ชุด: ${cfg.mix2} คน
       </div>`;
     toast('✅ โหลดแผน Filling แล้ว');
     this._dayData=dayData;
@@ -1846,6 +1883,61 @@ const SET={
         <button onclick="SET.chgPin()" style="padding:9px 13px;background:var(--blue);border:none;border-radius:9px;color:#fff;font-size:13px;font-weight:700;font-family:'Sarabun',sans-serif">เปลี่ยน</button>
       </div>
     </div></div>
+    <!-- Product Master -->
+    <div class="sg"><div class="sg-t">📦 Product Master</div>
+      <div style="padding:10px 14px">
+        <!-- Display Mode -->
+        <div style="margin-bottom:12px">
+          <label class="fl">🔤 แสดงในแผนผลิตเป็น</label>
+          <div style="display:flex;gap:6px">
+            ${['mat','name','both'].map(m=>`<button onclick="D.saveDisplayMode('${m}');SET.render();PLAN.render();toast('✅')"
+              style="flex:1;padding:7px;border:1.5px solid ${D.getDisplayMode()===m?'var(--blue)':'var(--border)'};
+              border-radius:8px;background:${D.getDisplayMode()===m?'rgba(37,99,235,.2)':'var(--bg3)'};
+              color:${D.getDisplayMode()===m?'var(--blue2)':'var(--text2)'};
+              font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">
+              ${{mat:'Material No.',name:'ชื่อ Product',both:'ทั้งคู่'}[m]}
+            </button>`).join('')}
+          </div>
+        </div>
+        <!-- Product List -->
+        <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px">รายการ Product</div>
+        <div style="max-height:300px;overflow-y:auto;margin-bottom:8px">
+          ${(()=>{
+            const master=D.getProductMaster();
+            if(!master.length)return '<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">ยังไม่มีข้อมูล</div>';
+            return master.map((p,i)=>`
+              <div style="display:flex;gap:6px;align-items:center;padding:7px 9px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:4px">
+                <div style="width:80px;flex-shrink:0">
+                  <input type="text" value="${p.mat||''}" placeholder="MAT-001"
+                    onchange="SET.updMat(${i},'mat',this.value)"
+                    style="width:100%;padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--amber);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">
+                </div>
+                <div style="flex:1;font-size:12px;font-weight:700">${p.name}</div>
+                <div style="width:70px;flex-shrink:0">
+                  <div style="display:flex;align-items:center;gap:3px">
+                    <input type="number" value="${p.ml||0}" min="0" placeholder="มล."
+                      onchange="SET.updMat(${i},'ml',parseInt(this.value)||0)"
+                      style="width:50px;padding:4px 6px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;color:var(--blue2);font-size:11px;font-family:'Sarabun',sans-serif;text-align:center">
+                    <span style="font-size:9px;color:var(--text3)">มล.</span>
+                  </div>
+                </div>
+                <button onclick="SET.delMat(${i})" style="width:26px;height:26px;background:rgba(220,38,38,.15);border:none;border-radius:6px;color:var(--red2);font-size:12px;flex-shrink:0">✕</button>
+              </div>`).join('');
+          })()}
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">
+          💡 Product ที่เพิ่มใน Line จะปรากฏที่นี่อัตโนมัติ
+        </div>
+        <!-- Add manual -->
+        <div style="display:flex;gap:6px">
+          <input type="text" class="fi" id="new-mat-no" placeholder="MAT-001" style="width:80px;padding:7px;font-size:12px;flex-shrink:0">
+          <input type="text" class="fi" id="new-mat-name" placeholder="ชื่อ Product" style="flex:1;padding:7px;font-size:12px">
+          <input type="number" id="new-mat-ml" placeholder="มล." style="width:60px;padding:7px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;text-align:center">
+          <button onclick="SET.addMat()" style="padding:7px 12px;background:var(--teal);border:none;border-radius:9px;color:#fff;font-size:12px;font-family:'Sarabun',sans-serif;flex-shrink:0">+</button>
+        </div>
+      </div>
+    </div>
+
     <div class="sg" style="border-color:rgba(220,38,38,.3)"><div class="sg-t" style="color:var(--red2)">⚠️ Danger Zone</div><div style="padding:12px 14px;display:flex;flex-direction:column;gap:7px">
       <button class="btn-danger" onclick="SET.clearSched()">🗑️ ล้างตารางกะและ OT ทั้งหมด</button>
       <button class="btn-danger" onclick="SET.resetDepts()">🔄 รีเซ็ตแผนกเป็นค่าเริ่มต้น</button>
@@ -1896,6 +1988,27 @@ const SET={
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
     FB.remove('signs');SCHED.render();DASH.render();DASH.renderPareto();toast('✅ ล้างทั้งหมดแล้ว');
   });},
+  addMat(){
+    const no=document.getElementById('new-mat-no')?.value.trim();
+    const name=document.getElementById('new-mat-name')?.value.trim();
+    const ml=parseInt(document.getElementById('new-mat-ml')?.value)||0;
+    if(!name){toast('❌ ใส่ชื่อ Product');return;}
+    const master=D.getProductMaster();
+    if(master.find(m=>m.name===name)){toast('❌ Product นี้มีอยู่แล้ว');return;}
+    master.push({mat:no||'',name,ml});
+    D.saveProductMaster(master);this.render();toast('✅ เพิ่ม '+name);
+  },
+  updMat(i,field,val){
+    const master=D.getProductMaster();
+    if(!master[i])return;
+    master[i][field]=val;
+    D.saveProductMaster(master);
+  },
+  delMat(i){
+    const master=D.getProductMaster();
+    master.splice(i,1);
+    D.saveProductMaster(master);this.render();toast('🗑️ ลบแล้ว');
+  },
   resetDepts(){confirm2('รีเซ็ตแผนกเป็นค่าเริ่มต้น?',()=>{D.saveDepts([...PDEPT],'proc');D.saveDepts([...FDEPT],'fill');this.render();SCHED.render();toast('✅ รีเซ็ตแล้ว');});}
 };
 
