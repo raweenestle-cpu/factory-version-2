@@ -268,6 +268,7 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
       <button id="plan-load-fill-btn" class="btn-p" style="background:var(--purple);color:#fff;display:none" onclick="PLAN.loadFromFilling()">📥 โหลดแผน Filling</button>
       <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">⚡ โหลด</button>
       <button class="btn-p btn-green" onclick="PLAN.save()">💾 บันทึก</button>
+      <button class="btn-p" style="background:rgba(220,38,38,.2);border:1px solid rgba(220,38,38,.4);color:var(--red2)" onclick="PLAN.clearPlan()">🗑️ ล้างแผน</button>
     </div>
     <!-- Team status -->
     <div id="plan-team-bar" style="padding:10px 14px;background:var(--navy);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -1102,6 +1103,23 @@ const PLAN={
     if(S.sys==='proc')this.loadFromFilling();
   },
 
+  clearPlan(){
+    confirm2('ล้างแผนการผลิตสัปดาห์นี้?\n(ล้าง Product, Volume ทุก Line\nตารางกะไม่ถูกแตะ)',()=>{
+      // ล้าง Plan
+      this.plan={};
+      D.savePlan({});
+      // ล้าง Volume
+      D.saveVolume({});
+      // ล้าง Stock ตั้งต้น
+      LS.set('mix_stock',0);
+      // ล้าง mixing summary
+      const ms=document.getElementById('mixing-summary');
+      if(ms)ms.style.display='none';
+      this._dayData=null;
+      this.render();
+      toast('✅ ล้างแผนแล้ว พร้อมรับข้อมูลสัปดาห์ใหม่');
+    });
+  },
   save(){D.savePlan(this.plan);toast('✅ บันทึกแผนการผลิต');},
   autoLoad(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
@@ -2104,7 +2122,18 @@ const SET={
     p[dept].push({name:n,count:cnt});
     D.saveProds(p);this.render();toast('✅ เพิ่ม '+n+' ('+cnt+' คน/กะ)');
   },
-  delP(dept,i){const p=D.getProds();if(!p[dept])return;p[dept].splice(i,1);D.saveProds(p);this.render();toast('🗑️ ลบแล้ว');},
+  delP(dept,i){
+    const p=D.getProds();if(!p[dept])return;
+    const removed=p[dept][i];
+    const removedName=typeof removed==='object'?removed.name:removed;
+    p[dept].splice(i,1);
+    D.saveProds(p);
+    // ลบออกจาก Product Master ด้วย
+    const master=D.getProductMaster();
+    const newMaster=master.filter(m=>!(m.name===removedName&&m.line===dept));
+    if(newMaster.length!==master.length)D.saveProductMaster(newMaster);
+    this.render();toast('🗑️ ลบ '+removedName+' แล้ว');
+  },
   chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
@@ -2399,8 +2428,18 @@ const PROD={
 
   del(idx){
     const master=D.getProductMaster();
-    confirm2('ลบ '+master[idx]?.name+'?',()=>{
-      master.splice(idx,1);D.saveProductMaster(master);this.render();toast('🗑️ ลบแล้ว');
+    const p=master[idx];if(!p)return;
+    confirm2('ลบ '+p.name+' จาก '+p.line+'?',()=>{
+      // ลบจาก master
+      master.splice(idx,1);D.saveProductMaster(master);
+      // ลบจาก prods ด้วย
+      const sys=D.getDepts('fill').includes(p.line)?'fill':'proc';
+      const prods=D.getProds(sys);
+      if(prods[p.line]){
+        prods[p.line]=prods[p.line].filter(x=>(typeof x==='object'?x.name:x)!==p.name);
+        D.saveProds(prods,sys);
+      }
+      this.render();PLAN.render();toast('🗑️ ลบ '+p.name+' แล้ว');
     });
   }
 };
