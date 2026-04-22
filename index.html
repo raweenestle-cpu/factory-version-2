@@ -497,37 +497,39 @@ function dStr(d){return d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+54
 
 let _tt=null;
 function calcMixingPlan(dayData){
-  // dayData = [{di, totalLiter, hasOreo}]
+  // dayData = [{di, totalLiter, hasOreo}] เรียงจันทร์-เสาร์
+  // Process ต้องผลิตล่วงหน้า 1 วัน
+  // วันจันทร์ผลิตให้อังคาร, อังคารผลิตให้พุธ, ..., เสาร์ผลิต Buffer
   const cfg=D.getMixingCfg();
-  const stock=parseFloat(LS.get('mix_stock',0)); // Stock ตั้งต้น (ลิตร)
-  let remainStock=stock;
+  let stock=parseFloat(LS.get('mix_stock',0)||0); // Stock ตั้งต้น
 
   return dayData.map((d,idx)=>{
-    const needed=Math.max(0,d.totalLiter-remainStock);
-    remainStock=Math.max(0,remainStock-d.totalLiter);
+    // ความต้องการของวันถัดไป (Process ผลิตล่วงหน้า 1 วัน)
+    const nextDay=dayData[idx+1];
+    const demandLiter=nextDay?nextDay.totalLiter:stock*0.5; // เสาร์ = Buffer 50% ของ stock
+    const hasOreoNext=nextDay?nextDay.hasOreo:d.hasOreo;
+
+    // หัก Stock ที่มี
+    const needed=Math.max(0,demandLiter-stock);
+    // Stock ที่เหลือหลังจ่ายให้วันถัดไป
+    const stockAfter=Math.max(0,stock-demandLiter);
 
     // เวลาทำงานต่อวัน
-    let workH=24;
-    if(d.di===0) workH=24-(8); // จันทร์เริ่ม 08:00 = ทำงาน 16 ชม.
-    if(d.di>=1&&d.di<=4) workH=24-cfg.breakH; // อังคาร-ศุกร์ หัก break
-    if(d.di===5) workH=24+cfg.bufferH; // เสาร์ เพิ่ม buffer (ข้ามคืน)
+    let workH=24,startTime='06:00';
+    if(d.di===0){workH=16;startTime='08:00';} // จันทร์ เริ่ม 08:00
+    else if(d.di>=1&&d.di<=4) workH=24-cfg.breakH; // อังคาร-ศุกร์ หัก break
+    else if(d.di===5) workH=24+cfg.bufferH; // เสาร์ เพิ่ม buffer
 
-    // คำนวณว่าต้องใช้กี่ชุด กี่ชั่วโมง
-    let units=1, hoursNeeded=0, startTime='06:00';
-    if(d.di===0) startTime='08:00';
-
+    // คำนวณชุดและชั่วโมง
+    let units=0,hoursNeeded=0;
     if(needed<=0){
-      // Stock พอ ไม่ต้องผลิต
-      units=0; hoursNeeded=0;
+      units=0;hoursNeeded=0;
     } else {
-      // ลอง 1 ชุด (Mixing 2)
-      const h1=needed/cfg.cap2;
-      if(h1<=workH){
-        units=1; hoursNeeded=Math.ceil(h1*10)/10;
-      } else {
-        // ต้องใช้ 2 ชุด
-        const h2=needed/(cfg.cap2+cfg.cap1);
-        units=2; hoursNeeded=Math.ceil(h2*10)/10;
+      const h1=needed/cfg.cap2; // Mixing 2 ชุดเดียว
+      if(h1<=workH){units=1;hoursNeeded=Math.ceil(h1*10)/10;}
+      else{
+        const h2=needed/(cfg.cap2+cfg.cap1); // เปิดทั้ง 2 ชุด
+        units=2;hoursNeeded=Math.ceil(h2*10)/10;
       }
     }
 
@@ -537,15 +539,19 @@ function calcMixingPlan(dayData){
     const endMin=startMin+(hoursNeeded*60);
     const endH=Math.floor(endMin/60)%24;
     const endM=Math.round(endMin%60);
-    const endTime=String(endH).padStart(2,'0')+':'+String(endM).padStart(2,'0');
+    const endTime=units>0?String(endH).padStart(2,'0')+':'+String(endM).padStart(2,'0'):'-';
 
     // คนที่ต้องใช้
-    const cfg2=D.getMixingCfg();
-    const baseP=units===0?0:units===1?cfg2.mix1people:cfg2.mix2people;
-    const oreoP=d.hasOreo&&units>0?1:0;
+    const baseP=units===0?0:units===1?cfg.mix1people:cfg.mix2people;
+    const oreoP=hasOreoNext&&units>0?1:0;
     const totalP=baseP+oreoP;
 
-    return{...d,needed,units,hoursNeeded,startTime,endTime,totalP,oreoP,stock:remainStock};
+    // อัพเดท stock สำหรับวันถัดไป
+    // stock ใหม่ = stock เก่า - ใช้ไป + ผลิตได้วันนี้
+    const produced=units===0?0:hoursNeeded*(units===1?cfg.cap2:(cfg.cap2+cfg.cap1));
+    stock=stockAfter+produced;
+
+    return{...d,demandLiter,needed,produced,units,hoursNeeded,startTime,endTime,totalP,oreoP,stockAfter};
   });
 }
 
@@ -1083,12 +1089,15 @@ const PLAN={
           const label=d.units===0?'ไม่ผลิต':d.units===1?'Mixing 2':'Mixing 1+2';
           return `<div style="flex-shrink:0;background:rgba(0,0,0,.3);border:1.5px solid ${col};border-radius:12px;padding:10px 12px;min-width:100px;text-align:center">
             <div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:4px">${DAYS[d.di]}</div>
-            <div style="font-size:10px;color:var(--amber)">${d.needed.toLocaleString()} ลิตร</div>
+            <div style="font-size:9px;color:var(--text3)">ผลิตให้วันถัดไป</div>
+            <div style="font-size:11px;color:var(--amber);font-weight:800">${d.demandLiter.toLocaleString()} ลิตร</div>
+            ${d.needed>0?`<div style="font-size:9px;color:var(--text3)">ต้องผลิต</div><div style="font-size:11px;color:var(--red2);font-weight:800">${d.needed.toLocaleString()} ลิตร</div>`:`<div style="font-size:10px;color:var(--green2);font-weight:700">✅ Stock พอ</div>`}
             <div style="font-size:12px;font-weight:900;color:${col};margin:3px 0">${label}</div>
-            ${d.units>0?`<div style="font-size:10px;color:var(--text2)">${d.startTime} - ${d.endTime}</div>`:''}
-            ${d.units>0?`<div style="font-size:11px;color:var(--blue2);margin-top:2px;font-weight:800">${d.hoursNeeded} ชม.</div>`:''}
+            ${d.units>0?`<div style="font-size:10px;color:var(--text2)">${d.startTime} - ${d.endTime}</div><div style="font-size:11px;color:var(--blue2);font-weight:800">${d.hoursNeeded} ชม.</div>`:''}
             <div style="font-size:12px;font-weight:900;color:#fff;margin-top:3px">${d.totalP} คน</div>
             ${d.hasOreo&&d.units>0?`<div style="font-size:9px;color:var(--amber);margin-top:2px">🍪 +Oreo</div>`:''}
+            <div style="font-size:9px;color:var(--text3);margin-top:3px">Stock หลังผลิต</div>
+            <div style="font-size:10px;color:var(--green2);font-weight:700">${Math.round(d.stockAfter+d.produced).toLocaleString()} ล.</div>
           </div>`;
         }).join('')}
       </div>
