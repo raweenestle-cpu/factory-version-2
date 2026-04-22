@@ -985,11 +985,13 @@ const PLAN={
   setCount(dept,di,ii,v){if(!this.plan[dept])this.plan[dept]={};if(!this.plan[dept][di])this.plan[dept][di]=[];if(this.plan[dept][di][ii])this.plan[dept][di][ii].count=parseInt(v)||1;},
   delProd(dept,di,ii){if(!this.plan[dept]||!this.plan[dept][di])return;this.plan[dept][di].splice(ii,1);D.savePlan(this.plan);this.render();},
   addProd(dept,di){
-    const prods=D.getProds();const dp=(prods[dept]||[]).map(x=>typeof x==='object'?x:{name:x,count:3});
+    // ดึงจาก Product Master ตาม Line
+    const master=D.getProductMaster();
+    const dp=master.filter(m=>m.line===dept).map(m=>({name:m.name,count:m.count||1,mat:m.mat||''}));
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">➕ เพิ่ม Product — ${dept} / ${DAYS[di]}</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div><div class="md-body">
       <div class="fg"><label class="fl">Product</label>
-      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>{const lbl=getProdLabel(p.name);return`<option value="${p.name}" data-count="${p.count}">${lbl} (${p.count} คน/กะ)</option>`;}).join(''):'<option value="">ยังไม่มี Product</option>'}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
+      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>{const lbl=getProdLabel(p.name);return`<option value="${p.name}" data-count="${p.count}">${lbl} — ${p.count} คน/กะ</option>`;}).join(''):`<option value="">ยังไม่มี Product ใน ${dept} — ไปเพิ่มที่ 📦 Product Master</option>`}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
       <div class="fg" id="pn-grp" style="display:none"><label class="fl">ชื่อใหม่</label><input type="text" class="fi" id="pn-inp" placeholder="ชื่อ Product..."></div>
       <div class="fg"><label class="fl">จำนวนคน/กะ</label><input type="number" class="fi" id="pc-inp" value="3" min="1" max="30"></div>
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">เพิ่ม</button></div></div>`;
@@ -1009,13 +1011,12 @@ const PLAN={
   },
   confirmAdd(dept,di){
     const sel=document.getElementById('ps-sel');let prod=sel.value;
-    if(prod==='__new__'){prod=document.getElementById('pn-inp').value.trim();if(!prod){toast('❌ ใส่ชื่อ Product');return;}
-      const prods2=D.getProds();if(!prods2[dept])prods2[dept]=[];
-      prods2[dept]=prods2[dept].map(x=>typeof x==='object'?x:{name:x,count:3});
-      if(!prods2[dept].find(x=>x.name===prod))prods2[dept].push({name:prod,count:3});
-      D.saveProds(prods2);}
+    if(prod==='__new__'){toast('❌ กรุณาเพิ่ม Product ใน 📦 Product Master ก่อน');return;}
     if(!prod){toast('❌ เลือก Product');return;}
-    const cnt=parseInt(document.getElementById('pc-inp').value)||1;
+    // ดึง count จาก Master
+    const master2=D.getProductMaster();
+    const pm=master2.find(m=>m.name===prod&&m.line===dept);
+    const cnt=pm?.count||parseInt(document.getElementById('pc-inp').value)||1;
     if(!this.plan[dept])this.plan[dept]={};if(!this.plan[dept][di])this.plan[dept][di]=[];
     this.plan[dept][di].push({product:prod,count:cnt});
     D.savePlan(this.plan);closeMo('mo-pr');this.render();toast('✅ เพิ่ม '+prod);
@@ -2311,18 +2312,20 @@ const PROD={
           <button onclick="PROD.openAdd('${line}')" style="padding:4px 10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่มใน ${line}</button>
         </div>
         <!-- Column Headers -->
-        <div style="display:grid;grid-template-columns:90px 1fr 80px 40px;gap:0;padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;gap:0;padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
           <div style="font-size:10px;font-weight:800;color:var(--text3)">Material No.</div>
           <div style="font-size:10px;font-weight:800;color:var(--text3)">ชื่อ Product</div>
           <div style="font-size:10px;font-weight:800;color:var(--text3);text-align:center">มล./กล่อง</div>
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-align:center">คน/กะ</div>
           <div></div>
         </div>
         <!-- Products -->
         ${prods.map(p=>`
-          <div style="display:grid;grid-template-columns:90px 1fr 80px 40px;gap:0;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;background:var(--bg)">
+          <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;gap:0;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;background:var(--bg)">
             <div style="font-size:11px;font-weight:800;color:var(--amber)">${p.mat||'-'}</div>
             <div style="font-size:13px;font-weight:700">${p.name}</div>
             <div style="text-align:center;font-size:12px;font-weight:700;color:var(--blue2)">${(p.ml||0).toLocaleString()}</div>
+            <div style="text-align:center;font-size:12px;font-weight:700;color:var(--green2)">${p.count||1}</div>
             <div style="display:flex;gap:3px;justify-content:flex-end">
               <button onclick="PROD.openEdit(${p.idx})" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px">✏️</button>
               <button onclick="PROD.del(${p.idx})" style="width:28px;height:28px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:7px;color:var(--red2);font-size:12px">✕</button>
@@ -2362,6 +2365,9 @@ const PROD={
           <input type="number" class="fi" id="pm-ml" placeholder="2000" min="0">
           <div style="font-size:10px;color:var(--text3);margin-top:3px">ถ้า 1 กล่อง = 20 ชิ้น × 100 มล. → ใส่ 2000</div>
         </div>
+        <div class="fg"><label class="fl">จำนวนคน/กะ *</label>
+          <input type="number" class="fi" id="pm-count" placeholder="3" min="1" max="50" value="1">
+        </div>
       </div>
       <div class="md-foot">
         <button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button>
@@ -2394,6 +2400,9 @@ const PROD={
         <div class="fg"><label class="fl">มล. ต่อ 1 กล่อง</label>
           <input type="number" class="fi" id="pm-ml" value="${p.ml||0}" min="0">
         </div>
+        <div class="fg"><label class="fl">จำนวนคน/กะ *</label>
+          <input type="number" class="fi" id="pm-count" value="${p.count||1}" min="1" max="50">
+        </div>
       </div>
       <div class="md-foot">
         <button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button>
@@ -2409,20 +2418,23 @@ const PROD={
     const mat=document.getElementById('pm-mat')?.value.trim();
     const name=document.getElementById('pm-name')?.value.trim();
     const ml=parseInt(document.getElementById('pm-ml')?.value)||0;
+    const count=parseInt(document.getElementById('pm-count')?.value)||1;
     if(!line){toast('❌ เลือก Line');return;}
     if(!name){toast('❌ ใส่ชื่อ Product');return;}
     const master=D.getProductMaster();
     if(idx<0){
       if(master.find(m=>m.name===name&&m.line===line)){toast('❌ Product นี้มีใน Line นี้แล้ว');return;}
-      master.push({line,mat,name,ml});
+      master.push({line,mat,name,ml,count});
       // sync ไป prods ด้วย
       const prods=D.getProds(line==='Polo 12A'||line==='Polo 12B'||line==='Comet'||line==='Mach'||line==='Sandwich'||line==='Hoyer'||line==='Extrud 3'||line==='Glacé'||line==='Scooping'?'fill':'proc');
       if(!prods[line])prods[line]=[];
       prods[line]=prods[line].map(x=>typeof x==='object'?x:{name:x,count:3});
-      if(!prods[line].find(x=>x.name===name))prods[line].push({name,count:3});
+      const existProd=prods[line].find(x=>x.name===name);
+      if(existProd)existProd.count=count;
+      else prods[line].push({name,count});
       D.saveProds(prods, D.getDepts('fill').includes(line)?'fill':'proc');
     } else {
-      master[idx]={line,mat,name,ml};
+      master[idx]={line,mat,name,ml,count};
     }
     D.saveProductMaster(master);
     closeMo('mo-pr');this.render();
