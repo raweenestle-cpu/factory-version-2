@@ -198,9 +198,120 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 .av0{background:linear-gradient(135deg,#2563EB,#3B82F6)}.av1{background:linear-gradient(135deg,#0D9488,#14B8A6)}.av2{background:linear-gradient(135deg,#7C3AED,#8B5CF6)}.av3{background:linear-gradient(135deg,#DC2626,#EF4444)}.av4{background:linear-gradient(135deg,#D97706,#F59E0B)}.av5{background:linear-gradient(135deg,#059669,#10B981)}.av6{background:linear-gradient(135deg,#DB2777,#EC4899)}.av7{background:linear-gradient(135deg,#0369A1,#0EA5E9)}
 @keyframes pulse-save{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{opacity:.8;box-shadow:0 0 0 8px rgba(239,68,68,0)}}
 .btn-unsaved{animation:pulse-save 1.5s ease-in-out infinite!important;background:var(--red2)!important}
-::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+::-webkit-scrollbar{width:4px;height:4px}
+
+/* ══ RESPONSIVE DESKTOP ══ */
+@media (min-width:768px){
+  html,body{font-size:15px}
+  #app{flex-direction:row;flex-wrap:wrap}
+
+  /* Topbar */
+  .topbar{padding:12px 24px}
+  .topbar-logo{font-size:20px}
+  .sys-btn{padding:7px 18px;font-size:13px}
+
+  /* Sidebar nav แทน bottom nav */
+  .bottomnav{
+    flex-direction:column;
+    width:80px;
+    border-top:none;
+    border-right:1px solid var(--border);
+    padding-bottom:0;
+    height:calc(100% - 57px);
+    position:fixed;
+    left:0;top:57px;
+    background:var(--bg2);
+    z-index:9;
+    overflow-y:auto;
+  }
+  .nav-item{
+    padding:14px 4px;
+    flex-direction:column;
+    font-size:9px;
+    border-right:3px solid transparent;
+    border-bottom:none;
+  }
+  .nav-item.active{
+    border-right-color:var(--blue2);
+    border-bottom:none;
+    background:rgba(59,130,246,.08);
+  }
+  .nav-icon{font-size:22px}
+
+  /* Main content area */
+  #app .topbar{width:100%;position:fixed;top:0;z-index:10}
+  .page{
+    margin-left:80px;
+    margin-top:57px;
+    height:calc(100vh - 57px);
+  }
+
+  /* Tables wider */
+  .sched-tbl td{min-width:110px}
+  .plan-tbl td{min-width:120px}
+
+  /* Cards grid */
+  .dash-cards{grid-template-columns:1fr 1fr 1fr}
+  .dash-card.full{grid-column:1/-1}
+
+  /* Employee list 2 col */
+  .emp-list{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    align-content:start;
+  }
+  .emp-card{margin-bottom:0}
+
+  /* Settings wider */
+  .set-list{max-width:800px;margin:0 auto}
+
+  /* Modal center on desktop */
+  .mo:not(.center){align-items:center;justify-content:center}
+  .mo:not(.center) .md{
+    border-radius:20px;
+    max-width:500px;
+    width:calc(100% - 40px);
+    max-height:85vh;
+  }
+
+  /* Pareto wider */
+  .pareto-card{margin:0 24px 24px}
+  .p-label{width:120px}
+
+  /* OT list */
+  .ot-list{max-width:700px;margin:0 auto;padding:20px 24px}
+
+  /* Toolbar padding */
+  .plan-tb,.sched-tb,.emp-tb,.sched-toolbar-top{padding:12px 24px}
+  .dash-cards{padding:20px 24px}
+}
+
+@media (min-width:1200px){
+  .bottomnav{width:100px}
+  .nav-item{font-size:10px}
+  .page{margin-left:100px}
+  .dash-cards{grid-template-columns:1fr 1fr 1fr 1fr}
+  .dash-card.full{grid-column:1/-1}
+  .emp-list{grid-template-columns:1fr 1fr 1fr}
+}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 @media print{#pg-login,#app .topbar,#app .bottomnav,.mo,.toast{display:none!important}#print-area{display:block!important}@page{size:A4 landscape;margin:8mm}body{background:#fff!important;color:#000!important}}
 #print-area{display:none;font-family:'Sarabun',sans-serif;font-size:12pt;color:#000;background:#fff}
+#print-area .pr-header{border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px}
+#print-area .pr-title{font-size:18pt;font-weight:900;margin-bottom:2px}
+#print-area .pr-sub{font-size:12pt;color:#444}
+#print-area .pr-section{margin-bottom:14px}
+#print-area .pr-sec-title{font-size:13pt;font-weight:800;background:#1e40af;color:#fff;padding:4px 10px;border-radius:4px;margin-bottom:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#print-area .pr-shift-title{font-size:12pt;font-weight:700;background:#f0f0f0;padding:3px 8px;margin-bottom:4px;border-left:3px solid #1e40af}
+#print-area table.pr-tbl{table-layout:fixed;width:100%;border-collapse:collapse;font-size:11pt;margin-bottom:8px}
+#print-area table.pr-tbl th{background:#e8edf8;border:1px solid #aaa;padding:5px 8px;font-weight:700;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#print-area table.pr-tbl td{border:1px solid #ccc;padding:5px 8px;vertical-align:middle}
+#print-area .pr-summary{background:#f8f8f8;border:1px solid #ccc;border-radius:4px;padding:8px 10px;margin-bottom:12px;font-size:11pt}
+#print-area .pr-footer{border-top:1.5px solid #000;padding-top:8px;margin-top:12px;font-size:11pt;display:flex;justify-content:space-between}
+#print-area .day-block{border:2px solid #000;border-radius:4px;margin-bottom:12px;page-break-inside:avoid}
+#print-area .day-block-header{background:#1e3a5f;color:#fff;padding:6px 10px;font-weight:900;font-size:12pt;border-bottom:2px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#print-area .day-block-header.over{background:#dc2626!important}
+#print-area .day-block-header.ok{background:#16a34a!important}
 #print-area table{width:100%;border-collapse:collapse;margin-bottom:10px}
 #print-area th{background:#1e3a5f!important;color:#fff!important;padding:6px 8px;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 #print-area td{border:1px solid #ccc;padding:5px 8px;font-size:10pt}
@@ -297,8 +408,8 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
           💾 บันทึก
           <span id="unsaved-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:#EF4444;border-radius:50%;border:2px solid var(--bg2)"></span>
         </button>
-        <button onclick="SCHED.printSched()" style="background:rgba(15,52,96,.9);color:#fff;border:1px solid rgba(6,182,212,.4)">🖨️ ตาราง</button>
-        <button onclick="SCHED.printOT()" style="background:rgba(0,0,0,.3);color:#fff;border:1px solid rgba(245,158,11,.4)">🖨️ OT</button>
+        <button onclick="PRINT.openSched()" style="background:rgba(15,52,96,.9);color:#fff;border:1px solid rgba(6,182,212,.4)">🖨️ ตาราง</button>
+        <button onclick="PRINT.openOT()" style="background:rgba(0,0,0,.3);color:#fff;border:1px solid rgba(245,158,11,.4)">🖨️ OT</button>
         <button onclick="SCHED.clearWk()" style="background:rgba(217,119,6,.2);color:var(--amber);border:1px solid rgba(217,119,6,.3)">🗑️ ล้าง</button>
       </div>
     </div>
@@ -450,7 +561,76 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 
 <div id="print-area"></div>
 <div class="toast" id="toast"></div>
+<div class="mo hide" id="mo-print-ot" style="align-items:flex-start;padding-top:20px">
+  <div class="md" style="max-width:600px;margin:0 auto;max-height:90vh">
+    <div class="md-handle"></div>
+    <div class="md-hdr">
+      <div class="md-title">🖨️ พิมพ์บิล OT</div>
+      <button class="md-close" onclick="closeMo('mo-print-ot')">✕</button>
+    </div>
+    <div class="md-body">
+      <!-- ตัวเลือก -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <label class="fl">ช่วงเวลา</label>
+          <select class="fs" id="pr-mode" onchange="PRINT.updateOTPreview()">
+            <option value="week">สัปดาห์นี้</option>
+            <option value="month">เดือนนี้</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:120px" id="pr-week-sel">
+          <label class="fl">เลือกสัปดาห์</label>
+          <input type="date" class="fi" id="pr-week-date" onchange="PRINT.updateOTPreview()">
+        </div>
+        <div style="flex:1;min-width:120px" id="pr-month-sel" style="display:none">
+          <label class="fl">เดือน</label>
+          <input type="month" class="fi" id="pr-month-val" onchange="PRINT.updateOTPreview()">
+        </div>
+        <div style="flex:1;min-width:120px">
+          <label class="fl">ระบบ</label>
+          <select class="fs" id="pr-sys" onchange="PRINT.updateOTPreview()">
+            <option value="both">ทั้งหมด</option>
+            <option value="proc">Process</option>
+            <option value="fill">Filling</option>
+          </select>
+        </div>
+      </div>
+      <!-- Preview -->
+      <div id="pr-ot-preview" style="background:#fff;color:#000;padding:12px;border-radius:8px;border:1px solid var(--border);min-height:200px;max-height:50vh;overflow-y:auto;font-family:'Sarabun',sans-serif;font-size:11pt"></div>
+    </div>
+    <div class="md-foot">
+      <button class="btn-cancel" onclick="closeMo('mo-print-ot')">ยกเลิก</button>
+      <button class="btn-confirm" onclick="PRINT.confirmOT()">🖨️ พิมพ์</button>
+    </div>
+  </div>
+</div>
 <div class="mo hide" id="mo-w"></div>
+<div class="mo hide" id="mo-print-sched" style="align-items:flex-start;padding-top:20px">
+  <div class="md" style="max-width:600px;margin:0 auto;max-height:90vh">
+    <div class="md-handle"></div>
+    <div class="md-hdr">
+      <div class="md-title">🖨️ พิมพ์ตารางกะ</div>
+      <button class="md-close" onclick="closeMo('mo-print-sched')">✕</button>
+    </div>
+    <div class="md-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <label class="fl">ระบบ</label>
+          <select class="fs" id="prs-sys" onchange="PRINT.updateSchedPreview()">
+            <option value="current">ระบบปัจจุบัน</option>
+            <option value="proc">Process</option>
+            <option value="fill">Filling</option>
+          </select>
+        </div>
+      </div>
+      <div id="pr-sched-preview" style="background:#fff;color:#000;padding:12px;border-radius:8px;border:1px solid var(--border);min-height:200px;max-height:50vh;overflow-y:auto;font-family:'Sarabun',sans-serif;font-size:10pt;overflow-x:auto"></div>
+    </div>
+    <div class="md-foot">
+      <button class="btn-cancel" onclick="closeMo('mo-print-sched')">ยกเลิก</button>
+      <button class="btn-confirm" onclick="PRINT.confirmSched()">🖨️ พิมพ์</button>
+    </div>
+  </div>
+</div>
 <div class="mo hide" id="mo-e"></div>
 <div class="mo hide" id="mo-pr"></div>
 <div class="mo hide" id="mo-or"></div>
@@ -2278,6 +2458,190 @@ const SET={
 };
 
 const PRINT={
+  openOT(){
+    // ตั้งค่า default
+    const now=new Date();
+    const wk=wKey(S.wkStart);
+    document.getElementById('pr-week-date').value=wk;
+    document.getElementById('pr-month-val').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    this.updateOTPreview();
+    openMo('mo-print-ot');
+  },
+  updateOTPreview(){
+    const mode=document.getElementById('pr-mode')?.value||'week';
+    const sys=document.getElementById('pr-sys')?.value||'both';
+    // toggle selectors
+    const ws=document.getElementById('pr-week-sel');
+    const ms=document.getElementById('pr-month-sel');
+    if(ws)ws.style.display=mode==='week'?'block':'none';
+    if(ms)ms.style.display=mode==='month'?'block':'none';
+    const html=this.buildOTHTML(mode,sys);
+    const prev=document.getElementById('pr-ot-preview');
+    if(prev)prev.innerHTML=html;
+  },
+  buildOTHTML(mode,sys){
+    const now=new Date();
+    const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+    const tgt=D.getTarget();
+    let wKeys=[];let titleSub='';
+    if(mode==='week'){
+      const selDate=document.getElementById('pr-week-date')?.value;
+      const ws2=selDate?new Date(selDate):S.wkStart;
+      const wk2=wKey(ws2);wKeys=[wk2];
+      const we2=new Date(ws2);we2.setDate(we2.getDate()+5);
+      titleSub='สัปดาห์ที่ '+wNum(ws2)+' ('+dStr(ws2)+' - '+dStr(we2)+')';
+    } else {
+      const mv=document.getElementById('pr-month-val')?.value;
+      const [yr2,mi2]=mv?mv.split('-').map(Number):[now.getFullYear(),now.getMonth()+1];
+      const allWK=new Set();
+      ['proc','fill'].forEach(s2=>{const all=D.getSched(s2);Object.keys(all).forEach(k=>allWK.add(k));});
+      wKeys=[...allWK].filter(wk3=>{
+        const wp=wk3.split('-');const ws3=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+        for(let i=0;i<6;i++){const d2=new Date(ws3);d2.setDate(ws3.getDate()+i);if(d2.getMonth()===mi2-1&&d2.getFullYear()===yr2)return true;}return false;
+      });
+      const thM=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+      titleSub=thM[mi2-1]+' '+(yr2+543);
+    }
+    if(!wKeys.length)return '<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล</div>';
+    const sysList=sys==='both'?['proc','fill']:sys==='proc'?['proc']:['fill'];
+    let html=`<div class="pr-header">
+      <div class="pr-title">📋 บิล OT${sys==='both'?' รวมทุกระบบ':sys==='proc'?' — Process':' — Filling'}</div>
+      <div class="pr-sub">${titleSub} · พิมพ์วันที่: ${dateStr}</div>
+    </div>`;
+    sysList.forEach(s2=>{
+      const sysName=s2==='proc'?'Process':'Filling';
+      const depts=D.getDepts(s2);
+      // รวบรวมพนักงาน OT
+      const rows=[];
+      wKeys.forEach(wk4=>{
+        const sched=D.getSched(s2)[wk4]||{};
+        const wp=wk4.split('-');const ws4=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+        for(let di=0;di<6;di++){
+          const d2=new Date(ws4);d2.setDate(ws4.getDate()+di);
+          const ds2=dStr(d2);const dayN=DAYS[di];
+          SHS.forEach(sh=>{
+            depts.forEach(dept=>{
+              (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
+                if(!w.ot)return;
+                const sgKey=wk4+'_'+w.name+'_'+dept+'_'+di+'_'+sh;
+                const sg=D.getSign(sgKey);
+                const emp=D.getEmps(s2).find(e=>e.name===w.name);
+                rows.push({name:w.name,dept,ds:ds2,dayN,sh:SHTH[sh],hrs:w.otHrs||4,sg,sigImg:emp?.signature||null});
+              });
+            });
+          });
+        }
+      });
+      if(!rows.length)return;
+      // คำนวณ OT%
+      let tH=0,oH=0;
+      wKeys.forEach(wk5=>{
+        const sched2=D.getSched(s2)[wk5]||{};
+        depts.forEach(d3=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched2[d3]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
+      });
+      const pct=tH>0?Math.round(oH/tH*100):0;
+      const isOver=pct>tgt;
+      html+=`<div class="pr-section">
+        <div class="pr-sec-title">${sysName}</div>
+        <div class="pr-summary">
+          OT รวม <strong>${oH}</strong> ชม. | OT% = <strong style="color:${isOver?'#dc2626':'#16a34a'}">${pct}%</strong> | Target ${tgt}% | ${isOver?'⚠️ เกิน Target':'✅ ปกติ'}
+        </div>
+        <table class="pr-tbl">
+          <thead><tr>
+            <th style="width:30px">#</th>
+            <th>ชื่อพนักงาน</th>
+            <th>แผนก</th>
+            <th>วัน/กะ</th>
+            <th style="width:50px;text-align:center">ชม.</th>
+            <th style="width:120px;text-align:center">ลายมือชื่อ</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map((r,i)=>`<tr>
+              <td style="text-align:center">${i+1}</td>
+              <td>${r.name}</td>
+              <td>${r.dept}</td>
+              <td>${r.dayN} ${r.ds} ${r.sh}</td>
+              <td style="text-align:center">${r.hrs}</td>
+              <td style="text-align:center;height:45px">
+                ${r.sigImg?`<img src="${r.sigImg}" style="max-height:40px;max-width:110px;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${r.sg}</span>`:''}
+              </td>
+            </tr>`).join('')}
+            <tr style="font-weight:900;background:#f0f0f0">
+              <td colspan="4" style="text-align:right">รวม</td>
+              <td style="text-align:center">${rows.reduce((a,r)=>a+r.hrs,0)}</td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pr-footer">
+          <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
+          <div>วันที่: ${dateStr}</div>
+          <div>ผู้อนุมัติ: ________________________</div>
+        </div>
+      </div>`;
+    });
+    return html;
+  },
+  confirmOT(){
+    const mode=document.getElementById('pr-mode')?.value||'week';
+    const sys=document.getElementById('pr-sys')?.value||'both';
+    const html=this.buildOTHTML(mode,sys);
+    document.getElementById('print-area').innerHTML=html;
+    closeMo('mo-print-ot');
+    setTimeout(()=>window.print(),300);
+  },
+  openSched(){
+    this.updateSchedPreview();
+    openMo('mo-print-sched');
+  },
+  updateSchedPreview(){
+    const sysSel=document.getElementById('prs-sys')?.value||'current';
+    const sys=sysSel==='current'?S.sys:sysSel;
+    const html=this.buildSchedHTML(sys);
+    const prev=document.getElementById('pr-sched-preview');
+    if(prev)prev.innerHTML=html;
+  },
+  buildSchedHTML(sys){
+    const wk=wKey(S.wkStart);const sched=D.getSched(sys)[wk]||{};
+    const depts=D.getDepts(sys);const ws=S.wkStart;
+    const now=new Date();const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+    return `<div class="pr-header">
+      <div class="pr-title">📅 ตารางกะ — ${sys==='proc'?'Process':'Filling'}</div>
+      <div class="pr-sub">สัปดาห์ที่ ${wNum(ws)} · พิมพ์: ${dateStr}</div>
+    </div>
+    <table class="pr-tbl" style="font-size:10pt">
+      <thead><tr>
+        <th style="width:100px">แผนก</th>
+        ${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th colspan="3" style="text-align:center">${d} ${d2.getDate()}/${d2.getMonth()+1}</th>`;}).join('')}
+      </tr>
+      <tr>
+        <th></th>
+        ${DAYS.map(()=>SHS.map(sh=>`<th style="font-size:9pt;text-align:center">${SHTH[sh].replace('กะ','')}</th>`).join('')).join('')}
+      </tr></thead>
+      <tbody>
+        ${depts.map(dept=>`<tr>
+          <td style="font-weight:700;background:#f8f8f8">${dept}</td>
+          ${Array.from({length:6},(_,di)=>SHS.map(sh=>{
+            const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+            return`<td style="font-size:9pt">${ws2.map(w=>w.name+(w.ot?' (OT)':'')).join('<br>')}</td>`;
+          }).join('')).join('')}
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="pr-footer">
+      <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
+      <div>วันที่: ${dateStr}</div>
+      <div>ผู้อนุมัติ: ________________________</div>
+    </div>`;
+  },
+  confirmSched(){
+    const sysSel=document.getElementById('prs-sys')?.value||'current';
+    const sys=sysSel==='current'?S.sys:sysSel;
+    const html=this.buildSchedHTML(sys);
+    document.getElementById('print-area').innerHTML=html;
+    closeMo('mo-print-sched');
+    setTimeout(()=>window.print(),300);
+  },
   ot(){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};const depts=D.getDepts();const tgt=D.getTarget();
     let tH=0,oH=0;
