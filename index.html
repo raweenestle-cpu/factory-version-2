@@ -1164,20 +1164,58 @@ const SCHED={
   showOTReason(pct,tgt,onSave,existingReasons=[],canSkip=false){
     const reasons=D.getReasons();
     let rows=existingReasons.length?existingReasons.map(r=>({...r})):[{reason:reasons[0]||'',hours:0}];
+
+    // คำนวณชั่วโมง OT จริงจากตารางกะ
+    const wk2=wKey(S.wkStart);const allSched2=D.getSched();const sched2=allSched2[wk2]||{};
+    let normalH=0,otH=0;
+    D.getDepts().forEach(d=>{
+      for(let di=0;di<6;di++){
+        SHS.forEach(sh=>{
+          (sched2[d]?.[di]?.[sh]||sched2[d]?.[String(di)]?.[sh]||[]).forEach(w=>{
+            normalH+=8;
+            if(w.ot)otH+=w.otHrs||4;
+          });
+        });
+      }
+    });
+    const totalOTH=otH; // ชั่วโมง OT ทั้งหมด
+
     const renderR=()=>{
-      document.getElementById('or-rows').innerHTML=rows.map((r,i)=>`<div class="ot-rrow">
-        <select onchange="window._or[${i}].reason=this.value">${reasons.map(re=>`<option value="${re}" ${r.reason===re?'selected':''}>${re}</option>`).join('')}</select>
-        <input type="number" value="${r.hours}" min="0" max="24" oninput="window._or[${i}].hours=parseInt(this.value)||0">
+      const usedH=window._or.reduce((a,r)=>a+(parseInt(r.hours)||0),0);
+      const remainH=totalOTH-usedH;
+      const remainColor=remainH===0?'#22C55E':remainH<0?'#EF4444':'#F59E0B';
+      document.getElementById('or-remain').innerHTML=
+        `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(0,0,0,.2);border-radius:10px;margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:var(--text2)">OT ทั้งหมด</div>
+            <div style="font-size:16px;font-weight:900">${totalOTH} ชม.</div>
+          </div>
+          <div style="font-size:24px">→</div>
+          <div>
+            <div style="font-size:11px;color:var(--text2)">กระจายแล้ว</div>
+            <div style="font-size:16px;font-weight:900;color:var(--green2)">${usedH} ชม.</div>
+          </div>
+          <div style="font-size:24px">→</div>
+          <div>
+            <div style="font-size:11px;color:var(--text2)">คงเหลือ</div>
+            <div style="font-size:20px;font-weight:900;color:${remainColor}">${remainH} ชม.</div>
+          </div>
+        </div>`;
+      document.getElementById('or-rows').innerHTML=window._or.map((r,i)=>`<div class="ot-rrow">
+        <select onchange="window._or[${i}].reason=this.value;window._rr()">${reasons.map(re=>`<option value="${re}" ${r.reason===re?'selected':''}>${re}</option>`).join('')}</select>
+        <input type="number" value="${r.hours}" min="0" max="${totalOTH}"
+          oninput="window._or[${i}].hours=parseInt(this.value)||0;window._rr()">
         <label>ชม.</label>
-        ${rows.length>1?`<button onclick="window._or.splice(${i},1);window._rr()" style="width:24px;height:24px;border:none;border-radius:6px;background:rgba(220,38,38,.2);color:var(--red2);font-size:12px">✕</button>`:''}
+        ${window._or.length>1?`<button onclick="window._or.splice(${i},1);window._rr()" style="width:24px;height:24px;border:none;border-radius:6px;background:rgba(220,38,38,.2);color:var(--red2);font-size:12px">✕</button>`:''}
       </div>`).join('');
     };
-    window._or=rows;window._rr=renderR;
+    window._or=rows;window._rr=renderR;window._totalOTH=totalOTH;
     const mo=document.getElementById('mo-or');
     const overText=pct>tgt?`<div class="ot-warn"><div class="ot-warn-t">OT ${pct}% เกิน Target ${tgt}%</div><div style="font-size:12px;color:var(--text2)">กรุณาระบุเหตุผล</div></div>`
       :`<div style="background:rgba(22,163,74,.1);border:1.5px solid rgba(22,163,74,.3);border-radius:12px;padding:12px;margin-bottom:14px"><div style="font-size:13px;font-weight:800;color:var(--green2)">✅ OT ${pct}% อยู่ใน Target ${tgt}%</div><div style="font-size:11px;color:var(--text2);margin-top:4px">ใส่ comment ไว้เป็นข้อมูลหรือกดข้ามได้เลย</div></div>`;
     mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${pct>tgt?'⚠️ OT เกิน Target':'📝 บันทึก Comment OT'}</div><button class="md-close" onclick="closeMo('mo-or')">✕</button></div><div class="md-body">
       ${overText}
+      <div id="or-remain"></div>
       <div id="or-rows"></div>
       <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ เพิ่มเหตุผล / comment</button>
     </div><div class="md-foot">
@@ -1188,11 +1226,24 @@ const SCHED={
   },
   saveOR(pct){
     const reasons=window._or.filter(r=>r.reason&&r.hours>0);
+    const usedH=reasons.reduce((a,r)=>a+r.hours,0);
+    const totalOTH=window._totalOTH||0;
+    const remainH=totalOTH-usedH;
+    // ถ้า OT เกิน target ต้องกระจายให้ครบก่อน
+    if(pct>parseFloat(document.getElementById('set-target')?.value||15)){
+      if(remainH>0){
+        toast('❌ ยังกระจายไม่ครบ — เหลืออีก '+remainH+' ชม.',3000);return;
+      }
+      if(remainH<0){
+        toast('❌ กระจายเกินไป '+Math.abs(remainH)+' ชม. กรุณาแก้ไข',3000);return;
+      }
+    }
     const log=D.getOTLog();const wk=wKey(S.wkStart);
     const idx=log.findIndex(l=>l.wk===wk&&l.sys===S.sys);
-    const entry={wk,sys:S.sys,pct,date:new Date().toISOString(),reasons};
+    const entry={wk,sys:S.sys,pct,totalOTH,normalH:totalOTH>0?totalOTH-usedH:0,date:new Date().toISOString(),reasons};
     if(idx>=0)log[idx]=entry;else log.push(entry);
     D.saveOTLog(log);closeMo('mo-or');if(this._onSave)this._onSave();DASH.renderPareto();
+    toast('✅ บันทึกเหตุผล OT แล้ว');
   },
   clearWk(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
