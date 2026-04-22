@@ -198,6 +198,12 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 .av0{background:linear-gradient(135deg,#2563EB,#3B82F6)}.av1{background:linear-gradient(135deg,#0D9488,#14B8A6)}.av2{background:linear-gradient(135deg,#7C3AED,#8B5CF6)}.av3{background:linear-gradient(135deg,#DC2626,#EF4444)}.av4{background:linear-gradient(135deg,#D97706,#F59E0B)}.av5{background:linear-gradient(135deg,#059669,#10B981)}.av6{background:linear-gradient(135deg,#DB2777,#EC4899)}.av7{background:linear-gradient(135deg,#0369A1,#0EA5E9)}
 @keyframes pulse-save{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{opacity:.8;box-shadow:0 0 0 8px rgba(239,68,68,0)}}
 .btn-unsaved{animation:pulse-save 1.5s ease-in-out infinite!important;background:var(--red2)!important}
+#pr-ot-preview *,#pr-sched-preview *{color:inherit!important;background:inherit!important}
+#pr-ot-preview td,#pr-sched-preview td{color:#000!important;border:1px solid #8090b0!important}
+#pr-ot-preview th,#pr-sched-preview th{color:#fff!important;border:1px solid #3a5a8f!important}
+#pr-ot-preview tr:nth-child(even) td{background:#e8eeff!important}
+#pr-ot-preview tr:nth-child(odd) td{background:#ffffff!important}
+#pr-ot-preview thead tr,#pr-sched-preview thead tr{background:#1e3a5f!important}
 ::-webkit-scrollbar{width:4px;height:4px}
 
 /* ══ RESPONSIVE DESKTOP ══ */
@@ -642,7 +648,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
         </div>
       </div>
       <!-- Preview -->
-      <div id="pr-ot-preview" style="background:#fff;color:#000;padding:12px;border-radius:8px;border:1px solid var(--border);min-height:200px;max-height:50vh;overflow-y:auto;font-family:'Sarabun',sans-serif;font-size:11pt"></div>
+      <div id="pr-ot-preview" style="background:#fff!important;color:#000!important;padding:12px;border-radius:8px;border:1px solid #ccc;min-height:200px;max-height:50vh;overflow-y:auto;font-family:'Sarabun',sans-serif;font-size:11pt"></div>
     </div>
     <div class="md-foot">
       <button class="btn-cancel" onclick="closeMo('mo-print-ot')">ยกเลิก</button>
@@ -669,7 +675,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
           </select>
         </div>
       </div>
-      <div id="pr-sched-preview" style="background:#fff;color:#000;padding:12px;border-radius:8px;border:1px solid var(--border);min-height:200px;max-height:50vh;overflow-y:auto;font-family:'Sarabun',sans-serif;font-size:10pt;overflow-x:auto"></div>
+      <div id="pr-sched-preview" style="background:#fff!important;color:#000!important;padding:12px;border-radius:8px;border:1px solid #ccc;min-height:200px;max-height:50vh;overflow-y:auto;font-family:'Sarabun',sans-serif;font-size:10pt;overflow-x:auto"></div>
     </div>
     <div class="md-foot">
       <button class="btn-cancel" onclick="closeMo('mo-print-sched')">ยกเลิก</button>
@@ -2550,13 +2556,13 @@ const PRINT={
     }
     if(!wKeys.length)return '<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล</div>';
     const sysList=sys==='both'?['proc','fill']:sys==='proc'?['proc']:['fill'];
-    let html=`<div class="pr-header">
-      <div class="pr-header-left">
-        <div class="pr-title">บันทึกการทำงานล่วงเวลา (OT)</div>
-        <div class="pr-sub">${sys==='both'?'Process & Filling':sys==='proc'?'แผนก Process':'แผนก Filling'}</div>
-        <div class="pr-sub">${titleSub}</div>
+    let html=`<div style="border-bottom:3px solid #1e3a5f;padding-bottom:10px;margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between">
+      <div>
+        <div style="font-size:18pt;font-weight:900;color:#1e3a5f;margin-bottom:3px">บันทึกการทำงานล่วงเวลา (OT)</div>
+        <div style="font-size:11pt;color:#333">${sys==='both'?'Process & Filling':sys==='proc'?'แผนก Process':'แผนก Filling'}</div>
+        <div style="font-size:11pt;color:#333">${titleSub}</div>
       </div>
-      <div class="pr-header-right">
+      <div style="text-align:right;font-size:10pt;color:#555">
         <div>พิมพ์วันที่: ${dateStr}</div>
         <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
       </div>
@@ -2595,72 +2601,69 @@ const PRINT={
       const pct=tH>0?Math.round(oH/tH*100):0;
       const isOver=pct>tgt;
       html+=`<div class="pr-section">
-        <div class="pr-sec-title">${sysName}</div>
-        <div class="pr-summary">
-          <div class="pr-sum-item">
-            <span class="pr-sum-val" style="color:#1e3a5f">${oH}</span>
-            <span class="pr-sum-lbl">ชม. OT รวม</span>
+        <div style="font-size:12pt;font-weight:900;background:#1e3a5f;color:#fff;padding:6px 12px;margin-bottom:0;border-radius:4px 4px 0 0;-webkit-print-color-adjust:exact;print-color-adjust:exact">${sysName}</div>
+        <div style="background:#f0f4ff;border:1px solid #c7d3f0;border-top:none;padding:10px 14px;margin-bottom:10px;display:flex;gap:20px;align-items:center;border-radius:0 0 4px 4px">
+          <div style="text-align:center">
+            <div style="font-size:20pt;font-weight:900;color:#1e3a5f;line-height:1">${oH}</div>
+            <div style="font-size:9pt;color:#555">ชม. OT รวม</div>
           </div>
           <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
-          <div class="pr-sum-item">
-            <span class="pr-sum-val" style="color:${isOver?'#dc2626':'#16a34a'}">${pct}%</span>
-            <span class="pr-sum-lbl">OT%</span>
+          <div style="text-align:center">
+            <div style="font-size:20pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'};line-height:1">${pct}%</div>
+            <div style="font-size:9pt;color:#555">OT%</div>
           </div>
           <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
-          <div class="pr-sum-item">
-            <span class="pr-sum-val">${tgt}%</span>
-            <span class="pr-sum-lbl">Target</span>
+          <div style="text-align:center">
+            <div style="font-size:20pt;font-weight:900;color:#000;line-height:1">${tgt}%</div>
+            <div style="font-size:9pt;color:#555">Target</div>
           </div>
           <div style="width:1px;background:#c7d3f0;align-self:stretch"></div>
-          <div class="pr-sum-item">
-            <span class="pr-sum-val" style="color:${isOver?'#dc2626':'#16a34a'};font-size:12pt">${isOver?'⚠️ เกิน':'✅ ปกติ'}</span>
-            <span class="pr-sum-lbl">สถานะ</span>
+          <div style="text-align:center">
+            <div style="font-size:14pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'};line-height:1">${isOver?'⚠️ เกิน Target':'✅ ปกติ'}</div>
+            <div style="font-size:9pt;color:#555">สถานะ</div>
           </div>
         </div>
-        <table class="pr-tbl">
-          <thead><tr>
-            <th class="left" style="width:28pt">#</th>
-            <th class="left" style="width:90pt">ชื่อ-นามสกุล</th>
-            <th class="left" style="width:70pt">แผนก</th>
-            <th class="left" style="width:55pt">วันที่</th>
-            <th class="left" style="width:50pt">กะ</th>
-            <th style="width:35pt">ชม.</th>
-            <th style="width:110pt">ลายมือชื่อ</th>
-          </tr></thead>
+        <table style="table-layout:fixed;width:100%;border-collapse:collapse;font-size:10pt;color:#000;margin-bottom:0">
+          <thead>
+            <tr style="background:#1e3a5f;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+              <th style="width:28pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:center">#</th>
+              <th style="width:90pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">ชื่อ-นามสกุล</th>
+              <th style="width:70pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">แผนก</th>
+              <th style="width:55pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">วันที่</th>
+              <th style="width:50pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:left">กะ</th>
+              <th style="width:35pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:center">ชม.</th>
+              <th style="width:110pt;border:1px solid #3a5a8f;padding:7px 6px;color:#fff;font-weight:700;text-align:center">ลายมือชื่อ</th>
+            </tr>
+          </thead>
           <tbody>
-            ${rows.map((r,i)=>`<tr>
-              <td class="center">${i+1}</td>
-              <td style="font-weight:700;white-space:nowrap">${r.name}</td>
-              <td style="white-space:nowrap">${r.dept}</td>
-              <td style="white-space:nowrap">${r.ds}</td>
-              <td style="white-space:nowrap">${r.sh}</td>
-              <td class="center" style="font-weight:700">${r.hrs}</td>
-              <td class="sig-cell">
-                ${r.sigImg?`<img src="${r.sigImg}">`
-                  :r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:13pt;color:#1e3a5f">${r.sg}</span>`
-                  :''}
+            ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#ffffff':'#e8eeff'}">
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;text-align:center">${i+1}</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;font-weight:700;white-space:nowrap">${r.name}</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;white-space:nowrap">${r.dept}</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;white-space:nowrap">${r.ds}</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;white-space:nowrap">${r.sh}</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#000;font-weight:700;text-align:center">${r.hrs}</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;text-align:center;height:45pt">
+                ${r.sigImg
+                  ?`<img src="${r.sigImg}" style="max-height:40pt;max-width:105pt;object-fit:contain">`
+                  :r.sg
+                    ?`<span style="font-family:'Brush Script MT',cursive;font-size:13pt;color:#1e3a5f">${r.sg}</span>`
+                    :''}
               </td>
             </tr>`).join('')}
-            <tr>
-              <td colspan="5" style="text-align:right;font-weight:900;padding-right:12px">รวมชั่วโมง OT</td>
-              <td class="center" style="font-weight:900;font-size:12pt;color:#1e3a5f">${rows.reduce((a,r)=>a+r.hrs,0)}</td>
-              <td></td>
+            <tr style="background:#dde4f5">
+              <td colspan="5" style="border:1px solid #8090b0;padding:7px 12px;color:#000;font-weight:900;text-align:right">รวมชั่วโมง OT</td>
+              <td style="border:1px solid #8090b0;padding:7px 6px;color:#1e3a5f;font-weight:900;font-size:13pt;text-align:center">${rows.reduce((a,r)=>a+r.hrs,0)}</td>
+              <td style="border:1px solid #8090b0"></td>
             </tr>
           </tbody>
         </table>
-        <div class="pr-footer">
-          <div class="pr-sign-box">
-            <div style="height:40px"></div>
-            <div class="pr-sign-box-label">ผู้จัดทำ: ${S.user?.name||'Admin'}</div>
-          </div>
-          <div class="pr-sign-box">
-            <div style="height:40px"></div>
-            <div class="pr-sign-box-label">ผู้ตรวจสอบ</div>
-          </div>
-          <div class="pr-sign-box">
-            <div style="height:40px"></div>
-            <div class="pr-sign-box-label">ผู้อนุมัติ</div>
-          </div>
+        <div style="border-top:2px solid #1e3a5f;padding-top:12px;margin-top:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          ${['ผู้จัดทำ: '+( S.user?.name||'Admin'),'ผู้ตรวจสอบ','ผู้อนุมัติ'].map(lbl=>`
+            <div style="border:1px solid #aaa;border-radius:4px;padding:10px;text-align:center">
+              <div style="height:50px"></div>
+              <div style="border-top:1px solid #aaa;padding-top:6px;font-size:9pt;color:#555">${lbl}</div>
+            </div>`).join('')}
         </div>
       </div>`;
     });
