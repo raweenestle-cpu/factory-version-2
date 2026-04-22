@@ -197,7 +197,7 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 .toast.show{opacity:1}
 .av0{background:linear-gradient(135deg,#2563EB,#3B82F6)}.av1{background:linear-gradient(135deg,#0D9488,#14B8A6)}.av2{background:linear-gradient(135deg,#7C3AED,#8B5CF6)}.av3{background:linear-gradient(135deg,#DC2626,#EF4444)}.av4{background:linear-gradient(135deg,#D97706,#F59E0B)}.av5{background:linear-gradient(135deg,#059669,#10B981)}.av6{background:linear-gradient(135deg,#DB2777,#EC4899)}.av7{background:linear-gradient(135deg,#0369A1,#0EA5E9)}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-@media print{#pg-login,#app .topbar,#app .bottomnav,.mo,.toast{display:none!important}#print-area{display:block!important}@page{size:A4 portrait;margin:10mm}body{background:#fff!important;color:#000!important}}
+@media print{#pg-login,#app .topbar,#app .bottomnav,.mo,.toast{display:none!important}#print-area{display:block!important}@page{size:A4 landscape;margin:8mm}body{background:#fff!important;color:#000!important}}
 #print-area{display:none;font-family:'Sarabun',sans-serif;font-size:12pt;color:#000;background:#fff}
 #print-area table{width:100%;border-collapse:collapse;margin-bottom:10px}
 #print-area th{background:#1e3a5f!important;color:#fff!important;padding:6px 8px;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -1330,7 +1330,13 @@ const PRINT={
       <div style="font-size:11pt;color:#666;margin-bottom:8px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)} - ${dStr(we)}</div>
       <div style="background:#f0f0f0;padding:7px 10px;border-radius:5px;margin-bottom:10px;font-size:11pt">OT%: <strong>${pct}%</strong> | Target: ${tgt}% | ${pct>tgt?'⚠️ เกิน':'✅ ปกติ'}</div>
       <table><thead><tr><th>#</th><th>ชื่อพนักงาน</th><th>แผนก</th><th>วันที่</th><th>กะ</th><th>ชม.</th><th>ลายมือชื่อ</th></tr></thead>
-      <tbody>${rows.map((r,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${r.name}</td><td>${r.dept}</td><td>${r.ds}</td><td>${r.sh}</td><td style="text-align:center">${r.hrs}</td><td style="text-align:center">${r.sigImg?`<img src="${r.sigImg}" style="max-height:40px;max-width:100px;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${r.sg}</span>`:''}</td></tr>`).join('')}
+      <tbody>${rows.map((r,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${r.name}</td><td>${r.dept}</td><td>${r.ds}</td><td>${r.sh}</td><td style="text-align:center">${r.hrs}</td><td style="text-align:center;padding:2px 4px;width:120pt">
+      ${r.sigImg
+        ? `<img src="${r.sigImg}" style="width:110pt;height:36pt;object-fit:contain;display:block;margin:0 auto">`
+        : r.sg
+          ? `<span style="font-family:'Brush Script MT',cursive;font-size:12pt;color:#1e3a5f">${r.sg}</span>`
+          : ''}
+    </td></tr>`).join('')}
       <tr style="font-weight:900;background:#f0f0f0"><td colspan="5" style="text-align:right">รวม</td><td style="text-align:center">${rows.reduce((a,r)=>a+r.hrs,0)}</td><td></td></tr>
       </tbody></table>
       <div style="margin-top:16px;display:flex;justify-content:space-between;font-size:11pt">
