@@ -3656,9 +3656,14 @@ const PROD={
     const el=document.getElementById('prod-list');if(!el)return;
     const master=D.getProductMaster();
     // ดึง LINE จาก default เหมือน Settings
-    const fillDepts=D.getDepts('fill').filter(d=>d!==AL);
-    const procDepts=D.getDepts('proc').filter(d=>d!==AL);
-    const allLines=[...new Set([...fillDepts,...procDepts])];
+    const _AL='AL';
+    const _FDEPT=['Polo 12A','Polo 12B','Comet','Mach','Sandwich','Hoyer','Extrud 3','Glacé','Scooping','Curve','ห้องน้ำยา'];
+    const _PDEPT=['Oreo Coating','Mixing','Flavor','CIP Man','Transfer Rework'];
+    const _fillLS=LS.get('depts_fill',null);
+    const _procLS=LS.get('depts_proc',null);
+    const fillDepts=(_fillLS&&_fillLS.length)?_fillLS.filter(d=>d!==_AL):_FDEPT;
+    const procDepts=(_procLS&&_procLS.length)?_procLS.filter(d=>d!==_AL):_PDEPT;
+    const allLines=[...new Set([...fillDepts,...procDepts])].filter(d=>d!==_AL);
     // filter
     const q=(document.getElementById('prod-search')?.value||'').toLowerCase();
     const filterLine=document.getElementById('prod-filter-line')?.value||'';
