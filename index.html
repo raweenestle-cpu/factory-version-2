@@ -2760,6 +2760,17 @@ const TEAM={
   }
 };
 
+function checkRest(name,di,sh,sched){
+  // เช็คว่าพักครบ 12 ชั่วโมงไหม (กะเช้าต้องไม่เคยทำกะดึกวันก่อน)
+  if(sh==='morning'&&di>0){
+    const depts=D.getDepts().filter(d=>d!==AL);
+    let nightEmps=[];
+    depts.forEach(d=>nightEmps=[...nightEmps,...(sched[d]?.[di-1]?.night||sched[d]?.[String(di-1)]?.night||[])]);
+    if(nightEmps.find(w=>w.name===name))return false;
+  }
+  return true;
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   if(!fbDb){setTimeout(()=>{APP.init();},500);return;}
   APP.init();
