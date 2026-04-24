@@ -3653,59 +3653,63 @@ const EMP={
 
 const PROD={
   render(){
-    const master=D.getProductMaster();
     const el=document.getElementById('prod-list');if(!el)return;
-    // ดึง depts — fallback เป็น default ถ้า localStorage ว่าง
-    const fillDepts=D.getDepts('fill').length?D.getDepts('fill'):[...FDEPT];
-    const procDepts=D.getDepts('proc').length?D.getDepts('proc'):[...PDEPT];
-    const depts=[...new Set([...fillDepts,...procDepts])].filter(d=>d!=='AL');
-    const lf=document.getElementById('prod-filter-line');
+    const master=D.getProductMaster();
+    // ดึง LINE จาก default เหมือน Settings
+    const fillDepts=D.getDepts('fill').filter(d=>d!==AL);
+    const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+    const allLines=[...new Set([...fillDepts,...procDepts])];
+    // filter
     const q=(document.getElementById('prod-search')?.value||'').toLowerCase();
     const filterLine=document.getElementById('prod-filter-line')?.value||'';
-    if(lf){lf.innerHTML='<option value="">ทุก Line</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');}
+    const lf=document.getElementById('prod-filter-line');
+    if(lf){lf.innerHTML='<option value="">ทุก Line</option>'+allLines.map(d=>`<option value="${d}" ${d===filterLine?'selected':''}>${d}</option>`).join('');}
+    // จัดกลุ่ม product ตาม line
     const byLine={};
+    allLines.forEach(l=>{byLine[l]=[];});
     master.forEach((p,i)=>{
-      const line=p.line||'ไม่ระบุ';
-      if(filterLine&&line!==filterLine)return;
+      if(!byLine[p.line])byLine[p.line]=[];
       if(q&&!p.name.toLowerCase().includes(q)&&!(p.mat||'').toLowerCase().includes(q))return;
-      if(!byLine[line])byLine[line]=[];
-      byLine[line].push({...p,idx:i});
+      byLine[p.line].push({...p,idx:i});
     });
-    // แสดงทุก LINE เสมอ แม้ไม่มี product
-    const allLines=[...new Set([...depts])];
-    allLines.forEach(line=>{if(!byLine[line])byLine[line]=[];});
-    const displayLines=filterLine?{[filterLine]:byLine[filterLine]||[]}:Object.fromEntries(allLines.map(l=>[l,byLine[l]||[]]));
-    el.innerHTML=Object.entries(displayLines).map(([line,prods])=>`
-      <div>
-        <div style="padding:8px 14px;background:var(--navy);display:flex;align-items:center;justify-content:space-between">
+    // แสดง
+    const showLines=filterLine?[filterLine]:allLines;
+    el.innerHTML=showLines.map(line=>{
+      const prods=byLine[line]||[];
+      return`<div>
+        <div style="padding:8px 14px;background:var(--navy);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:2">
           <div style="font-size:13px;font-weight:900;color:#fff">📋 ${line}</div>
-          <button onclick="PROD.openAdd('${line}')" style="padding:4px 10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่ม</button>
+          <button onclick="PROD.openAdd('${line}')" style="padding:4px 10px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);border-radius:7px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่ม</button>
         </div>
-        <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;padding:5px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
+        ${prods.length?`
+        <div style="display:grid;grid-template-columns:80px 1fr 65px 50px 40px;padding:5px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
           <div style="font-size:10px;color:var(--text3)">Material</div>
           <div style="font-size:10px;color:var(--text3)">Product</div>
           <div style="font-size:10px;color:var(--text3);text-align:center">มล.</div>
           <div style="font-size:10px;color:var(--text3);text-align:center">คน</div>
           <div></div>
         </div>
-        ${prods.map(p=>`
-          <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center">
-            <div style="font-size:11px;font-weight:800;color:var(--amber)">${p.mat||'-'}</div>
-            <div style="font-size:13px;font-weight:700">${p.name}</div>
-            <div style="text-align:center;font-size:12px;color:var(--blue2)">${(p.ml||0).toLocaleString()}</div>
-            <div style="text-align:center;font-size:12px;color:var(--green2)">${p.count||1}</div>
-            <div style="display:flex;gap:3px">
-              <button onclick="PROD.openEdit(${p.idx})" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px">✏️</button>
-              <button onclick="PROD.del(${p.idx})" style="width:28px;height:28px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:7px;color:var(--red2);font-size:12px">✕</button>
-            </div>
-          </div>`).join('')}
-      </div>`).join('');
+        ${prods.map(p=>`<div style="display:grid;grid-template-columns:80px 1fr 65px 50px 40px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center">
+          <div style="font-size:11px;font-weight:800;color:var(--amber)">${p.mat||'-'}</div>
+          <div style="font-size:13px;font-weight:700">${p.name}</div>
+          <div style="text-align:center;font-size:12px;color:var(--blue2)">${(p.ml||0).toLocaleString()}</div>
+          <div style="text-align:center;font-size:12px;color:var(--green2)">${p.count||1}</div>
+          <div style="display:flex;gap:3px">
+            <button onclick="PROD.openEdit(${p.idx})" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px">✏️</button>
+            <button onclick="PROD.del(${p.idx})" style="width:28px;height:28px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:7px;color:var(--red2);font-size:12px">✕</button>
+          </div>
+        </div>`).join('')}`
+        :`<div style="padding:10px 14px;font-size:11px;color:var(--text3)">ยังไม่มี Product — กด + เพิ่ม</div>`}
+      </div>`;
+    }).join('');
   },
   setDisplay(mode){D.saveDisplayMode(mode);this.render();PLAN.render();toast('✅');},
   openAdd(line=''){
-    const fillD=D.getDepts('fill').length?D.getDepts('fill'):[...FDEPT];
-    const procD=D.getDepts('proc').length?D.getDepts('proc'):[...PDEPT];
-    const depts=[...new Set([...fillD,...procD])].filter(d=>d!=='AL');
+    const _fd2=LS.get('depts_fill',null);
+    const _pd2=LS.get('depts_proc',null);
+    const fillD=(_fd2&&_fd2.length)?_fd2:[...FDEPT];
+    const procD=(_pd2&&_pd2.length)?_pd2:[...PDEPT];
+    const depts=[...new Set([...fillD,...procD])].filter(d=>d!==AL);
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">+ เพิ่ม Product</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
@@ -3726,9 +3730,11 @@ const PROD={
   },
   openEdit(idx){
     const master=D.getProductMaster();const p=master[idx];if(!p)return;
-    const fillD=D.getDepts('fill').length?D.getDepts('fill'):[...FDEPT];
-    const procD=D.getDepts('proc').length?D.getDepts('proc'):[...PDEPT];
-    const depts=[...new Set([...fillD,...procD])].filter(d=>d!=='AL');
+    const _fd2=LS.get('depts_fill',null);
+    const _pd2=LS.get('depts_proc',null);
+    const fillD=(_fd2&&_fd2.length)?_fd2:[...FDEPT];
+    const procD=(_pd2&&_pd2.length)?_pd2:[...PDEPT];
+    const depts=[...new Set([...fillD,...procD])].filter(d=>d!==AL);
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">✏️ แก้ไข</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
