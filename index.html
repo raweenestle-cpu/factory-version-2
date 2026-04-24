@@ -951,6 +951,7 @@ const D={
   saveMixingCfg(v){LS.set('mixing_cfg',v);FB.set('config/mixing_cfg',v);},
   getVolume(){return LS.get('fill_volume',{});},
   saveVolume(v){LS.set('fill_volume',v);FB.set('fill/volume',v);},
+  getTeamCfg(){return LS.get('team_cfg',{rotateSW:2,startWk:1});},
   getOTLog(sys=S.sys){return LS.get('otlog_'+sys,[]);},
   saveOTLog(l,sys=S.sys){LS.set('otlog_'+sys,l);FB.set(sys+'/otlog',l);},
 };
