@@ -582,11 +582,9 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     <!-- Display Mode -->
     <div style="padding:8px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
       <span style="font-size:11px;color:var(--text2);font-weight:700">แสดงในแผนผลิตเป็น:</span>
-      ${['mat','name','both'].map(m=>`<button id="dm-${m}" onclick="PROD.setDisplay('${m}')"
-        style="padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);
-        background:transparent;color:var(--text3);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">
-        ${{mat:'Material No.',name:'ชื่อ Product',both:'ทั้งคู่'}[m]}
-      </button>`).join('')}
+      <button id="dm-mat" onclick="PROD.setDisplay('mat')" style="padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text3);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">Material No.</button>
+      <button id="dm-name" onclick="PROD.setDisplay('name')" style="padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text3);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">ชื่อ Product</button>
+      <button id="dm-both" onclick="PROD.setDisplay('both')" style="padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);background:transparent;color:var(--text3);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">ทั้งคู่</button>
     </div>
     <div style="overflow-y:auto;flex:1" id="prod-list"></div>
   </div>
