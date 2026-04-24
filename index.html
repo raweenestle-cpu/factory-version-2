@@ -1299,30 +1299,59 @@ const PLAN={
   setCount(dept,di,ii,v){if(!this.plan[dept])this.plan[dept]={};if(!this.plan[dept][di])this.plan[dept][di]=[];if(this.plan[dept][di][ii])this.plan[dept][di][ii].count=parseInt(v)||1;},
   delProd(dept,di,ii){if(!this.plan[dept]||!this.plan[dept][di])return;this.plan[dept][di].splice(ii,1);D.savePlan(this.plan);this.render();},
   addProd(dept,di){
-    // ดึงจาก Product Master ตาม Line
     const master=D.getProductMaster();
-    const dp=master.filter(m=>m.line===dept).map(m=>({name:m.name,count:m.count||1,mat:m.mat||''}));
+    const dp=master.filter(m=>m.line===dept).map(m=>({name:m.name,count:m.count||1,mat:m.mat||'',ml:m.ml||0}));
+    const isFill=S.sys==='fill';
+    const vol=D.getVolume();
+    const curBoxes=(vol[dept]||{})[di]||0;
     const mo=document.getElementById('mo-pr');
-    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">➕ เพิ่ม Product — ${dept} / ${DAYS[di]}</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div><div class="md-body">
-      <div class="fg"><label class="fl">Product</label>
-      <select class="fs" id="ps-sel">${dp.length?dp.map(p=>{const lbl=getProdLabel(p.name);return`<option value="${p.name}" data-count="${p.count}">${lbl} — ${p.count} คน/กะ</option>`;}).join(''):`<option value="">ยังไม่มี Product ใน ${dept} — ไปเพิ่มที่ 📦 Product Master</option>`}<option value="__new__">+ พิมพ์ชื่อใหม่...</option></select></div>
-      <div class="fg" id="pn-grp" style="display:none"><label class="fl">ชื่อใหม่</label><input type="text" class="fi" id="pn-inp" placeholder="ชื่อ Product..."></div>
-      <div class="fg"><label class="fl">จำนวนคน/กะ</label><input type="number" class="fi" id="pc-inp" value="3" min="1" max="30"></div>
-    </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">เพิ่ม</button></div></div>`;
+    mo.innerHTML=`<div class="md">
+      <div class="md-handle"></div>
+      <div class="md-hdr">
+        <div class="md-title">+ เพิ่ม Product — ${dept} / ${DAYS[di]}</div>
+        <button class="md-close" onclick="closeMo('mo-pr')">✕</button>
+      </div>
+      <div class="md-body">
+        <div class="fg">
+          <label class="fl">Product</label>
+          <select class="fs" id="ps-sel">
+            <option value="">-- เลือก --</option>
+            ${dp.length
+              ? dp.map(p=>`<option value="${p.name}">${getProdLabel(p.name)}</option>`).join('')
+              : `<option value="">ยังไม่มี Product ใน ${dept} — ไปเพิ่มที่ 📦 Product Master</option>`}
+          </select>
+        </div>
+        ${isFill?`<div class="fg">
+          <label class="fl" style="color:var(--amber)">📦 ยอดกล่อง/วัน</label>
+          <input type="number" class="fi" id="pw-boxes" min="0" value="${curBoxes}" placeholder="0"
+            style="font-size:16px;font-weight:800;color:var(--amber);text-align:center">
+          <div id="pw-liter" style="font-size:11px;color:var(--text2);margin-top:3px;text-align:right"></div>
+        </div>`:''}
+      </div>
+      <div class="md-foot">
+        <button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button>
+        <button class="btn-confirm" onclick="PLAN.confirmAdd('${dept}',${di})">✅ เพิ่ม</button>
+      </div>
+    </div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};
-    const sel=document.getElementById('ps-sel');
-    // ใช้ dp array ดึง count โดยตรงแทน dataset
-    sel.onchange=function(){
-      document.getElementById('pn-grp').style.display=this.value==='__new__'?'block':'none';
-      const found=dp.find(p=>p.name===this.value);
-      if(found) document.getElementById('pc-inp').value=found.count||1;
-    };
-    // โหลด count ของ product แรกทันทีที่เปิด
-    if(dp.length){
-      document.getElementById('pc-inp').value=dp[0].count||1;
+    // แสดงลิตรเมื่อกรอกกล่อง
+    if(isFill){
+      const boxInput=document.getElementById('pw-boxes');
+      const literDiv=document.getElementById('pw-liter');
+      const calcLiter=()=>{
+        const sel=document.getElementById('ps-sel');
+        const prod=dp.find(p=>p.name===sel?.value);
+        const ml=prod?.ml||0;
+        const boxes=parseInt(boxInput?.value)||0;
+        const liters=Math.round(boxes*ml/1000);
+        if(literDiv)literDiv.textContent=ml>0?boxes.toLocaleString()+' กล่อง × '+ml+' มล. = '+liters.toLocaleString()+' ลิตร':'';
+      };
+      boxInput?.addEventListener('input',calcLiter);
+      document.getElementById('ps-sel')?.addEventListener('change',calcLiter);
     }
     openMo('mo-pr');
   },
+
   confirmAdd(dept,di){
     const sel=document.getElementById('ps-sel');let prod=sel.value;
     if(prod==='__new__'){toast('❌ กรุณาเพิ่ม Product ใน 📦 Product Master ก่อน');return;}
