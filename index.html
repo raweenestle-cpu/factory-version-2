@@ -1401,11 +1401,15 @@ const PLAN={
 
   loadFromFilling(){
     try{
+      toast('⏳ กำลังโหลดแผน Filling...');
       const fillPlan=D.getPlan('fill');
       const fillVol=D.getVolume();
       const depts=D.getDepts('fill').filter(d=>d!=='AL');
       const cfg=D.getMixingCfg();
-      toast('⏳ กำลังโหลดแผน Filling...');
+      const breakH=parseFloat(cfg.breakH)||2;
+      const bufferH=parseFloat(cfg.bufferH)||2;
+      const cap1=parseFloat(cfg.cap1)||4000;
+      const cap2=parseFloat(cfg.cap2)||3000;
       const dayData=Array.from({length:6},(_,di)=>{
         let totalLiter=0;let hasOreo=false;
         depts.forEach(dept=>{
@@ -1415,7 +1419,7 @@ const PLAN={
             const name=typeof item==='object'?item.product:item;
             const master=D.getProductMaster();
             const pm=master.find(m=>m.name===name&&m.line===dept)||master.find(m=>m.name===name);
-            const ml=pm?.ml||0;
+            const ml=parseFloat(pm?.ml)||0;
             totalLiter+=Math.round(boxes*ml/1000);
           });
           if(dept===cfg.oreoLine||(fillPlan[dept]||{})[di]?.some(x=>(typeof x==='object'?x.product:x).toLowerCase().includes('oreo')))
@@ -1423,9 +1427,24 @@ const PLAN={
         });
         return{di,totalLiter,hasOreo};
       });
-      this._dayData=calcMixingPlan(dayData);
+      // คำนวณ mixing แบบง่าย ไม่ recursive
+      this._dayData=dayData.map((d,idx)=>{
+        const workH=d.di===0?16:d.di===3?(24-breakH):d.di===5?(24-bufferH):24;
+        const nextDay=dayData[idx+1];
+        const demandLiter=nextDay?nextDay.totalLiter:bufferH*cap2;
+        const needed=Math.max(0,demandLiter);
+        let units=0,hoursNeeded=0,totalP=0;
+        if(needed>0){
+          const h1=needed/cap2;
+          if(h1<=workH){units=1;hoursNeeded=Math.ceil(h1*10)/10;totalP=cfg.mix1people||9;}
+          else{units=2;hoursNeeded=Math.ceil(needed/(cap1+cap2)*10)/10;totalP=cfg.mix2people||12;}
+        }
+        const oreoP=d.hasOreo&&units>0?1:0;
+        return{...d,demandLiter,needed,units,hoursNeeded,totalP:totalP+oreoP,oreoP,
+          shiftPeople:{morning:totalP,afternoon:totalP,night:totalP}};
+      });
       toast('✅ โหลดแผน Filling แล้ว');
-      this.updateMixingSummary();
+      this.renderMixSummary();
     }catch(e){
       toast('❌ โหลดไม่ได้: '+e.message);
       console.error('loadFromFilling error:',e);
