@@ -2398,9 +2398,7 @@ const PROD={
     const master=D.getProductMaster();
     // ดึง LINE จาก Firebase ผ่าน D.getDepts (sync มาแล้วใน localStorage)
     // D.getDepts มี hardcode default ถ้า localStorage ว่าง
-    const fillDepts=D.getDepts('fill').filter(d=>d!=='AL');
-    const procDepts=D.getDepts('proc').filter(d=>d!=='AL');
-    const allLines=[...new Set([...fillDepts,...procDepts])];
+    const allLines=D.getDepts(S.sys).filter(d=>d!=='AL');
     console.log('PROD.render fillDepts:',fillDepts,'procDepts:',procDepts,'allLines:',allLines);
     // filter
     const q=(document.getElementById('prod-search')?.value||'').toLowerCase();
@@ -2448,7 +2446,7 @@ const PROD={
   },
   setDisplay(mode){D.saveDisplayMode(mode);this.render();PLAN.render();toast('✅');},
   openAdd(line=''){
-    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
+    const depts=D.getDepts(S.sys).filter(d=>d!=='AL');
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">+ เพิ่ม Product</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
@@ -2469,7 +2467,7 @@ const PROD={
   },
   openEdit(idx){
     const master=D.getProductMaster();const p=master[idx];if(!p)return;
-    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
+    const depts=D.getDepts(S.sys).filter(d=>d!=='AL');
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">✏️ แก้ไข</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
