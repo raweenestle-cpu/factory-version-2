@@ -1399,6 +1399,34 @@ const PLAN={
     this.render();toast('🗑️ ลบ '+removedName+' แล้ว');
   },
 
+  loadFromFilling(){
+    // โหลดแผน Filling มาคำนวณ Mixing สำหรับ Process
+    const fillPlan=D.getPlan('fill');
+    const fillVol=D.getVolume();
+    const depts=D.getDepts('fill').filter(d=>d!=='AL');
+    const cfg=D.getMixingCfg();
+    // คำนวณลิตรต่อวัน
+    const dayData=Array.from({length:6},(_,di)=>{
+      let totalLiter=0;let hasOreo=false;
+      depts.forEach(dept=>{
+        const boxes=(fillVol[dept]||{})[di]||0;
+        const items=(fillPlan[dept]||{})[di]||[];
+        items.forEach(item=>{
+          const name=typeof item==='object'?item.product:item;
+          const master=D.getProductMaster();
+          const pm=master.find(m=>m.name===name&&m.line===dept)||master.find(m=>m.name===name);
+          const ml=pm?.ml||0;
+          totalLiter+=Math.round(boxes*ml/1000);
+        });
+        if(dept===cfg.oreoLine||(fillPlan[dept]||{})[di]?.some(x=>(typeof x==='object'?x.product:x).toLowerCase().includes('oreo')))
+          hasOreo=true;
+      });
+      return{di,totalLiter,hasOreo};
+    });
+    this._dayData=calcMixingPlan(dayData);
+    toast('✅ โหลดแผน Filling แล้ว');
+    this.updateMixingSummary();
+  },
   toggleMixSummary(){
     const body=document.getElementById('mix-sum-body');
     const arrow=document.getElementById('mix-sum-arrow');
