@@ -1267,15 +1267,15 @@ const PLAN={
     const procLoadBtn=document.getElementById('plan-load-fill-btn');
     if(procLoadBtn) procLoadBtn.style.display=S.sys==='proc'?'inline-flex':'none';
     // อัพเดท team bar
-    const shifts=TEAM.getCurShifts();
-    const shTH={'morning':'กะเช้า','afternoon':'กะบ่าย','night':'กะดึก'};
-    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
-    const ta=document.getElementById('plan-team-a');
-    const tb=document.getElementById('plan-team-b');
-    const tc=document.getElementById('plan-team-c');
-    if(ta)ta.textContent='ทีม A: '+shifts.A;
-    if(tb)tb.textContent='ทีม B: '+shifts.B;
-    if(tc)tc.textContent='ทีม C: '+shifts.C;
+    try{
+      const shifts=TEAM.getCurShifts();
+      const ta=document.getElementById('plan-team-a');
+      const tb=document.getElementById('plan-team-b');
+      const tc=document.getElementById('plan-team-c');
+      if(ta)ta.textContent='ทีม A: '+(shifts.A||'-');
+      if(tb)tb.textContent='ทีม B: '+(shifts.B||'-');
+      if(tc)tc.textContent='ทีม C: '+(shifts.C||'-');
+    }catch(e){console.log('team shifts error',e);}
     const isFill=S.sys==='fill';
     const th=document.getElementById('pth');
     if(th)th.innerHTML=`<tr><th class="dc">แผนก / Line</th>${DAYS.map((d,di)=>`<th>${d}${isFill?`<br><span style="font-size:9px;font-weight:400;color:var(--amber)">Volume</span>`:''}  </th>`).join('')}</tr>`;
