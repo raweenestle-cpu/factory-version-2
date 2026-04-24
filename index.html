@@ -1396,7 +1396,186 @@ const PLAN={
     if(newMaster.length!==master.length)D.saveProductMaster(newMaster);
     this.render();toast('🗑️ ลบ '+removedName+' แล้ว');
   },
-  chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
+
+  toggleMixSummary(){
+    const body=document.getElementById('mix-sum-body');
+    const arrow=document.getElementById('mix-sum-arrow');
+    if(!body)return;
+    const hidden=body.style.display==='none'||!body.style.display;
+    if(hidden){body.style.display='block';if(arrow)arrow.textContent='▲';}
+    else{body.style.display='none';if(arrow)arrow.textContent='▼';}
+  },
+  updateMixingSummary(){if(S.sys==='proc')this.loadFromFilling();},
+  save(){D.savePlan(this.plan);FB.set(S.sys+'/plan',this.plan);markSaved();toast('✅ บันทึกแผนการผลิต');},
+  clearPlan(){
+    confirm2('ล้างแผนการผลิต?\n(ล้าง Product, Volume ทุก Line\nตารางกะไม่ถูกแตะ)',()=>{
+      this.plan={};
+      LS.set('plan_'+S.sys,{});FB.set(S.sys+'/plan',{});
+      LS.set('fill_volume',{});FB.set('fill/volume',{});
+      LS.set('mix_stock',0);FB.set('config/mix_stock',0);
+      const ms=document.getElementById('mixing-summary');
+      if(ms)ms.style.display='none';
+      this._dayData=null;
+      this.render();
+      toast('✅ ล้างแผนแล้ว พร้อมรับข้อมูลสัปดาห์ใหม่');
+    });
+  },
+  autoLoad(){
+    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
+    const emps=D.getEmps();if(!emps.length){alert2('ยังไม่มีพนักงาน','❌');return;}
+    // Process — โหลดจาก Filling ก่อน
+    if(S.sys==='proc'){
+      if(!this._dayData)this.loadFromFilling();
+      if(this._dayData){
+        const wk2=wKey(S.wkStart);const allSched2=D.getSched();
+        if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
+        Object.keys(sched2).forEach(k=>delete sched2[k]);
+        const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+        const short2=[];
+        this._dayData.forEach(d=>{
+          SHS.forEach(sh=>{
+            const needPpl=d.units===0?0:(d.shiftPeople?.[sh]||d.totalP);
+            if(!needPpl)return;
+            procDepts.forEach(dept=>{
+              if(!sched2[dept])sched2[dept]={};
+              if(!sched2[dept][d.di])sched2[dept][d.di]={morning:[],afternoon:[],night:[]};
+            });
+            const cands=emps.filter(e=>{
+              if(e.lockShift&&e.lockShift!==sh)return false;
+              return procDepts.includes(e.mainDept||e.dept)||procDepts.includes(e.sub1)||procDepts.includes(e.sub2);
+            });
+            const leaveData=D.getLeave();
+            const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+d.di);
+            const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+            const avail=cands.filter(e=>!(leaveData[e.name]||[]).includes(dk));
+            procDepts.forEach(dept=>{
+              const deptEmps=avail.filter(e=>(e.mainDept||e.dept)===dept||e.sub1===dept||e.sub2===dept);
+              deptEmps.forEach(e=>{
+                if(!sched2[dept][d.di][sh].find(w=>w.name===e.name))
+                  sched2[dept][d.di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+              });
+            });
+            const got=procDepts.reduce((a,dept)=>(sched2[dept]?.[d.di]?.[sh]||[]).length+a,0);
+            if(got<needPpl)short2.push(dept+' '+DAYS[d.di]+' '+SHTH[sh]+': ขาด '+(needPpl-got)+' คน');
+          });
+        });
+        allSched2[wk2]=sched2;D.saveSched(allSched2);
+        FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
+        markUnsaved();SCHED.render();
+        if(short2.length)alert2('⚠️ พนักงานไม่พอ:\n'+short2.join('\n'),'😟');
+      }
+      return;
+    }
+    // Filling — autoLoad ปกติ
+    const wk=wKey(S.wkStart);const allSched=D.getSched();
+    if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    Object.keys(sched).forEach(k=>delete sched[k]);
+    const depts=D.getDepts().filter(d=>d!==AL&&d!=='__IDLE__');
+    const leaveData=D.getLeave();
+    const short=[];const used=new Set();const usedByDayShift={};
+    const AL2=AL;
+    function checkRest2(name,di,sh,sc){
+      if(sh==='morning'){
+        const prev=di>0?sc:null;
+        if(prev){
+          let nightEmps=[];
+          depts.forEach(d=>nightEmps=[...nightEmps,...(sc[d]?.[di-1]?.night||[])]);
+          if(nightEmps.find(w=>w.name===name))return false;
+        }
+      }
+      return true;
+    }
+    const teamCfg=D.getTeamCfg();
+    const teamShifts=TEAM.getCurShifts();
+    const shMap={morning:'morning',afternoon:'afternoon',night:'night'};
+    const allEmpsPool=D.getEmps();
+    function findSub(dept,di,sh,excludeNames){
+      const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+      const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+      return allEmpsPool.filter(e=>{
+        if(excludeNames.has(e.name))return false;
+        if(e.lockShift&&e.lockShift!==sh)return false;
+        const myLv=leaveData[e.name]||[];if(myLv.includes(dk))return false;
+        return e.sub1===dept||e.sub2===dept;
+      });
+    }
+    emps.forEach(e=>{
+      if(!e.team)return;
+      const sh=shMap[teamShifts[e.team]];if(!sh)return;
+      const actualSh=e.lockShift||sh;
+      const dept=e.mainDept||e.dept;if(!dept)return;
+      if(!depts.includes(dept)&&dept!==AL2)return;
+      if(!sched[dept])sched[dept]={};
+      const myLeave=leaveData[e.name]||[];
+      for(let di=0;di<6;di++){
+        const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+        const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+        const dayShiftKey=di+'_'+actualSh;
+        if(!usedByDayShift[dayShiftKey])usedByDayShift[dayShiftKey]=new Set();
+        if(myLeave.includes(dk)){
+          if(!sched[AL2])sched[AL2]={};
+          if(!sched[AL2][di])sched[AL2][di]={morning:[],afternoon:[],night:[]};
+          if(!sched[AL2][di][actualSh])sched[AL2][di][actualSh]=[];
+          if(!sched[AL2][di][actualSh].find(w=>w.name===e.name))
+            sched[AL2][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
+          const subs=findSub(dept,di,actualSh,usedByDayShift[dayShiftKey]);
+          if(subs.length>0){
+            const sub=subs[0];
+            if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+            if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
+            if(!sched[dept][di][actualSh].find(w=>w.name===sub.name)){
+              sched[dept][di][actualSh].push({name:sub.name,ot:false,otHrs:4,av:sub.av||0,isSub:true});
+              usedByDayShift[dayShiftKey].add(sub.name);
+            }
+          } else {
+            short.push(dept+' '+DAYS[di]+' '+SHTH[actualSh]+': '+e.name+'ลา — ขาดมือรอง 1 คน');
+          }
+          continue;
+        }
+        if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+        if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
+        if(checkRest2(e.name,di,actualSh,sched)&&!usedByDayShift[dayShiftKey].has(e.name)){
+          if(!sched[dept][di][actualSh].find(w=>w.name===e.name)){
+            sched[dept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+            usedByDayShift[dayShiftKey].add(e.name);
+          }
+        }
+      }
+      used.add(e.name);
+    });
+    // IDLE
+    const IDLE='__IDLE__';
+    const idleEmps=emps.filter(e=>!used.has(e.name)&&!(leaveData[e.name]||[]).length);
+    if(idleEmps.length)toast('ℹ️ มีพนักงานว่าง '+idleEmps.length+' คน',4000);
+    allSched[wk]=sched;D.saveSched(allSched);
+    FB.set(S.sys+'/sched/'+wk,sched);
+    markUnsaved();SCHED.render();
+    if(short.length){
+      const rows=short.map(s=>{
+        const parts=s.split(':');
+        return '<tr><td style="padding:6px 10px;border:1px solid #334155;font-size:12px;font-weight:700">'+parts[0].trim()+'</td><td style="padding:6px 10px;border:1px solid #334155;font-size:12px;color:#EF4444;font-weight:800;text-align:center">'+(parts[1]||'').trim()+'</td></tr>';
+      }).join('');
+      const mo=document.getElementById('mo-al');
+      mo.innerHTML=`<div class="md"><div class="md-body" style="padding:16px">
+        <div style="text-align:center;font-size:28px;margin-bottom:8px">😟</div>
+        <div style="font-size:14px;font-weight:900;color:var(--red2);margin-bottom:12px;text-align:center">พนักงานไม่เพียงพอ</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:7px 10px;background:var(--navy);color:#fff;font-size:11px;text-align:left;border:1px solid #334155">Line / วัน / กะ</th>
+            <th style="padding:7px 10px;background:var(--navy);color:#fff;font-size:11px;text-align:center;border:1px solid #334155">ขาด</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div><div class="md-foot">
+        <button class="btn-confirm" onclick="closeMo('mo-al')">รับทราบ</button>
+      </div></div>`;
+      openMo('mo-al');
+    }
+  }
+};
+
+const SET={
+chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
@@ -1425,6 +1604,7 @@ const PLAN={
   },
   resetDepts(){confirm2('รีเซ็ตแผนกเป็นค่าเริ่มต้น?',()=>{D.saveDepts([...PDEPT],'proc');D.saveDepts([...FDEPT],'fill');this.render();SCHED.render();toast('✅ รีเซ็ตแล้ว');});}
 };
+
 
 const PRINT={
   openOT(){
@@ -1706,181 +1886,1783 @@ function resetSessionTimer() {
 }
 
 // track activity ทุก interaction
-['click','touchstart','keydown','scroll'].forEach(evt => {
-  document.addEventListener(evt, resetSessionTimer, {passive:true});
-});
 
-// ══ PWA Install ══
-// PWA Install
-let _deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  _deferredPrompt = e;
-  document.getElementById('pwa-banner').style.display='block';
-});
-window.addEventListener('appinstalled', () => {
-  document.getElementById('pwa-banner').style.display='none';
-});
-function installPWA() {
-  if(!_deferredPrompt) return;
-  _deferredPrompt.prompt();
-  _deferredPrompt.userChoice.then(()=>{ _deferredPrompt=null; document.getElementById('pwa-banner').style.display='none'; });
-}
 
-// Service Worker
-if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
-}
+
+const SCHED={
+  render(){
+    const depts=D.getDepts();const wk=wKey(S.wkStart);const allSched=D.getSched();const sched=allSched[wk]||{};
+    const wn=wNum(S.wkStart);
+    document.getElementById('swl').textContent='\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e17\u0e35\u0e48 '+wn;
+    const ws=S.wkStart;
+    const th=document.getElementById('sth');
+    if(th)th.innerHTML=`<tr><th class="sc">\u0e01\u0e30 / \u0e41\u0e1c\u0e19\u0e01</th>${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th>${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;}).join('')}</tr>`;
+    const tb=document.getElementById('stb');if(!tb)return;
+    let html='';
+    SHS.forEach(sh=>{
+      depts.forEach(dept=>{
+        const isLocked=LOCK_D.includes(dept)&&S.sys==='fill';
+        html+=`<tr><td class="sn">${SHTH[sh]}<br><span style="font-size:10px;color:var(--text3)">${dept}</span></td>`;
+        for(let di=0;di<6;di++){
+          if(isLocked&&sh!=='morning'){html+=`<td style="background:rgba(255,255,255,.02)"><div style="text-align:center;padding:8px;font-size:10px;color:var(--text3)">\ud83d\udd12</div></td>`;continue;}
+          const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          let otTime='';
+          html+=`<td>${ws2.map(w=>{
+            const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
+            if(w.ot){if(sh==='morning')otTime='06:00-18:00';else if(sh==='night')otTime='18:00-06:00';else otTime=w.sr==='10-22'?'10:00-22:00':w.sr==='14-02'?'14:00-02:00':'14:00-22:00';}
+            const ne=w.name.replace(/'/g,"\\'");
+            return `<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">${w.name}${w.ot?`<span class="ot-t">${otTime}</span>`:''}${sg?'\u2705':w.ot?'\u270d\ufe0f':''}</span>`;
+          }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
+        }
+        html+='</tr>';
+      });
+    });
+    tb.innerHTML=html;
+    this.renderAL(sched,wk);
+  },
+  renderAL(sched,wk){
+    const el=document.getElementById('alc');if(!el)return;
+    const set=new Set();
+    SHS.forEach(sh=>{for(let di=0;di<6;di++)(sched[AL]?.[di]?.[sh]||[]).forEach(w=>set.add(w.name));});
+    if(!set.size){el.innerHTML='<span style="font-size:11px;color:var(--text3)">\u0e27\u0e48\u0e32\u0e07</span>';return;}
+    el.innerHTML=[...set].map(n=>`<span class="al-chip" onclick="SCHED.openAL('${n.replace(/'/g,"\\'")}')"> ${n}</span>`).join('');
+  },
+  openW(name,dept,di,sh){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const ws=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+    const w=ws.find(x=>x.name===name);if(!w)return;
+    const sg=D.getSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh);
+    const isMe=S.user?.emp?.name===name;const isAdmin=S.user?.isAdmin;
+    const mo=document.getElementById('mo-w');
+    const ne=name.replace(/'/g,"\\'");
+    let html=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${name}</div><button class="md-close" onclick="closeMo('mo-w')">\u2715</button></div><div class="md-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dept} \u2014 ${SHTH[sh]} \u2014 ${DAYS[di]}</div>`;
+    if(isAdmin){
+      html+=`<button onclick="SCHED.toggleOT('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:${w.ot?'rgba(245,158,11,.2)':'rgba(37,99,235,.15)'};color:${w.ot?'var(--amber)':'var(--blue2)'};font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;margin-bottom:6px">${w.ot?'\ud83d\udfe1 \u0e1b\u0e34\u0e14 OT':'\u26a1 \u0e40\u0e1b\u0e34\u0e14 OT'}</button>`;
+      if(w.ot){
+        if(sh==='afternoon'){
+          html+=`<select onchange="SCHED.setSR('${ne}','${dept}',${di},this.value)" style="width:100%;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
+            <option value="14-22" ${(w.sr||'14-22')==='14-22'?'selected':''}>14:00-22:00 (OT 4\u0e0a\u0e21.)</option>
+            <option value="10-22" ${w.sr==='10-22'?'selected':''}>10:00-22:00 (OT 8\u0e0a\u0e21.)</option>
+            <option value="14-02" ${w.sr==='14-02'?'selected':''}>14:00-02:00 (OT 8\u0e0a\u0e21.)</option>
+          </select>`;
+        }else{
+          html+=`<div style="display:flex;gap:6px;margin-bottom:6px">${[2,3,4].map(h=>`<button onclick="SCHED.setH('${ne}','${dept}',${di},'${sh}',${h});closeMo('mo-w')" style="flex:1;padding:8px;border:none;border-radius:8px;background:${(w.otHrs||4)===h?'var(--amber)':'var(--bg3)'};color:${(w.otHrs||4)===h?'#000':'var(--text2)'};font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">${h}\u0e0a\u0e21.</button>`).join('')}</div>`;
+        }
+      }
+      html+=`<button onclick="SCHED.removeW('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(220,38,38,.15);color:var(--red2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif">\ud83d\uddd1\ufe0f \u0e25\u0e1a\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e01\u0e30</button>`;
+    }
+    if((isMe||isAdmin)&&w.ot&&!sg)html+=`<button onclick="SCHED.sign('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(22,163,74,.15);color:var(--green2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;margin-top:8px">\u270d\ufe0f \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT</button>`;
+    if(sg)html+=`<div style="background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:8px;margin-top:8px;text-align:center"><div style="font-size:11px;color:var(--green2)">\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u0e41\u0e25\u0e49\u0e27</div><div style="font-family:'Brush Script MT',cursive;font-size:18px;color:var(--blue2);margin-top:4px">${sg}</div></div>`;
+    html+='</div></div>';
+    mo.innerHTML=html;mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
+  },
+  toggleOT(name,dept,di,sh){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const ws=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+    const w=ws.find(x=>x.name===name);if(!w)return;
+    if(!w.ot){
+      const max=D.getMaxOT();let cnt=0;
+      D.getDepts().forEach(d=>{for(let di2=0;di2<6;di2++)SHS.forEach(s=>{const f=(sched[d]?.[di2]?.[s]||sched[d]?.[String(di2)]?.[s]||[]).find(x=>x.name===name&&x.ot);if(f)cnt++;});});
+      if(cnt>=max){alert2('\ud83d\udeab OT \u0e40\u0e15\u0e47\u0e21\u0e41\u0e25\u0e49\u0e27!\
+\
+'+name+' \u0e17\u0e33 OT \u0e04\u0e23\u0e1a '+max+' \u0e27\u0e31\u0e19\u0e41\u0e25\u0e49\u0e27','\u274c');return;}
+    }
+    w.ot=!w.ot;if(!w.ot)w.otHrs=4;
+    all[wk]=sched;D.saveSched(all);this.render();toast(w.ot?'\u2705 \u0e40\u0e1b\u0e34\u0e14 OT':'\u2705 \u0e1b\u0e34\u0e14 OT');
+  },
+  setH(name,dept,di,sh,h){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const w=(sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);
+    if(w){w.otHrs=h;all[wk]=sched;D.saveSched(all);this.render();}
+  },
+  setSR(name,dept,di,range){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const w=(sched[dept]?.[di]?.['afternoon']||sched[dept]?.[String(di)]?.['afternoon']||[]).find(x=>x.name===name);
+    if(w){w.sr=range;if(range!=='14-22'){w.ot=true;w.otHrs=4;}all[wk]=sched;D.saveSched(all);this.render();closeMo('mo-w');toast('\u2705 \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17\u0e0a\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32');}
+  },
+  sign(name,dept,di,sh){
+    if(!S.user?.isAdmin&&S.user?.emp?.name!==name){toast('\u274c \u0e40\u0e0b\u0e47\u0e19\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e15\u0e31\u0e27\u0e40\u0e2d\u0e07');return;}
+    const wk=wKey(S.wkStart);D.saveSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh,name);this.render();toast('\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u2014 '+name);
+  },
+  removeW(name,dept,di,sh){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const arr=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+    const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;D.saveSched(all);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e1a '+name);}
+  },
+  openAdd(dept,di,sh){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const emps=D.getEmps();const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const already=new Set((sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).map(w=>w.name));
+    const mo=document.getElementById('mo-w');
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">\u2795 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19</div><button class="md-close" onclick="closeMo('mo-w')">\u2715</button></div><div class="md-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${dept} \u2014 ${SHTH[sh]} \u2014 ${DAYS[di]}</div>
+      <input type="search" class="fi" placeholder="\ud83d\udd0d \u0e04\u0e49\u0e19\u0e2b\u0e32..." id="aw-s" oninput="SCHED.filterAdd(this.value)" style="margin-bottom:8px">
+      <div id="aw-list" style="max-height:50vh;overflow-y:auto">
+        ${emps.map(e=>{
+          const isIn=already.has(e.name);const ok=checkRest(e.name,di,sh,sched);const ne=e.name.replace(/'/g,"\\'");
+          return `<div onclick="${!isIn&&ok?`SCHED.addW('${ne}','${dept}',${di},'${sh}')`:''}" style="padding:8px;border-radius:8px;border:1px solid ${isIn?'var(--green)':!ok?'var(--red)':'var(--border)'};background:${isIn?'rgba(22,163,74,.1)':!ok?'rgba(220,38,38,.05)':'var(--bg3)'};margin-bottom:3px;cursor:${!isIn&&ok?'pointer':'default'};opacity:${isIn||!ok?'.6':'1'};display:flex;align-items:center;gap:8px">
+            <div class="${AV[(e.av||0)%8]} e-av" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${e.name.charAt(0)}</div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:700">${e.name}</div><div style="font-size:10px;color:var(--text3)">${e.mainDept||e.dept||''}</div></div>
+            <div style="font-size:10px;font-weight:700;color:${isIn?'var(--green2)':!ok?'var(--red2)':'var(--text3)'}">${isIn?'\u2713 \u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27':!ok?'\u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a':''}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div></div>`;
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
+  },
+  filterAdd(q){
+    document.querySelectorAll('#aw-list > div').forEach(el=>{
+      const nm=el.querySelector('div > div:first-child')?.textContent||'';
+      el.style.display=nm.toLowerCase().includes(q.toLowerCase())?'':'none';
+    });
+  },
+  addW(name,dept,di,sh){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    if(!checkRest(name,di,sh,sched)){alert2('\ud83d\ude34 \u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a 12 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07!\
+\
+'+name+' \u0e22\u0e31\u0e07\u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e01\u0e30\u0e19\u0e35\u0e49','\u274c');return;}
+    const emp=D.getEmps().find(e=>e.name===name);if(!emp)return;
+    if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+    if(!sched[dept][di][sh])sched[dept][di][sh]=[];
+    if(!sched[dept][di][sh].find(w=>w.name===name))sched[dept][di][sh].push({name,ot:false,otHrs:4,av:emp.av||0});
+    all[wk]=sched;D.saveSched(all);closeMo('mo-w');this.render();toast('\u2705 \u0e40\u0e1e\u0e34\u0e48\u0e21 '+name);
+  },
+  openAL(name){
+    const mo=document.getElementById('mo-w');
+    const depts=D.getDepts().filter(d=>d!==AL);
+    let opts='';
+    depts.forEach(dept=>DAYS.forEach((dy,di)=>SHS.forEach(sh=>{
+      const ne=name.replace(/'/g,"\\'");
+      opts+=`<button onclick="SCHED.moveAL('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif;margin-bottom:3px;text-align:left">${dept} \u2014 ${dy} \u2014 ${SHTH[sh]}</button>`;
+    })));
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${name} (AL) \u2014 \u0e22\u0e49\u0e32\u0e22\u0e44\u0e1b\u0e01\u0e30</div><button class="md-close" onclick="closeMo('mo-w')">\u2715</button></div><div class="md-body" style="overflow-y:auto">${opts}</div></div>`;
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
+  },
+  moveAL(name,dept,di,sh){
+    this.addW(name,dept,di,sh);
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    SHS.forEach(s=>{const arr=sched[AL]?.[di]?.[s]||[];const idx=arr.findIndex(w=>w.name===name);if(idx>=0)arr.splice(idx,1);});
+    all[wk]=sched;D.saveSched(all);this.render();
+  },
+  chgWk(dir){
+    const d=new Date(S.wkStart);d.setDate(d.getDate()+dir*7);S.wkStart=d;
+    const wk=wKey(d);
+    ['proc','fill'].forEach(sys=>FB.get(sys+'/sched/'+wk).then(v=>{if(!v)return;const all=LS.get('sched_'+sys,{});all[wk]=v;LS.set('sched_'+sys,all);if(sys===S.sys)this.render();}));
+    this.render();
+  },
+  save(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    let tH=0,oH=0;
+    D.getDepts().forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched[d]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
+    const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
+    if(pct>tgt){this.showOTReason(pct,tgt,()=>{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();});}
+    else{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();}
+  },
+  showOTReason(pct,tgt,onSave){
+    const reasons=D.getReasons();let rows=[{reason:reasons[0]||'',hours:0}];
+    const renderR=()=>{
+      document.getElementById('or-rows').innerHTML=rows.map((r,i)=>`<div class="ot-rrow">
+        <select onchange="window._or[${i}].reason=this.value">${reasons.map(re=>`<option value="${re}" ${r.reason===re?'selected':''}>${re}</option>`).join('')}</select>
+        <input type="number" value="${r.hours}" min="0" max="24" oninput="window._or[${i}].hours=parseInt(this.value)||0">
+        <label>\u0e0a\u0e21.</label>
+        ${rows.length>1?`<button onclick="window._or.splice(${i},1);window._rr()" style="width:24px;height:24px;border:none;border-radius:6px;background:rgba(220,38,38,.2);color:var(--red2);font-size:12px">\u2715</button>`:''}
+      </div>`).join('');
+    };
+    window._or=rows;window._rr=renderR;
+    const mo=document.getElementById('mo-or');
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">\u26a0\ufe0f OT \u0e40\u0e01\u0e34\u0e19 Target</div><button class="md-close" onclick="closeMo('mo-or')">\u2715</button></div><div class="md-body">
+      <div class="ot-warn"><div class="ot-warn-t">OT ${pct}% \u0e40\u0e01\u0e34\u0e19 Target ${tgt}%</div><div style="font-size:12px;color:var(--text2)">\u0e01\u0e23\u0e38\u0e13\u0e32\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25</div></div>
+      <div id="or-rows"></div>
+      <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25</button>
+    </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-or')">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button><button class="btn-confirm" onclick="SCHED.saveOR(${pct})">\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button></div></div>`;
+    openMo('mo-or');renderR();this._onSave=onSave;
+  },
+  saveOR(pct){
+    const reasons=window._or.filter(r=>r.reason&&r.hours>0);
+    const log=D.getOTLog();const wk=wKey(S.wkStart);
+    const idx=log.findIndex(l=>l.wk===wk&&l.sys===S.sys);
+    const entry={wk,sys:S.sys,pct,date:new Date().toISOString(),reasons};
+    if(idx>=0)log[idx]=entry;else log.push(entry);
+    D.saveOTLog(log);closeMo('mo-or');if(this._onSave)this._onSave();DASH.renderPareto();
+  },
+  clearWk(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    confirm2('\u0e25\u0e49\u0e32\u0e07\u0e15\u0e32\u0e23\u0e32\u0e07\u0e01\u0e30\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49?',()=>{
+      const wk=wKey(S.wkStart);const all=D.getSched();delete all[wk];D.saveSched(all);FB.remove(S.sys+'/sched/'+wk);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e49\u0e32\u0e07\u0e41\u0e25\u0e49\u0e27');
+    });
+  },
+  printSched(){PRINT.sched();},
+  printOT(){PRINT.ot();}
+};</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "filename": null
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_01Pbe3DFhbmrMK2EPxuvc3YC",
+    "name": "bash_tool",
+    "content": [
+      {
+        "type": "text",
+        "text": "{"returncode":0,"stdout":"\u2705 ALL JS VALID\
+","stderr":""}",
+        "uuid": "05e788e4-969e-4368-a757-7bcc5984c2fe"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": null,
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "display_content": {
+      "type": "json_block",
+      "json_block": "{"returncode":0,"stdout":"\u2705 ALL JS VALID\
+","stderr":""}"
+    }
+  },
+  {
+    "start_timestamp": "2026-04-22T00:20:14.640701Z",
+    "stop_timestamp": "2026-04-22T00:20:15.199896Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_012QyengwRq8wPbUMuxGFP63",
+    "name": "bash_tool",
+    "input": {
+      "command": "cp /home/claude/v2.html /mnt/user-data/outputs/factory-v2.html",
+      "description": "Copy to outputs"
+    },
+    "message": "Copy to outputs",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "context": null,
+    "display_content": {
+      "type": "code_block",
+      "language": "bash",
+      "code": "cp /home/claude/v2.html /mnt/user-data/outputs/factory-v2.html",
+      "filename": null
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_012QyengwRq8wPbUMuxGFP63",
+    "name": "bash_tool",
+    "content": [
+      {
+        "type": "text",
+        "text": "{"returncode":0,"stdout":"","stderr":""}",
+        "uuid": "d9faed64-3eef-4534-9a9a-1b2c42b20105"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": null,
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "display_content": {
+      "type": "json_block",
+      "json_block": "{"returncode":0,"stdout":"","stderr":""}"
+    }
+  },
+  {
+    "start_timestamp": "2026-04-22T00:20:17.641061Z",
+    "stop_timestamp": "2026-04-22T00:20:17.641061Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_01EKNx2mqEpkyghMo9ZAa9oF",
+    "name": "present_files",
+    "input": {
+      "filepaths": [
+        "/mnt/user-data/outputs/factory-v2.html"
+      ]
+    },
+    "message": "Presenting file(s)...",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "file",
+    "context": null,
+    "display_content": {
+      "type": "table",
+      "table": [
+        [
+          "filepaths",
+          "['/mnt/user-data/outputs/factory-v2.html']"
+        ]
+      ]
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_01EKNx2mqEpkyghMo9ZAa9oF",
+    "name": "present_files",
+    "content": [
+      {
+        "type": "local_resource",
+        "file_path": "/mnt/user-data/outputs/factory-v2.html",
+        "name": "factory-v2",
+        "mime_type": "text/html",
+        "uuid": "1747f159-ff2b-4078-916e-d5fcd8132ed8"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": "Presented file",
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "file",
+    "display_content": null
+  },
+  {
+    "start_timestamp": "2026-04-22T00:20:19.116683Z",
+    "stop_timestamp": "2026-04-22T00:20:25.371929Z",
+    "flags": null,
+    "type": "text",
+    "text": "Download **factory-v2** \u2192 upload \u0e02\u0e36\u0e49\u0e19 GitHub \u0e04\u0e23\u0e31\u0e1a
+
+\u0e23\u0e30\u0e1a\u0e1a\u0e17\u0e35\u0e21\u0e15\u0e2d\u0e19\u0e19\u0e35\u0e49\u0e04\u0e23\u0e31\u0e1a:
+
+**\u0e15\u0e2d\u0e19\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19** \u2192 \u0e40\u0e25\u0e37\u0e2d\u0e01 \u0e17\u0e35\u0e21 A / B / C \u0e44\u0e14\u0e49\u0e40\u0e25\u0e22
+
+**\u0e2b\u0e19\u0e49\u0e32 \ud83d\udd04 \u0e17\u0e35\u0e21:**
+- \u0e41\u0e2a\u0e14\u0e07\u0e2a\u0e21\u0e32\u0e0a\u0e34\u0e01\u0e41\u0e15\u0e48\u0e25\u0e30\u0e17\u0e35\u0e21
+- \u0e15\u0e31\u0e49\u0e07\u0e23\u0e2d\u0e1a\u0e2b\u0e21\u0e38\u0e19\u0e01\u0e30 \u0e40\u0e0a\u0e48\u0e19 \u0e17\u0e38\u0e01 2 \u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c
+- \u0e1a\u0e2d\u0e01\u0e27\u0e48\u0e32\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49 **A=\u0e14\u0e36\u0e01 B=\u0e1a\u0e48\u0e32\u0e22 C=\u0e40\u0e0a\u0e49\u0e32**
+- \u0e01\u0e14 **\u2192 \u0e42\u0e2b\u0e25\u0e14\u0e17\u0e35\u0e21 A** \u2192 \u0e23\u0e30\u0e1a\u0e1a\u0e01\u0e23\u0e30\u0e08\u0e32\u0e22\u0e04\u0e19\u0e40\u0e02\u0e49\u0e32\u0e41\u0e1c\u0e19\u0e01\u0e2b\u0e25\u0e31\u0e01\u0e02\u0e2d\u0e07\u0e41\u0e15\u0e48\u0e25\u0e30\u0e04\u0e19\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34
+- \u0e01\u0e14 **\u26a1 \u0e42\u0e2b\u0e25\u0e14\u0e17\u0e38\u0e01\u0e17\u0e35\u0e21** \u2192 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e01\u0e31\u0e19\u0e17\u0e35\u0e40\u0e14\u0e35\u0e22\u0e27\u0e04\u0e23\u0e31\u0e1a \ud83d\ude0a",
+    "citations": []
+  }
+]
+
+================================================================================
+
+Human:
+Content:
+[
+  {
+    "start_timestamp": "2026-04-22T00:21:27.847071Z",
+    "stop_timestamp": "2026-04-22T00:21:27.847071Z",
+    "flags": null,
+    "type": "text",
+    "text": "\u0e40\u0e1e\u0e23\u0e32\u0e30\u0e09\u0e30\u0e19\u0e31\u0e49\u0e19\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32 \u0e01\u0e32\u0e23\u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e07\u0e32\u0e19\u0e19\u0e31\u0e49\u0e19\u0e01\u0e47\u0e08\u0e30\u0e15\u0e49\u0e2d\u0e07\u0e21\u0e35\u0e0a\u0e48\u0e2d\u0e07\u0e43\u0e2b\u0e49\u0e15\u0e34\u0e14\u0e40\u0e23\u0e35\u0e22\u0e01\u0e27\u0e48\u0e32\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49\u0e17\u0e35\u0e21\u0e44\u0e2b\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e40\u0e0a\u0e49\u0e32 \u0e2a\u0e48\u0e27\u0e19\u0e17\u0e35\u0e21\u0e2d\u0e22\u0e39\u0e48\u0e1a\u0e49\u0e32\u0e19\u0e43\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e14\u0e36\u0e01\u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e43\u0e2b\u0e49\u0e2b\u0e21\u0e38\u0e19\u0e15\u0e32\u0e21\u0e44\u0e1b\u0e40\u0e25\u0e22\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e17\u0e35\u0e48\u0e21\u0e35\u0e2d\u0e22\u0e39\u0e48\u0e40\u0e0a\u0e49\u0e32\u0e17\u0e35\u0e48\u0e21\u0e35\u0e2d\u0e22\u0e39\u0e48\u0e44\u0e2b\u0e21\u0e17\u0e35\u0e21\u0e2a\u0e35\u0e2d\u0e22\u0e39\u0e48\u0e14\u0e36\u0e01\u0e41\u0e1a\u0e1a\u0e19\u0e35\u0e49\u0e41\u0e15\u0e48\u0e27\u0e48\u0e32\u0e43\u0e2b\u0e49\u0e15\u0e34\u0e14\u0e40\u0e23\u0e37\u0e2d\u0e41\u0e01\u0e17\u0e35\u0e21\u0e17\u0e35\u0e48\u0e08\u0e30\u0e25\u0e07\u0e40\u0e0a\u0e49\u0e32\u0e41\u0e25\u0e49\u0e27\u0e01\u0e14\u0e42\u0e2b\u0e25\u0e14\u0e43\u0e2b\u0e49\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e2b\u0e21\u0e38\u0e19\u0e15\u0e32\u0e21\u0e19\u0e31\u0e49\u0e19\u0e40\u0e25\u0e22\u0e21\u0e35\u0e01\u0e27\u0e48\u0e32\u0e44\u0e2b\u0e21\u0e2b\u0e23\u0e37\u0e2d\u0e04\u0e38\u0e13\u0e21\u0e35\u0e17\u0e32\u0e07\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e17\u0e35\u0e48\u0e14\u0e35\u0e01\u0e27\u0e48\u0e32\u0e19\u0e35\u0e49",
+    "citations": []
+  }
+]
+
+================================================================================
+
+Assistant:
+Content:
+[
+  {
+    "start_timestamp": "2026-04-22T00:21:29.989770Z",
+    "stop_timestamp": "2026-04-22T00:21:36.930335Z",
+    "flags": null,
+    "type": "text",
+    "text": " \u0e04\u0e23\u0e31\u0e1a \u0e40\u0e02\u0e49\u0e32\u0e43\u0e08\u0e41\u0e25\u0e49\u0e27 \u2014 \u0e2d\u0e22\u0e32\u0e01\u0e43\u0e2b\u0e49\u0e2b\u0e19\u0e49\u0e32\u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e07\u0e32\u0e19\u0e21\u0e35\u0e2a\u0e48\u0e27\u0e19\u0e1a\u0e2d\u0e01\u0e27\u0e48\u0e32\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49\u0e17\u0e35\u0e21\u0e44\u0e2b\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e01\u0e30\u0e44\u0e2b\u0e19 \u0e41\u0e25\u0e49\u0e27\u0e01\u0e14\u0e42\u0e2b\u0e25\u0e14\u0e44\u0e14\u0e49\u0e40\u0e25\u0e22
+
+\u0e02\u0e2d\u0e40\u0e2a\u0e19\u0e2d\u0e41\u0e19\u0e27\u0e17\u0e32\u0e07\u0e17\u0e35\u0e48\u0e14\u0e35\u0e01\u0e27\u0e48\u0e32\u0e04\u0e23\u0e31\u0e1a \u2014 **\u0e23\u0e27\u0e21\u0e17\u0e38\u0e01\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e44\u0e27\u0e49\u0e43\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e21** \u0e40\u0e25\u0e22:
+
+1. \u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e21\u0e1a\u0e2d\u0e01\u0e27\u0e48\u0e32 **\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49 A=\u0e40\u0e0a\u0e49\u0e32 B=\u0e1a\u0e48\u0e32\u0e22 C=\u0e14\u0e36\u0e01**
+2. \u0e01\u0e14 **\u26a1 \u0e42\u0e2b\u0e25\u0e14\u0e17\u0e38\u0e01\u0e17\u0e35\u0e21** \u2192 \u0e23\u0e30\u0e1a\u0e1a\u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e40\u0e02\u0e49\u0e32\u0e01\u0e30\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34
+3. \u0e2b\u0e19\u0e49\u0e32\u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e07\u0e32\u0e19\u0e43\u0e0a\u0e49\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a **\u0e01\u0e33\u0e2b\u0e19\u0e14 Product \u0e41\u0e25\u0e30\u0e08\u0e33\u0e19\u0e27\u0e19\u0e04\u0e19** \u0e27\u0e48\u0e32\u0e41\u0e15\u0e48\u0e25\u0e30 Line \u0e40\u0e14\u0e34\u0e19\u0e2d\u0e30\u0e44\u0e23\u0e1a\u0e49\u0e32\u0e07
+
+\u0e41\u0e1a\u0e1a\u0e19\u0e35\u0e49\u0e44\u0e21\u0e48\u0e0b\u0e49\u0e33\u0e0b\u0e49\u0e2d\u0e19\u0e04\u0e23\u0e31\u0e1a \u2014 **\u0e17\u0e35\u0e21\u0e08\u0e31\u0e14\u0e04\u0e19 / \u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e08\u0e31\u0e14 Product**
+
+\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07\u0e44\u0e2b\u0e21\u0e04\u0e23\u0e31\u0e1a \u0e2b\u0e23\u0e37\u0e2d\u0e2d\u0e22\u0e32\u0e01\u0e43\u0e2b\u0e49\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e2a\u0e2d\u0e07\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e19\u0e04\u0e23\u0e31\u0e1a?",
+    "citations": []
+  }
+]
+
+================================================================================
+
+Human:
+Content:
+[
+  {
+    "start_timestamp": "2026-04-22T00:22:59.676196Z",
+    "stop_timestamp": "2026-04-22T00:22:59.676196Z",
+    "flags": null,
+    "type": "text",
+    "text": "\u0e04\u0e19\u0e17\u0e35\u0e48\u0e08\u0e31\u0e14\u0e41\u0e1c\u0e19\u0e01\u0e47\u0e04\u0e37\u0e2d redman \u0e2b\u0e23\u0e37\u0e2d admin \u0e40\u0e21\u0e37\u0e48\u0e2d\u0e08\u0e31\u0e14\u0e07\u0e32\u0e19\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e40\u0e02\u0e32\u0e08\u0e30\u0e15\u0e49\u0e2d\u0e07\u0e08\u0e31\u0e14\u0e04\u0e19\u0e14\u0e49\u0e27\u0e22\u0e40\u0e1e\u0e23\u0e32\u0e30\u0e09\u0e30\u0e19\u0e31\u0e49\u0e19\u0e08\u0e31\u0e14\u0e41\u0e1c\u0e19\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e01\u0e47\u0e15\u0e49\u0e2d\u0e07\u0e15\u0e34\u0e14\u0e17\u0e35\u0e48\u0e19\u0e48\u0e32\u0e08\u0e30\u0e41\u0e1e\u0e07\u0e19\u0e31\u0e48\u0e19\u0e41\u0e2b\u0e25\u0e30\u0e41\u0e25\u0e49\u0e27\u0e01\u0e47\u0e42\u0e2b\u0e25\u0e14\u0e17\u0e31\u0e49\u0e07\u0e17\u0e35\u0e21\u0e1c\u0e21\u0e27\u0e48\u0e32\u0e19\u0e48\u0e32\u0e08\u0e30\u0e2a\u0e30\u0e14\u0e27\u0e01\u0e01\u0e27\u0e48\u0e32\u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e40\u0e1b\u0e34\u0e14\u0e01\u0e25\u0e31\u0e1a\u0e44\u0e1b\u0e01\u0e25\u0e31\u0e1a\u0e21\u0e32",
+    "citations": []
+  }
+]
+
+================================================================================
+
+Assistant:
+Content:
+[
+  {
+    "start_timestamp": "2026-04-22T00:23:00.706758Z",
+    "stop_timestamp": "2026-04-22T00:23:04.628314Z",
+    "flags": null,
+    "type": "text",
+    "text": " \u0e04\u0e23\u0e31\u0e1a \u0e40\u0e02\u0e49\u0e32\u0e43\u0e08\u0e41\u0e25\u0e49\u0e27 \u2014 \u0e23\u0e27\u0e21\u0e17\u0e38\u0e01\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e44\u0e27\u0e49\u0e43\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e40\u0e25\u0e22 \u0e44\u0e2b\u0e25\u0e08\u0e32\u0e01\u0e1a\u0e19\u0e25\u0e07\u0e25\u0e48\u0e32\u0e07\u0e04\u0e23\u0e31\u0e1a:
+
+**\u0e2b\u0e19\u0e49\u0e32\u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e01\u0e32\u0e23\u0e1c\u0e25\u0e34\u0e15:**
+1. \u0e41\u0e2a\u0e14\u0e07 **\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49 A=\u0e40\u0e0a\u0e49\u0e32 B=\u0e1a\u0e48\u0e32\u0e22 C=\u0e14\u0e36\u0e01** \u0e43\u0e2b\u0e49\u0e40\u0e2b\u0e47\u0e19\u0e01\u0e48\u0e2d\u0e19
+2. \u0e15\u0e34\u0e4a\u0e01 Line + \u0e40\u0e25\u0e37\u0e2d\u0e01 Product + \u0e08\u0e33\u0e19\u0e27\u0e19\u0e04\u0e19
+3. \u0e01\u0e14 **\u26a1 \u0e42\u0e2b\u0e25\u0e14** \u2192 \u0e23\u0e30\u0e1a\u0e1a\u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21\u0e41\u0e25\u0e30\u0e41\u0e1c\u0e19\u0e01\u0e40\u0e02\u0e49\u0e32\u0e01\u0e30\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34
+
+\u0e41\u0e01\u0e49\u0e40\u0e25\u0e22\u0e04\u0e23\u0e31\u0e1a:",
+    "citations": []
+  },
+  {
+    "start_timestamp": "2026-04-22T00:23:05.065305Z",
+    "stop_timestamp": "2026-04-22T00:23:51.003609Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_016ZBZWgmszMTHnh8nzyhnyJ",
+    "name": "bash_tool",
+    "input": {
+      "command": "python3 << 'PYEOF'
+with open('/home/claude/v2.html','r',encoding='utf-8') as f:
+    c = f.read()
+
+# \u0e40\u0e1e\u0e34\u0e48\u0e21 team status bar \u0e43\u0e19 planning toolbar
+c = c.replace(
+    """    <div class="plan-tb"><h2>\ud83d\udccb \u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e01\u0e32\u0e23\u0e1c\u0e25\u0e34\u0e15</h2>
+      <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">\u26a1 \u0e42\u0e2b\u0e25\u0e14</button>
+      <button class="btn-p btn-green" onclick="PLAN.save()">\ud83d\udcbe \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button>
+    </div>""",
+    """    <div class="plan-tb"><h2>\ud83d\udccb \u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e01\u0e32\u0e23\u0e1c\u0e25\u0e34\u0e15</h2>
+      <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">\u26a1 \u0e42\u0e2b\u0e25\u0e14</button>
+      <button class="btn-p btn-green" onclick="PLAN.save()">\ud83d\udcbe \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button>
+    </div>
+    <!-- Team status -->
+    <div id="plan-team-bar" style="padding:10px 14px;background:var(--navy);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:800;color:var(--text2)">\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49:</span>
+      <span id="plan-team-a" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(37,99,235,.3);color:var(--blue2)">\u0e17\u0e35\u0e21 A: -</span>
+      <span id="plan-team-b" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(13,148,136,.3);color:var(--teal)">\u0e17\u0e35\u0e21 B: -</span>
+      <span id="plan-team-c" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(124,58,237,.3);color:#A78BFA">\u0e17\u0e35\u0e21 C: -</span>
+      <button onclick="PLAN.autoLoad()" style="margin-left:auto;padding:5px 12px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">\u26a1 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19</button>
+    </div>"""
+)
+
+# \u0e41\u0e01\u0e49 PLAN.render() \u0e43\u0e2b\u0e49\u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 team bar \u0e14\u0e49\u0e27\u0e22
+c = c.replace(
+    "  render(){\
+    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));\
+    this.plan=JSON.parse(JSON.stringify(D.getPlan()));",
+    """  render(){
+    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    this.plan=JSON.parse(JSON.stringify(D.getPlan()));
+    // \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 team bar
+    const shifts=TEAM.getCurShifts();
+    const shTH={'morning':'\u0e01\u0e30\u0e40\u0e0a\u0e49\u0e32','afternoon':'\u0e01\u0e30\u0e1a\u0e48\u0e32\u0e22','night':'\u0e01\u0e30\u0e14\u0e36\u0e01'};
+    const shMap={'\u0e40\u0e0a\u0e49\u0e32':'morning','\u0e1a\u0e48\u0e32\u0e22':'afternoon','\u0e14\u0e36\u0e01':'night'};
+    const ta=document.getElementById('plan-team-a');
+    const tb=document.getElementById('plan-team-b');
+    const tc=document.getElementById('plan-team-c');
+    if(ta)ta.textContent='\u0e17\u0e35\u0e21 A: '+shifts.A;
+    if(tb)tb.textContent='\u0e17\u0e35\u0e21 B: '+shifts.B;
+    if(tc)tc.textContent='\u0e17\u0e35\u0e21 C: '+shifts.C;"""
+)
+
+# \u0e41\u0e01\u0e49 PLAN.autoLoad() \u0e43\u0e2b\u0e49\u0e42\u0e2b\u0e25\u0e14\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21\u0e14\u0e49\u0e27\u0e22
+c = c.replace(
+    """  autoLoad(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const emps=D.getEmps();if(!emps.length){alert2('\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19','\u274c');return;}
+    const wk=wKey(S.wkStart);const allSched=D.getSched();if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    Object.keys(sched).forEach(k=>delete sched[k]);
+    const plan=this.plan;const used=new Set();const short=[];
+    const empMap=new Map(emps.map(e=>[e.name,e]));
+    SHS.forEach(sh=>{
+      Object.entries(plan).forEach(([dept,days])=>{
+        for(let di=0;di<6;di++){
+          const items=(days[di]||[]);if(!items.length)continue;
+          const need=items.reduce((a,it)=>a+(it.count||1),0);
+          const cands=emps.filter(e=>!used.has(e.name))
+            .filter(e=>{if(e.lockShift&&e.lockShift!==sh)return false;return e.mainDept===dept||e.sub1===dept||e.sub2===dept;})
+            .sort((a,b)=>(a.mainDept===dept?0:a.sub1===dept?1:2)-(b.mainDept===dept?0:b.sub1===dept?1:2));
+          const valid=cands.filter(e=>checkRest(e.name,di,sh,sched));
+          const picked=valid.slice(0,need);
+          picked.forEach(e=>used.add(e.name));
+          if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+          sched[dept][di][sh]=picked.map(e=>({name:e.name,ot:false,otHrs:4,av:e.av||0}));
+          if(picked.length<need)short.push(`${dept} ${DAYS[di]} ${SHTH[sh]}: \u0e02\u0e32\u0e14 ${need-picked.length} \u0e04\u0e19`);
+        }
+      });
+    });
+    // AL
+    const alEmps=emps.filter(e=>!used.has(e.name));
+    if(!sched[AL])sched[AL]={};
+    for(let di=0;di<6;di++){sched[AL][di]={morning:[],afternoon:[],night:[]};
+      SHS.forEach(sh=>{sched[AL][di][sh]=alEmps.filter(e=>!e.lockShift||(e.lockShift===sh)).map(e=>({name:e.name,ot:false,otHrs:4,av:e.av||0}));});
+    }
+    allSched[wk]=sched;D.saveSched(allSched);SCHED.render();
+    if(short.length)alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e1e\u0e2d:\\
+\\
+'+short.join('\\
+'),'\ud83d\ude1f');
+    else toast('\u2705 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08!');
+    APP.goPage('pg-sched');
+  }""",
+    """  autoLoad(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const emps=D.getEmps();if(!emps.length){alert2('\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19','\u274c');return;}
+    const wk=wKey(S.wkStart);const allSched=D.getSched();
+    if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    Object.keys(sched).forEach(k=>delete sched[k]);
+    const plan=this.plan;const used=new Set();const short=[];
+
+    // \u0e14\u0e36\u0e07 shift \u0e02\u0e2d\u0e07\u0e41\u0e15\u0e48\u0e25\u0e30\u0e17\u0e35\u0e21\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49
+    const teamShifts=TEAM.getCurShifts();
+    const shMap={'\u0e40\u0e0a\u0e49\u0e32':'morning','\u0e1a\u0e48\u0e32\u0e22':'afternoon','\u0e14\u0e36\u0e01':'night'};
+
+    // \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21 \u2014 lock \u0e01\u0e30\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21
+    emps.forEach(e=>{
+      if(!e.team)return;
+      const sh=shMap[teamShifts[e.team]];
+      if(!sh)return;
+      // \u0e16\u0e49\u0e32\u0e21\u0e35 lockShift \u0e43\u0e2b\u0e49\u0e43\u0e0a\u0e49 lockShift \u0e41\u0e17\u0e19
+      const actualSh=e.lockShift||sh;
+      const dept=e.mainDept||e.dept;
+      if(!dept)return;
+      const depts=D.getDepts();
+      if(!depts.includes(dept)&&dept!==AL)return;
+      if(!sched[dept])sched[dept]={};
+      for(let di=0;di<6;di++){
+        if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+        if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
+        if(!used.has(e.name)&&checkRest(e.name,di,actualSh,sched)){
+          if(!sched[dept][di][actualSh].find(w=>w.name===e.name)){
+            sched[dept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+          }
+        }
+      }
+      used.add(e.name);
+    });
+
+    // \u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e27\u0e48\u0e32 plan \u0e21\u0e35\u0e17\u0e35\u0e48\u0e44\u0e2b\u0e19\u0e02\u0e32\u0e14\u0e04\u0e19\u0e1a\u0e49\u0e32\u0e07
+    const depts2=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    SHS.forEach(sh=>{
+      Object.entries(plan).forEach(([dept,days])=>{
+        for(let di=0;di<6;di++){
+          const items=(days[di]||[]);if(!items.length)continue;
+          const need=items.reduce((a,it)=>a+(it.count||1),0);
+          const have=(sched[dept]?.[di]?.[sh]||[]).length;
+          if(have<need)short.push(`${dept} ${DAYS[di]} ${SHTH[sh]}: \u0e02\u0e32\u0e14 ${need-have} \u0e04\u0e19`);
+        }
+      });
+    });
+
+    // \u0e04\u0e19\u0e17\u0e35\u0e48\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e35\u0e21\u0e2b\u0e23\u0e37\u0e2d\u0e40\u0e2b\u0e25\u0e37\u0e2d \u2192 AL
+    const alEmps=emps.filter(e=>!used.has(e.name));
+    if(!sched[AL])sched[AL]={};
+    for(let di=0;di<6;di++){
+      if(!sched[AL][di])sched[AL][di]={morning:[],afternoon:[],night:[]};
+      alEmps.forEach(e=>{
+        const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:'morning');
+        if(!sched[AL][di][sh])sched[AL][di][sh]=[];
+        if(!sched[AL][di][sh].find(w=>w.name===e.name))
+          sched[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+      });
+    }
+
+    allSched[wk]=sched;D.saveSched(allSched);SCHED.render();
+    if(short.length)alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e1e\u0e2d:\\
+\\
+'+short.join('\\
+'),'\ud83d\ude1f');
+    else toast('\u2705 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08!');
+    APP.goPage('pg-sched');
+  }"""
+)
+
+with open('/home/claude/v2.html','w',encoding='utf-8') as f:
+    f.write(c)
+
+import re,subprocess,tempfile,os
+scripts=re.findall(r'<script[^>]*>(.*?)</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "description": "Add team status bar to planning page and load by team"
+    },
+    "message": "Add team status bar to planning page and load by team",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "context": null,
+    "display_content": {
+      "type": "code_block",
+      "language": "bash",
+      "code": "python3 << 'PYEOF'
+with open('/home/claude/v2.html','r',encoding='utf-8') as f:
+    c = f.read()
+
+# \u0e40\u0e1e\u0e34\u0e48\u0e21 team status bar \u0e43\u0e19 planning toolbar
+c = c.replace(
+    """    <div class="plan-tb"><h2>\ud83d\udccb \u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e01\u0e32\u0e23\u0e1c\u0e25\u0e34\u0e15</h2>
+      <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">\u26a1 \u0e42\u0e2b\u0e25\u0e14</button>
+      <button class="btn-p btn-green" onclick="PLAN.save()">\ud83d\udcbe \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button>
+    </div>""",
+    """    <div class="plan-tb"><h2>\ud83d\udccb \u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e01\u0e32\u0e23\u0e1c\u0e25\u0e34\u0e15</h2>
+      <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">\u26a1 \u0e42\u0e2b\u0e25\u0e14</button>
+      <button class="btn-p btn-green" onclick="PLAN.save()">\ud83d\udcbe \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button>
+    </div>
+    <!-- Team status -->
+    <div id="plan-team-bar" style="padding:10px 14px;background:var(--navy);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:800;color:var(--text2)">\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49:</span>
+      <span id="plan-team-a" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(37,99,235,.3);color:var(--blue2)">\u0e17\u0e35\u0e21 A: -</span>
+      <span id="plan-team-b" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(13,148,136,.3);color:var(--teal)">\u0e17\u0e35\u0e21 B: -</span>
+      <span id="plan-team-c" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;background:rgba(124,58,237,.3);color:#A78BFA">\u0e17\u0e35\u0e21 C: -</span>
+      <button onclick="PLAN.autoLoad()" style="margin-left:auto;padding:5px 12px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">\u26a1 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19</button>
+    </div>"""
+)
+
+# \u0e41\u0e01\u0e49 PLAN.render() \u0e43\u0e2b\u0e49\u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 team bar \u0e14\u0e49\u0e27\u0e22
+c = c.replace(
+    "  render(){\
+    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));\
+    this.plan=JSON.parse(JSON.stringify(D.getPlan()));",
+    """  render(){
+    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    this.plan=JSON.parse(JSON.stringify(D.getPlan()));
+    // \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 team bar
+    const shifts=TEAM.getCurShifts();
+    const shTH={'morning':'\u0e01\u0e30\u0e40\u0e0a\u0e49\u0e32','afternoon':'\u0e01\u0e30\u0e1a\u0e48\u0e32\u0e22','night':'\u0e01\u0e30\u0e14\u0e36\u0e01'};
+    const shMap={'\u0e40\u0e0a\u0e49\u0e32':'morning','\u0e1a\u0e48\u0e32\u0e22':'afternoon','\u0e14\u0e36\u0e01':'night'};
+    const ta=document.getElementById('plan-team-a');
+    const tb=document.getElementById('plan-team-b');
+    const tc=document.getElementById('plan-team-c');
+    if(ta)ta.textContent='\u0e17\u0e35\u0e21 A: '+shifts.A;
+    if(tb)tb.textContent='\u0e17\u0e35\u0e21 B: '+shifts.B;
+    if(tc)tc.textContent='\u0e17\u0e35\u0e21 C: '+shifts.C;"""
+)
+
+# \u0e41\u0e01\u0e49 PLAN.autoLoad() \u0e43\u0e2b\u0e49\u0e42\u0e2b\u0e25\u0e14\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21\u0e14\u0e49\u0e27\u0e22
+c = c.replace(
+    """  autoLoad(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const emps=D.getEmps();if(!emps.length){alert2('\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19','\u274c');return;}
+    const wk=wKey(S.wkStart);const allSched=D.getSched();if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    Object.keys(sched).forEach(k=>delete sched[k]);
+    const plan=this.plan;const used=new Set();const short=[];
+    const empMap=new Map(emps.map(e=>[e.name,e]));
+    SHS.forEach(sh=>{
+      Object.entries(plan).forEach(([dept,days])=>{
+        for(let di=0;di<6;di++){
+          const items=(days[di]||[]);if(!items.length)continue;
+          const need=items.reduce((a,it)=>a+(it.count||1),0);
+          const cands=emps.filter(e=>!used.has(e.name))
+            .filter(e=>{if(e.lockShift&&e.lockShift!==sh)return false;return e.mainDept===dept||e.sub1===dept||e.sub2===dept;})
+            .sort((a,b)=>(a.mainDept===dept?0:a.sub1===dept?1:2)-(b.mainDept===dept?0:b.sub1===dept?1:2));
+          const valid=cands.filter(e=>checkRest(e.name,di,sh,sched));
+          const picked=valid.slice(0,need);
+          picked.forEach(e=>used.add(e.name));
+          if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+          sched[dept][di][sh]=picked.map(e=>({name:e.name,ot:false,otHrs:4,av:e.av||0}));
+          if(picked.length<need)short.push(`${dept} ${DAYS[di]} ${SHTH[sh]}: \u0e02\u0e32\u0e14 ${need-picked.length} \u0e04\u0e19`);
+        }
+      });
+    });
+    // AL
+    const alEmps=emps.filter(e=>!used.has(e.name));
+    if(!sched[AL])sched[AL]={};
+    for(let di=0;di<6;di++){sched[AL][di]={morning:[],afternoon:[],night:[]};
+      SHS.forEach(sh=>{sched[AL][di][sh]=alEmps.filter(e=>!e.lockShift||(e.lockShift===sh)).map(e=>({name:e.name,ot:false,otHrs:4,av:e.av||0}));});
+    }
+    allSched[wk]=sched;D.saveSched(allSched);SCHED.render();
+    if(short.length)alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e1e\u0e2d:\\
+\\
+'+short.join('\\
+'),'\ud83d\ude1f');
+    else toast('\u2705 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08!');
+    APP.goPage('pg-sched');
+  }""",
+    """  autoLoad(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const emps=D.getEmps();if(!emps.length){alert2('\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19','\u274c');return;}
+    const wk=wKey(S.wkStart);const allSched=D.getSched();
+    if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+    Object.keys(sched).forEach(k=>delete sched[k]);
+    const plan=this.plan;const used=new Set();const short=[];
+
+    // \u0e14\u0e36\u0e07 shift \u0e02\u0e2d\u0e07\u0e41\u0e15\u0e48\u0e25\u0e30\u0e17\u0e35\u0e21\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49
+    const teamShifts=TEAM.getCurShifts();
+    const shMap={'\u0e40\u0e0a\u0e49\u0e32':'morning','\u0e1a\u0e48\u0e32\u0e22':'afternoon','\u0e14\u0e36\u0e01':'night'};
+
+    // \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21 \u2014 lock \u0e01\u0e30\u0e15\u0e32\u0e21\u0e17\u0e35\u0e21
+    emps.forEach(e=>{
+      if(!e.team)return;
+      const sh=shMap[teamShifts[e.team]];
+      if(!sh)return;
+      // \u0e16\u0e49\u0e32\u0e21\u0e35 lockShift \u0e43\u0e2b\u0e49\u0e43\u0e0a\u0e49 lockShift \u0e41\u0e17\u0e19
+      const actualSh=e.lockShift||sh;
+      const dept=e.mainDept||e.dept;
+      if(!dept)return;
+      const depts=D.getDepts();
+      if(!depts.includes(dept)&&dept!==AL)return;
+      if(!sched[dept])sched[dept]={};
+      for(let di=0;di<6;di++){
+        if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+        if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
+        if(!used.has(e.name)&&checkRest(e.name,di,actualSh,sched)){
+          if(!sched[dept][di][actualSh].find(w=>w.name===e.name)){
+            sched[dept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+          }
+        }
+      }
+      used.add(e.name);
+    });
+
+    // \u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e27\u0e48\u0e32 plan \u0e21\u0e35\u0e17\u0e35\u0e48\u0e44\u0e2b\u0e19\u0e02\u0e32\u0e14\u0e04\u0e19\u0e1a\u0e49\u0e32\u0e07
+    const depts2=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    SHS.forEach(sh=>{
+      Object.entries(plan).forEach(([dept,days])=>{
+        for(let di=0;di<6;di++){
+          const items=(days[di]||[]);if(!items.length)continue;
+          const need=items.reduce((a,it)=>a+(it.count||1),0);
+          const have=(sched[dept]?.[di]?.[sh]||[]).length;
+          if(have<need)short.push(`${dept} ${DAYS[di]} ${SHTH[sh]}: \u0e02\u0e32\u0e14 ${need-have} \u0e04\u0e19`);
+        }
+      });
+    });
+
+    // \u0e04\u0e19\u0e17\u0e35\u0e48\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e35\u0e21\u0e2b\u0e23\u0e37\u0e2d\u0e40\u0e2b\u0e25\u0e37\u0e2d \u2192 AL
+    const alEmps=emps.filter(e=>!used.has(e.name));
+    if(!sched[AL])sched[AL]={};
+    for(let di=0;di<6;di++){
+      if(!sched[AL][di])sched[AL][di]={morning:[],afternoon:[],night:[]};
+      alEmps.forEach(e=>{
+        const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:'morning');
+        if(!sched[AL][di][sh])sched[AL][di][sh]=[];
+        if(!sched[AL][di][sh].find(w=>w.name===e.name))
+          sched[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+      });
+    }
+
+    allSched[wk]=sched;D.saveSched(allSched);SCHED.render();
+    if(short.length)alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e1e\u0e2d:\\
+\\
+'+short.join('\\
+'),'\ud83d\ude1f');
+    else toast('\u2705 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08!');
+    APP.goPage('pg-sched');
+  }"""
+)
+
+with open('/home/claude/v2.html','w',encoding='utf-8') as f:
+    f.write(c)
+
+import re,subprocess,tempfile,os
+scripts=re.findall(r'<script[^>]*>(.*?)</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "filename": null
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_016ZBZWgmszMTHnh8nzyhnyJ",
+    "name": "bash_tool",
+    "content": [
+      {
+        "type": "text",
+        "text": "{"returncode":0,"stdout":"Block 2: \u274c /tmp/tmp171eal6z.js:304\
+    const tb=document.getElementById('ptb');if(!tb)return;\
+          ^\
+\
+SyntaxError: Identifier 'tb' has already been declared\
+","stderr":""}",
+        "uuid": "4ebab5f7-b1cc-46f9-83b8-f35ad36a41ce"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": null,
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "display_content": {
+      "type": "json_block",
+      "json_block": "{"returncode":0,"stdout":"Block 2: \u274c /tmp/tmp171eal6z.js:304\
+    const tb=document.getElementById('ptb');if(!tb)return;\
+          ^\
+\
+SyntaxError: Identifier 'tb' has already been declared\
+","stderr":""}"
+    }
+  },
+  {
+    "start_timestamp": "2026-04-22T00:23:53.980325Z",
+    "stop_timestamp": "2026-04-22T00:24:00.651756Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_01C3gmqJR8kFcpPHq9hb9Bxw",
+    "name": "bash_tool",
+    "input": {
+      "command": "python3 << 'PYEOF'
+with open('/home/claude/v2.html','r',encoding='utf-8') as f:
+    c = f.read()
+
+# \u0e41\u0e01\u0e49\u0e15\u0e31\u0e27\u0e41\u0e1b\u0e23\u0e0b\u0e49\u0e33 tb \u2192 tbEl
+c = c.replace(
+    "    const tb=document.getElementById('ptb');if(!tb)return;",
+    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;"
+)
+c = c.replace(
+    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
+    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+) if "    tbEl.innerHTML=depts" in c else None
+
+# \u0e2b\u0e32 tb.innerHTML \u0e17\u0e35\u0e48\u0e40\u0e1b\u0e47\u0e19 plan
+idx = c.find("tbEl.innerHTML=depts.map")
+if idx == -1:
+    # \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19 \u0e2b\u0e32 tb.innerHTML
+    c = c.replace(
+        "    tb.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
+        "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+    )
+
+with open('/home/claude/v2.html','w',encoding='utf-8') as f:
+    f.write(c)
+
+import re,subprocess,tempfile,os
+scripts=re.findall(r'<script[^>]*>(.*?)</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "description": "Fix duplicate variable tb"
+    },
+    "message": "Fix duplicate variable tb",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "context": null,
+    "display_content": {
+      "type": "code_block",
+      "language": "bash",
+      "code": "python3 << 'PYEOF'
+with open('/home/claude/v2.html','r',encoding='utf-8') as f:
+    c = f.read()
+
+# \u0e41\u0e01\u0e49\u0e15\u0e31\u0e27\u0e41\u0e1b\u0e23\u0e0b\u0e49\u0e33 tb \u2192 tbEl
+c = c.replace(
+    "    const tb=document.getElementById('ptb');if(!tb)return;",
+    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;"
+)
+c = c.replace(
+    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
+    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+) if "    tbEl.innerHTML=depts" in c else None
+
+# \u0e2b\u0e32 tb.innerHTML \u0e17\u0e35\u0e48\u0e40\u0e1b\u0e47\u0e19 plan
+idx = c.find("tbEl.innerHTML=depts.map")
+if idx == -1:
+    # \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19 \u0e2b\u0e32 tb.innerHTML
+    c = c.replace(
+        "    tb.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
+        "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+    )
+
+with open('/home/claude/v2.html','w',encoding='utf-8') as f:
+    f.write(c)
+
+import re,subprocess,tempfile,os
+scripts=re.findall(r'<script[^>]*>(.*?)</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "filename": null
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_01C3gmqJR8kFcpPHq9hb9Bxw",
+    "name": "bash_tool",
+    "content": [
+      {
+        "type": "text",
+        "text": "{"returncode":1,"stdout":"","stderr":"Traceback (most recent call last):\
+  File \"<stdin>\", line 15, in <module>\
+AttributeError: 'NoneType' object has no attribute 'find'\
+"}",
+        "uuid": "e0276e70-9972-4ac2-97a6-d2ed9c48b7b1"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": null,
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "display_content": {
+      "type": "code_block",
+      "language": "plaintext",
+      "code": "Traceback (most recent call last):
+  File "<stdin>", line 15, in <module>
+AttributeError: 'NoneType' object has no attribute 'find'
+",
+      "filename": null
+    }
+  },
+  {
+    "start_timestamp": "2026-04-22T00:24:02.716943Z",
+    "stop_timestamp": "2026-04-22T00:24:05.811619Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_01AteJPGSK8K17YgjCTXv3wB",
+    "name": "bash_tool",
+    "input": {
+      "command": "python3 << 'PYEOF'
+with open('/home/claude/v2.html','r',encoding='utf-8') as f:
+    c = f.read()
+
+c = c.replace(
+    "    const tb=document.getElementById('ptb');if(!tb)return;\
+    tb.innerHTML=depts.map",
+    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;\
+    tbEl.innerHTML=depts.map"
+)
+
+with open('/home/claude/v2.html','w',encoding='utf-8') as f:
+    f.write(c)
+
+import re,subprocess,tempfile,os
+scripts=re.findall(r'<script[^>]*>(.*?)</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "description": "Fix variable conflict"
+    },
+    "message": "Fix variable conflict",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "context": null,
+    "display_content": {
+      "type": "code_block",
+      "language": "bash",
+      "code": "python3 << 'PYEOF'
+with open('/home/claude/v2.html','r',encoding='utf-8') as f:
+    c = f.read()
+
+c = c.replace(
+    "    const tb=document.getElementById('ptb');if(!tb)return;\
+    tb.innerHTML=depts.map",
+    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;\
+    tbEl.innerHTML=depts.map"
+)
+
+with open('/home/claude/v2.html','w',encoding='utf-8') as f:
+    f.write(c)
+
+import re,subprocess,tempfile,os
+scripts=re.findall(r'<script[^>]*>(.*?)</script>',c,re.DOTALL)
+all_ok=True
+for i,s in enumerate(scripts):
+    if len(s.strip())<10: continue
+    with tempfile.NamedTemporaryFile(mode='w',suffix='.js',delete=False) as f2: f2.write(s);fname=f2.name
+    r=subprocess.run(['node','--check',fname],capture_output=True,text=True)
+    if r.returncode!=0: all_ok=False;print(f'Block {i}: \u274c {r.stderr[:150]}')
+    os.unlink(fname)
+if all_ok: print('\u2705 ALL JS VALID')
+PYEOF",
+      "filename": null
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_01AteJPGSK8K17YgjCTXv3wB",
+    "name": "bash_tool",
+    "content": [
+      {
+        "type": "text",
+        "text": "{"returncode":0,"stdout":"\u2705 ALL JS VALID\
+","stderr":""}",
+        "uuid": "0197c32b-818e-44dd-9583-f5cd710d966f"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": null,
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "display_content": {
+      "type": "json_block",
+      "json_block": "{"returncode":0,"stdout":"\u2705 ALL JS VALID\
+","stderr":""}"
+    }
+  },
+  {
+    "start_timestamp": "2026-04-22T00:24:08.271265Z",
+    "stop_timestamp": "2026-04-22T00:24:08.696314Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_01Q87MTw6tcfFKkVjtpqECPY",
+    "name": "bash_tool",
+    "input": {
+      "command": "cp /home/claude/v2.html /mnt/user-data/outputs/factory-v2.html",
+      "description": "Copy to outputs"
+    },
+    "message": "Copy to outputs",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "context": null,
+    "display_content": {
+      "type": "code_block",
+      "language": "bash",
+      "code": "cp /home/claude/v2.html /mnt/user-data/outputs/factory-v2.html",
+      "filename": null
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_01Q87MTw6tcfFKkVjtpqECPY",
+    "name": "bash_tool",
+    "content": [
+      {
+        "type": "text",
+        "text": "{"returncode":0,"stdout":"","stderr":""}",
+        "uuid": "0086eb78-532f-40ce-9285-6089562c236c"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": null,
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "commandLine",
+    "display_content": {
+      "type": "json_block",
+      "json_block": "{"returncode":0,"stdout":"","stderr":""}"
+    }
+  },
+  {
+    "start_timestamp": "2026-04-22T00:24:10.579357Z",
+    "stop_timestamp": "2026-04-22T00:24:10.579357Z",
+    "flags": null,
+    "type": "tool_use",
+    "id": "toolu_01Wb9HB3VLU53CsYMPwvYRYP",
+    "name": "present_files",
+    "input": {
+      "filepaths": [
+        "/mnt/user-data/outputs/factory-v2.html"
+      ]
+    },
+    "message": "Presenting file(s)...",
+    "integration_name": null,
+    "integration_icon_url": null,
+    "icon_name": "file",
+    "context": null,
+    "display_content": {
+      "type": "table",
+      "table": [
+        [
+          "filepaths",
+          "['/mnt/user-data/outputs/factory-v2.html']"
+        ]
+      ]
+    },
+    "approval_options": null,
+    "approval_key": null,
+    "is_mcp_app": null,
+    "mcp_server_url": null
+  },
+  {
+    "start_timestamp": null,
+    "stop_timestamp": null,
+    "flags": null,
+    "type": "tool_result",
+    "tool_use_id": "toolu_01Wb9HB3VLU53CsYMPwvYRYP",
+    "name": "present_files",
+    "content": [
+      {
+        "type": "local_resource",
+        "file_path": "/mnt/user-data/outputs/factory-v2.html",
+        "name": "factory-v2",
+        "mime_type": "text/html",
+        "uuid": "e343262c-d01b-4334-a981-ddf40731dc50"
+      }
+    ],
+    "is_error": false,
+    "structured_content": null,
+    "meta": null,
+    "message": "Presented file",
+    "integration_name": null,
+    "mcp_server_url": null,
+    "integration_icon_url": null,
+    "icon_name": "file",
+    "display_content": null
+  },
+  {
+    "start_timestamp": "2026-04-22T00:24:12.131349Z",
+    "stop_timestamp": "2026-04-22T00:24:18.674148Z",
+    "flags": null,
+    "type": "text",
+    "text": "Download **factory-v2** \u2192 upload \u0e02\u0e36\u0e49\u0e19 GitHub \u0e04\u0e23\u0e31\u0e1a
+
+\u0e15\u0e2d\u0e19\u0e19\u0e35\u0e49\u0e2b\u0e19\u0e49\u0e32\u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19\u0e21\u0e35\u0e41\u0e16\u0e1a\u0e14\u0e49\u0e32\u0e19\u0e1a\u0e19\u0e41\u0e2a\u0e14\u0e07\u0e04\u0e23\u0e31\u0e1a:
+
+```
+\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49: [\u0e17\u0e35\u0e21 A: \u0e40\u0e0a\u0e49\u0e32] [\u0e17\u0e35\u0e21 B: \u0e1a\u0e48\u0e32\u0e22] [\u0e17\u0e35\u0e21 C: \u0e14\u0e36\u0e01]  [\u26a1 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19]
+```
+
+Admin \u0e27\u0e32\u0e07\u0e41\u0e1c\u0e19 Product \u0e40\u0e2a\u0e23\u0e47\u0e08 \u2192 \u0e01\u0e14 **\u26a1 \u0e42\u0e2b\u0e25\u0e14\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19** \u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e30:
+1. \u0e14\u0e39\u0e27\u0e48\u0e32\u0e17\u0e35\u0e21\u0e44\u0e2b\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e01\u0e30\u0e44\u0e2b\u0e19\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49
+2. \u0e01\u0e23\u0e30\u0e08\u0e32\u0e22\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e40\u0e02\u0e49\u0e32\u0e41\u0e1c\u0e19\u0e01\u0e2b\u0e25\u0e31\u0e01\u0e02\u0e2d\u0e07\u0e15\u0e31\u0e27\u0e40\u0e2d\u0e07\u0e15\u0e32\u0e21\u0e01\u0e30\u0e17\u0e35\u0e21
+3. \u0e43\u0e04\u0e23\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e35\u0e21 \u2192 \u0e44\u0e1b AL
+4. \u0e16\u0e49\u0e32\u0e02\u0e32\u0e14\u0e04\u0e19 \u2192 popup \u0e41\u0e08\u0e49\u0e07\u0e04\u0e23\u0e31\u0e1a \ud83d\ude0a",
+    "citations": []
+  }
+];
+
+document.addEventListener('DOMContentLoaded',()=>{
+  if(!fbDb){setTimeout(()=>APP.init(),500);return;}
+  APP.init();
+});
+</script>
+<script>
+const SCHED={
+  render(){
+    const depts=D.getDepts();const wk=wKey(S.wkStart);const allSched=D.getSched();const sched=allSched[wk]||{};
+    const wn=wNum(S.wkStart);
+    document.getElementById('swl').textContent='\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e17\u0e35\u0e48 '+wn;
+    const ws=S.wkStart;
+    const th=document.getElementById('sth');
+    if(th)th.innerHTML=`<tr><th class="sc">\u0e01\u0e30 / \u0e41\u0e1c\u0e19\u0e01</th>${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th>${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;}).join('')}</tr>`;
+    const tb=document.getElementById('stb');if(!tb)return;
+    let html='';
+    SHS.forEach(sh=>{
+      depts.forEach(dept=>{
+        const isLocked=LOCK_D.includes(dept)&&S.sys==='fill';
+        html+=`<tr><td class="sn">${SHTH[sh]}<br><span style="font-size:10px;color:var(--text3)">${dept}</span></td>`;
+        for(let di=0;di<6;di++){
+          if(isLocked&&sh!=='morning'){html+=`<td style="background:rgba(255,255,255,.02)"><div style="text-align:center;padding:8px;font-size:10px;color:var(--text3)">\ud83d\udd12</div></td>`;continue;}
+          const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          let otTime='';
+          html+=`<td>${ws2.map(w=>{
+            const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
+            if(w.ot){if(sh==='morning')otTime='06:00-18:00';else if(sh==='night')otTime='18:00-06:00';else otTime=w.sr==='10-22'?'10:00-22:00':w.sr==='14-02'?'14:00-02:00':'14:00-22:00';}
+            const ne=w.name.replace(/'/g,"\\'");
+            return `<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">${w.name}${w.ot?`<span class="ot-t">${otTime}</span>`:''}${sg?'\u2705':w.ot?'\u270d\ufe0f':''}</span>`;
+          }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
+        }
+        html+='</tr>';
+      });
+    });
+    tb.innerHTML=html;
+    this.renderAL(sched,wk);
+  },
+  renderAL(sched,wk){
+    const el=document.getElementById('alc');if(!el)return;
+    const set=new Set();
+    SHS.forEach(sh=>{for(let di=0;di<6;di++)(sched[AL]?.[di]?.[sh]||[]).forEach(w=>set.add(w.name));});
+    if(!set.size){el.innerHTML='<span style="font-size:11px;color:var(--text3)">\u0e27\u0e48\u0e32\u0e07</span>';return;}
+    el.innerHTML=[...set].map(n=>`<span class="al-chip" onclick="SCHED.openAL('${n.replace(/'/g,"\\'")}')"> ${n}</span>`).join('');
+  },
+  openW(name,dept,di,sh){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const ws=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+    const w=ws.find(x=>x.name===name);if(!w)return;
+    const sg=D.getSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh);
+    const isMe=S.user?.emp?.name===name;const isAdmin=S.user?.isAdmin;
+    const mo=document.getElementById('mo-w');
+    const ne=name.replace(/'/g,"\\'");
+    let html=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${name}</div><button class="md-close" onclick="closeMo('mo-w')">\u2715</button></div><div class="md-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dept} \u2014 ${SHTH[sh]} \u2014 ${DAYS[di]}</div>`;
+    if(isAdmin){
+      html+=`<button onclick="SCHED.toggleOT('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:${w.ot?'rgba(245,158,11,.2)':'rgba(37,99,235,.15)'};color:${w.ot?'var(--amber)':'var(--blue2)'};font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;margin-bottom:6px">${w.ot?'\ud83d\udfe1 \u0e1b\u0e34\u0e14 OT':'\u26a1 \u0e40\u0e1b\u0e34\u0e14 OT'}</button>`;
+      if(w.ot){
+        if(sh==='afternoon'){
+          html+=`<select onchange="SCHED.setSR('${ne}','${dept}',${di},this.value)" style="width:100%;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
+            <option value="14-22" ${(w.sr||'14-22')==='14-22'?'selected':''}>14:00-22:00 (OT 4\u0e0a\u0e21.)</option>
+            <option value="10-22" ${w.sr==='10-22'?'selected':''}>10:00-22:00 (OT 8\u0e0a\u0e21.)</option>
+            <option value="14-02" ${w.sr==='14-02'?'selected':''}>14:00-02:00 (OT 8\u0e0a\u0e21.)</option>
+          </select>`;
+        }else{
+          html+=`<div style="display:flex;gap:6px;margin-bottom:6px">${[2,3,4].map(h=>`<button onclick="SCHED.setH('${ne}','${dept}',${di},'${sh}',${h});closeMo('mo-w')" style="flex:1;padding:8px;border:none;border-radius:8px;background:${(w.otHrs||4)===h?'var(--amber)':'var(--bg3)'};color:${(w.otHrs||4)===h?'#000':'var(--text2)'};font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">${h}\u0e0a\u0e21.</button>`).join('')}</div>`;
+        }
+      }
+      html+=`<button onclick="SCHED.removeW('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(220,38,38,.15);color:var(--red2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif">\ud83d\uddd1\ufe0f \u0e25\u0e1a\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e01\u0e30</button>`;
+    }
+    if((isMe||isAdmin)&&w.ot&&!sg)html+=`<button onclick="SCHED.sign('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(22,163,74,.15);color:var(--green2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;margin-top:8px">\u270d\ufe0f \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT</button>`;
+    if(sg)html+=`<div style="background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:8px;margin-top:8px;text-align:center"><div style="font-size:11px;color:var(--green2)">\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u0e41\u0e25\u0e49\u0e27</div><div style="font-family:'Brush Script MT',cursive;font-size:18px;color:var(--blue2);margin-top:4px">${sg}</div></div>`;
+    html+='</div></div>';
+    mo.innerHTML=html;mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
+  },
+  toggleOT(name,dept,di,sh){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const ws=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+    const w=ws.find(x=>x.name===name);if(!w)return;
+    if(!w.ot){
+      const max=D.getMaxOT();let cnt=0;
+      D.getDepts().forEach(d=>{for(let di2=0;di2<6;di2++)SHS.forEach(s=>{const f=(sched[d]?.[di2]?.[s]||sched[d]?.[String(di2)]?.[s]||[]).find(x=>x.name===name&&x.ot);if(f)cnt++;});});
+      if(cnt>=max){alert2('\ud83d\udeab OT \u0e40\u0e15\u0e47\u0e21\u0e41\u0e25\u0e49\u0e27!\
+\
+'+name+' \u0e17\u0e33 OT \u0e04\u0e23\u0e1a '+max+' \u0e27\u0e31\u0e19\u0e41\u0e25\u0e49\u0e27','\u274c');return;}
+    }
+    w.ot=!w.ot;if(!w.ot)w.otHrs=4;
+    all[wk]=sched;D.saveSched(all);this.render();toast(w.ot?'\u2705 \u0e40\u0e1b\u0e34\u0e14 OT':'\u2705 \u0e1b\u0e34\u0e14 OT');
+  },
+  setH(name,dept,di,sh,h){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const w=(sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);
+    if(w){w.otHrs=h;all[wk]=sched;D.saveSched(all);this.render();}
+  },
+  setSR(name,dept,di,range){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const w=(sched[dept]?.[di]?.['afternoon']||sched[dept]?.[String(di)]?.['afternoon']||[]).find(x=>x.name===name);
+    if(w){w.sr=range;if(range!=='14-22'){w.ot=true;w.otHrs=4;}all[wk]=sched;D.saveSched(all);this.render();closeMo('mo-w');toast('\u2705 \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17\u0e0a\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32');}
+  },
+  sign(name,dept,di,sh){
+    if(!S.user?.isAdmin&&S.user?.emp?.name!==name){toast('\u274c \u0e40\u0e0b\u0e47\u0e19\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e15\u0e31\u0e27\u0e40\u0e2d\u0e07');return;}
+    const wk=wKey(S.wkStart);D.saveSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh,name);this.render();toast('\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u2014 '+name);
+  },
+  removeW(name,dept,di,sh){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const arr=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+    const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;D.saveSched(all);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e1a '+name);}
+  },
+  openAdd(dept,di,sh){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const emps=D.getEmps();const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const already=new Set((sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).map(w=>w.name));
+    const mo=document.getElementById('mo-w');
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">\u2795 \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19</div><button class="md-close" onclick="closeMo('mo-w')">\u2715</button></div><div class="md-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${dept} \u2014 ${SHTH[sh]} \u2014 ${DAYS[di]}</div>
+      <input type="search" class="fi" placeholder="\ud83d\udd0d \u0e04\u0e49\u0e19\u0e2b\u0e32..." id="aw-s" oninput="SCHED.filterAdd(this.value)" style="margin-bottom:8px">
+      <div id="aw-list" style="max-height:50vh;overflow-y:auto">
+        ${emps.map(e=>{
+          const isIn=already.has(e.name);const ok=checkRest(e.name,di,sh,sched);const ne=e.name.replace(/'/g,"\\'");
+          return `<div onclick="${!isIn&&ok?`SCHED.addW('${ne}','${dept}',${di},'${sh}')`:''}" style="padding:8px;border-radius:8px;border:1px solid ${isIn?'var(--green)':!ok?'var(--red)':'var(--border)'};background:${isIn?'rgba(22,163,74,.1)':!ok?'rgba(220,38,38,.05)':'var(--bg3)'};margin-bottom:3px;cursor:${!isIn&&ok?'pointer':'default'};opacity:${isIn||!ok?'.6':'1'};display:flex;align-items:center;gap:8px">
+            <div class="${AV[(e.av||0)%8]} e-av" style="width:28px;height:28px;font-size:12px;flex-shrink:0">${e.name.charAt(0)}</div>
+            <div style="flex:1"><div style="font-size:12px;font-weight:700">${e.name}</div><div style="font-size:10px;color:var(--text3)">${e.mainDept||e.dept||''}</div></div>
+            <div style="font-size:10px;font-weight:700;color:${isIn?'var(--green2)':!ok?'var(--red2)':'var(--text3)'}">${isIn?'\u2713 \u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27':!ok?'\u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a':''}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div></div>`;
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
+  },
+  filterAdd(q){
+    document.querySelectorAll('#aw-list > div').forEach(el=>{
+      const nm=el.querySelector('div > div:first-child')?.textContent||'';
+      el.style.display=nm.toLowerCase().includes(q.toLowerCase())?'':'none';
+    });
+  },
+  addW(name,dept,di,sh){
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    if(!checkRest(name,di,sh,sched)){alert2('\ud83d\ude34 \u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a 12 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07!\
+\
+'+name+' \u0e22\u0e31\u0e07\u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e01\u0e30\u0e19\u0e35\u0e49','\u274c');return;}
+    const emp=D.getEmps().find(e=>e.name===name);if(!emp)return;
+    if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
+    if(!sched[dept][di][sh])sched[dept][di][sh]=[];
+    if(!sched[dept][di][sh].find(w=>w.name===name))sched[dept][di][sh].push({name,ot:false,otHrs:4,av:emp.av||0});
+    all[wk]=sched;D.saveSched(all);closeMo('mo-w');this.render();toast('\u2705 \u0e40\u0e1e\u0e34\u0e48\u0e21 '+name);
+  },
+  openAL(name){
+    const mo=document.getElementById('mo-w');
+    const depts=D.getDepts().filter(d=>d!==AL);
+    let opts='';
+    depts.forEach(dept=>DAYS.forEach((dy,di)=>SHS.forEach(sh=>{
+      const ne=name.replace(/'/g,"\\'");
+      opts+=`<button onclick="SCHED.moveAL('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif;margin-bottom:3px;text-align:left">${dept} \u2014 ${dy} \u2014 ${SHTH[sh]}</button>`;
+    })));
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${name} (AL) \u2014 \u0e22\u0e49\u0e32\u0e22\u0e44\u0e1b\u0e01\u0e30</div><button class="md-close" onclick="closeMo('mo-w')">\u2715</button></div><div class="md-body" style="overflow-y:auto">${opts}</div></div>`;
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
+  },
+  moveAL(name,dept,di,sh){
+    this.addW(name,dept,di,sh);
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    SHS.forEach(s=>{const arr=sched[AL]?.[di]?.[s]||[];const idx=arr.findIndex(w=>w.name===name);if(idx>=0)arr.splice(idx,1);});
+    all[wk]=sched;D.saveSched(all);this.render();
+  },
+  chgWk(dir){
+    const d=new Date(S.wkStart);d.setDate(d.getDate()+dir*7);S.wkStart=d;
+    const wk=wKey(d);
+    ['proc','fill'].forEach(sys=>FB.get(sys+'/sched/'+wk).then(v=>{if(!v)return;const all=LS.get('sched_'+sys,{});all[wk]=v;LS.set('sched_'+sys,all);if(sys===S.sys)this.render();}));
+    this.render();
+  },
+  save(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    let tH=0,oH=0;
+    D.getDepts().forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched[d]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
+    const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
+    if(pct>tgt){this.showOTReason(pct,tgt,()=>{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();});}
+    else{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();}
+  },
+  showOTReason(pct,tgt,onSave){
+    const reasons=D.getReasons();let rows=[{reason:reasons[0]||'',hours:0}];
+    const renderR=()=>{
+      document.getElementById('or-rows').innerHTML=rows.map((r,i)=>`<div class="ot-rrow">
+        <select onchange="window._or[${i}].reason=this.value">${reasons.map(re=>`<option value="${re}" ${r.reason===re?'selected':''}>${re}</option>`).join('')}</select>
+        <input type="number" value="${r.hours}" min="0" max="24" oninput="window._or[${i}].hours=parseInt(this.value)||0">
+        <label>\u0e0a\u0e21.</label>
+        ${rows.length>1?`<button onclick="window._or.splice(${i},1);window._rr()" style="width:24px;height:24px;border:none;border-radius:6px;background:rgba(220,38,38,.2);color:var(--red2);font-size:12px">\u2715</button>`:''}
+      </div>`).join('');
+    };
+    window._or=rows;window._rr=renderR;
+    const mo=document.getElementById('mo-or');
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">\u26a0\ufe0f OT \u0e40\u0e01\u0e34\u0e19 Target</div><button class="md-close" onclick="closeMo('mo-or')">\u2715</button></div><div class="md-body">
+      <div class="ot-warn"><div class="ot-warn-t">OT ${pct}% \u0e40\u0e01\u0e34\u0e19 Target ${tgt}%</div><div style="font-size:12px;color:var(--text2)">\u0e01\u0e23\u0e38\u0e13\u0e32\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25</div></div>
+      <div id="or-rows"></div>
+      <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25</button>
+    </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-or')">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button><button class="btn-confirm" onclick="SCHED.saveOR(${pct})">\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button></div></div>`;
+    openMo('mo-or');renderR();this._onSave=onSave;
+  },
+  saveOR(pct){
+    const reasons=window._or.filter(r=>r.reason&&r.hours>0);
+    const log=D.getOTLog();const wk=wKey(S.wkStart);
+    const idx=log.findIndex(l=>l.wk===wk&&l.sys===S.sys);
+    const entry={wk,sys:S.sys,pct,date:new Date().toISOString(),reasons};
+    if(idx>=0)log[idx]=entry;else log.push(entry);
+    D.saveOTLog(log);closeMo('mo-or');if(this._onSave)this._onSave();DASH.renderPareto();
+  },
+  clearWk(){
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    confirm2('\u0e25\u0e49\u0e32\u0e07\u0e15\u0e32\u0e23\u0e32\u0e07\u0e01\u0e30\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49?',()=>{
+      const wk=wKey(S.wkStart);const all=D.getSched();delete all[wk];D.saveSched(all);FB.remove(S.sys+'/sched/'+wk);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e49\u0e32\u0e07\u0e41\u0e25\u0e49\u0e27');
+    });
+  },
+  printSched(){PRINT.sched();},
+  printOT(){PRINT.ot();}
+};
+const OT={
+  sub:'ov',per:'wk',wkOff:0,mo:new Date().getMonth(),yr2:new Date().getFullYear(),
+  getEmpOT(name){
+    const all=LS.get('sched_'+S.sys,{});const depts=D.getDepts();let oH=0,tH=0;
+    const processWk=(wk,wd)=>{
+      depts.forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>{const w=(wd[d]?.[di]?.[sh]||wd[d]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);if(w){const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}});});
+    };
+    if(this.per==='wk'){
+      const ws=new Date(S.wkStart);ws.setDate(ws.getDate()+this.wkOff*7);
+      const wk2=wKey(ws);if(all[wk2])processWk(wk2,all[wk2]);
+    }else{
+      Object.entries(all).forEach(([wk,wd])=>{
+        if(!wk.match(/\d{4}-\d{2}-\d{2}/))return;
+        const wp=wk.split('-');const ws=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+        for(let di=0;di<6;di++){
+          const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+          if(this.per==='mo'&&(d2.getMonth()!==this.mo||d2.getFullYear()!==this.yr2))continue;
+          if(this.per==='yr'&&d2.getFullYear()!==this.yr2)continue;
+          depts.forEach(d=>SHS.forEach(sh=>{const w=(wd[d]?.[di]?.[sh]||wd[d]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);if(w){const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}}));
+        }
+      });
+    }
+    return{oH,tH,pct:tH>0?Math.round(oH/tH*100):0};
+  },
+  render(){this.updNav();if(this.sub==='ov')this.renderOv();else if(this.sub==='pe')this.renderPe();else this.renderRp();},
+  setSub(s){this.sub=s;['ov','pe','rp'].forEach(x=>document.getElementById('os-'+x)?.classList.toggle('active',x===s));
+    const ps=document.getElementById('ot-psel'),nv=document.getElementById('ot-nav2');
+    if(ps)ps.style.display=s==='rp'?'none':'flex';if(nv)nv.style.display=s==='rp'?'none':'flex';this.render();},
+  setPer(p){this.per=p;['wk','mo','yr'].forEach(x=>document.getElementById('op-'+x)?.classList.toggle('active',x===p));this.render();},
+  prev(){if(this.per==='wk')this.wkOff--;else if(this.per==='mo'){this.mo--;if(this.mo<0){this.mo=11;this.yr2--;}}else this.yr2--;this.render();},
+  next(){if(this.per==='wk')this.wkOff++;else if(this.per==='mo'){this.mo++;if(this.mo>11){this.mo=0;this.yr2++;}}else this.yr2++;this.render();},
+  updNav(){
+    const el=document.getElementById('onl');if(!el)return;
+    if(this.per==='wk'){const ws=new Date(S.wkStart);ws.setDate(ws.getDate()+this.wkOff*7);const we=new Date(ws);we.setDate(we.getDate()+5);el.textContent='\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e17\u0e35\u0e48 '+wNum(ws)+' ('+ws.getDate()+'/'+(ws.getMonth()+1)+'-'+we.getDate()+'/'+(we.getMonth()+1)+')';}
+    else if(this.per==='mo')el.textContent=MON[this.mo]+' '+(this.yr2+543);
+    else el.textContent='\u0e1b\u0e35 '+(this.yr2+543);
+  },
+  renderOv(){
+    const emps=D.getEmps();const tgt=D.getTarget();
+    const items=emps.map(e=>({...this.getEmpOT(e.name),emp:e})).filter(x=>x.oH>0).sort((a,b)=>b.oH-a.oH);
+    const mx=Math.max(...items.map(x=>x.oH),1);
+    const el=document.getElementById('otl');if(!el)return;
+    if(!items.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25 OT</div>';return;}
+    el.innerHTML=items.map(x=>{const c=x.pct>tgt?'var(--red2)':'var(--green2)';
+      return `<div class="ot-row"><div class="ot-info"><div class="ot-av">${x.emp.photo?`<img src="${x.emp.photo}">`:`<span>${x.emp.name.charAt(0)}</span>`}</div><div class="ot-nm">${x.emp.name}</div><div class="ot-h" style="color:${c}">${x.oH}\u0e0a\u0e21.</div><div style="font-size:11px;color:${c};font-weight:800;margin-left:4px">(${x.pct}%)</div></div><div class="ot-bar"><div class="ot-fill" style="width:${Math.max(x.oH/mx*100,2)}%;background:${c}"></div></div></div>`;
+    }).join('');
+  },
+  renderPe(){
+    const emps=D.getEmps();const tgt=D.getTarget();
+    const items=emps.map(e=>({...this.getEmpOT(e.name),emp:e})).sort((a,b)=>b.oH-a.oH);
+    const mx=Math.max(...items.map(x=>x.oH),1);
+    const el=document.getElementById('otl');if(!el)return;
+    el.innerHTML=items.map(x=>{const c=x.pct>tgt?'var(--red2)':x.oH>0?'var(--green2)':'var(--text3)';
+      return `<div class="ot-row"><div class="ot-info"><div class="ot-av">${x.emp.photo?`<img src="${x.emp.photo}">`:`<span>${x.emp.name.charAt(0)}</span>`}</div><div class="ot-nm">${x.emp.name}</div><div class="ot-h" style="color:${c}">${x.oH}\u0e0a\u0e21.</div></div>${x.oH>0?`<div class="ot-bar"><div class="ot-fill" style="width:${Math.max(x.oH/mx*100,2)}%;background:${c}"></div></div>`:''}</div>`;
+    }).join('');
+  },
+  renderRp(){
+    const yr=new Date().getFullYear();const all=LS.get('sched_'+S.sys,{});const depts=D.getDepts();const emps=D.getEmps();
+    const ed={};emps.forEach(e=>{ed[e.name]={ot:[],sg:[],emp:e};});
+    Object.entries(all).forEach(([wk,sched])=>{
+      if(!wk.match(/\d{4}-\d{2}-\d{2}/))return;
+      const wp=wk.split('-');const ws=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+      for(let di=0;di<6;di++){
+        const d2=new Date(ws);d2.setDate(ws.getDate()+di);if(d2.getFullYear()!==yr)continue;
+        const ds=dStr(d2);
+        SHS.forEach(sh=>depts.forEach(dept=>{
+          const w=(sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).find(x=>x.ot);if(!w)return;
+          if(!ed[w.name])ed[w.name]={ot:[],sg:[],emp:emps.find(e=>e.name===w.name)||{name:w.name}};
+          const k=ds+'_'+sh;
+          if(!ed[w.name].ot.find(x=>x.k===k)){
+            ed[w.name].ot.push({k,ds,sh:SHTH[sh],di,dept,wk});
+            if(D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh))ed[w.name].sg.push(k);
+          }
+        }));
+      }
+    });
+    const items=Object.entries(ed).filter(([,d])=>d.ot.length>0).sort((a,b)=>(a[1].sg.length/a[1].ot.length)-(b[1].sg.length/b[1].ot.length));
+    const tot=items.reduce((a,[,d])=>a+d.ot.length,0),sgtot=items.reduce((a,[,d])=>a+d.sg.length,0);
+    const el=document.getElementById('otl');if(!el)return;
+    el.innerHTML=`<div style="background:var(--navy);border-radius:12px;padding:14px;margin-bottom:14px;display:flex;gap:12px">
+      <div style="flex:1;text-align:center"><div style="font-size:22px;font-weight:900;color:var(--green2)">${tot>0?Math.round(sgtot/tot*100):0}%</div><div style="font-size:10px;color:var(--text2)">\u0e40\u0e0b\u0e47\u0e19\u0e41\u0e25\u0e49\u0e27</div></div>
+      <div style="flex:1;text-align:center"><div style="font-size:22px;font-weight:900">${sgtot}</div><div style="font-size:10px;color:var(--text2)">\u0e04\u0e23\u0e31\u0e49\u0e07</div></div>
+      <div style="flex:1;text-align:center"><div style="font-size:22px;font-weight:900;color:var(--red2)">${tot-sgtot}</div><div style="font-size:10px;color:var(--text2)">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e40\u0e0b\u0e47\u0e19</div></div>
+    </div>`+items.map(([n,data])=>{
+      const tot2=data.ot.length,sg2=data.sg.length,un=tot2-sg2;const sp=tot2>0?Math.round(sg2/tot2*100):0;
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div class="ot-info"><div class="ot-av">${data.emp?.photo?`<img src="${data.emp.photo}">`:`<span>${n.charAt(0)}</span>`}</div><div class="ot-nm">${n}</div><div style="font-size:10px;color:var(--text3)">${sg2}/${tot2}</div><div style="font-size:12px;font-weight:900;color:${sp===100?'var(--green2)':sp===0?'var(--red2)':'var(--amber)'}">${sp}%</div></div>
+        <div class="sg-bar"><div class="sg-done" style="width:${sp}%;min-width:${sg2>0?'20px':'0'}"><span class="sg-val">${sg2>0?sp+'%':''}</span></div><div class="sg-miss" style="width:${100-sp}%;min-width:${un>0?'20px':'0'}"><span class="sg-val">${un>0?(100-sp)+'%':''}</span></div></div>
+        <div style="font-size:10px;margin-top:4px;color:${un>0?'var(--red2)':'var(--green2)'}">
+          ${un>0?'\u26a0\ufe0f \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e40\u0e0b\u0e47\u0e19 '+un+' \u0e04\u0e23\u0e31\u0e49\u0e07':'\u2705 \u0e40\u0e0b\u0e47\u0e19\u0e04\u0e23\u0e1a'}
+        </div>
+      </div>`;
+    }).join('');
+  }
+};;
+
+const EMP={
+  _photo:null,
+  render(q=''){
+    const emps=D.getEmps();
+    const list=q?emps.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())):emps;
+    const el=document.getElementById('el');if(!el)return;
+    if(!list.length){el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3)">${q?'\u0e44\u0e21\u0e48\u0e1e\u0e1a':'\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19 \u0e01\u0e14 + \u0e40\u0e1e\u0e34\u0e48\u0e21'}</div>`;updEmpCnt();return;}
+    el.innerHTML=list.map(e=>{
+      const ri=emps.indexOf(e);
+      const tags=[];
+      if(e.mainDept)tags.push({l:'\u0e2b\u0e25\u0e31\u0e01: '+e.mainDept,c:'main'});
+      if(e.sub1)tags.push({l:'\u0e23\u0e2d\u0e071: '+e.sub1,c:'sub'});
+      if(e.sub2)tags.push({l:'\u0e23\u0e2d\u0e072: '+e.sub2,c:'sub'});
+      if(e.lockShift)tags.push({l:'\ud83d\udd12 '+SHTH[e.lockShift],c:'lk'});
+      return `<div class="emp-card">
+        <div class="e-av ${AV[(e.av||0)%8]}" ${e.photo?'style="background:transparent"':''}>${e.photo?`<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:e.name.charAt(0)}</div>
+        <div class="e-info"><div class="e-name">${e.name}</div><div class="e-dept">${e.dept||e.mainDept||'-'}</div>
+          <div class="e-tags">${tags.map(t=>`<span class="e-tag ${t.c}">${t.l}</span>`).join('')}</div>
+        </div>
+        <div class="e-acts">
+          <button class="e-btn" onclick="EMP.toggleLock(${ri})" style="border-color:${e.lockShift?'var(--green)':'var(--border)'};color:${e.lockShift?'var(--green2)':'var(--text3)'}">\ud83d\udd12</button>
+          <button class="e-btn" onclick="EMP.openEdit(${ri})">\u270f\ufe0f</button>
+          <button class="e-btn" onclick="EMP.del(${ri})" style="color:var(--red2)">\u2715</button>
+        </div>
+      </div>`;
+    }).join('');
+    updEmpCnt();
+  },
+  search(q){this.render(q);},
+  openAdd(){this.openForm(-1);},
+  openEdit(i){this.openForm(i);},
+  openForm(idx){
+    const emps=D.getEmps();const emp=idx>=0?emps[idx]:null;const depts=D.getDepts();
+    const mo=document.getElementById('mo-e');
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">${emp?'\u0e41\u0e01\u0e49\u0e44\u0e02':'\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19'}</div><button class="md-close" onclick="closeMo('mo-e')">\u2715</button></div><div class="md-body">
+      <div class="fg"><label class="fl">\u0e0a\u0e37\u0e48\u0e2d-\u0e19\u0e32\u0e21\u0e2a\u0e01\u0e38\u0e25 *</label><input type="text" class="fi" id="ef-n" value="${emp?.name||''}" placeholder="\u0e0a\u0e37\u0e48\u0e2d..."></div>
+      <div class="fg"><label class="fl">PIN ${emp?'(\u0e27\u0e48\u0e32\u0e07=\u0e44\u0e21\u0e48\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19)':'* (4 \u0e2b\u0e25\u0e31\u0e01)'}</label><input type="password" class="fi" id="ef-p" maxlength="4" inputmode="numeric" placeholder="${emp?'\u0e27\u0e48\u0e32\u0e07=\u0e44\u0e21\u0e48\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19':'PIN 4 \u0e2b\u0e25\u0e31\u0e01'}" style="letter-spacing:4px;text-align:center"></div>
+      <div class="fg"><label class="fl">\u0e41\u0e1c\u0e19\u0e01\u0e2b\u0e25\u0e31\u0e01 *</label><select class="fs" id="ef-md"><option value="">-- \u0e40\u0e25\u0e37\u0e2d\u0e01 --</option>${depts.map(d=>`<option ${emp?.mainDept===d||emp?.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">\u0e41\u0e1c\u0e19\u0e01\u0e2a\u0e33\u0e23\u0e2d\u0e07 1</label><select class="fs" id="ef-s1"><option value="">-- \u0e44\u0e21\u0e48\u0e21\u0e35 --</option>${depts.map(d=>`<option ${emp?.sub1===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">\u0e41\u0e1c\u0e19\u0e01\u0e2a\u0e33\u0e23\u0e2d\u0e07 2</label><select class="fs" id="ef-s2"><option value="">-- \u0e44\u0e21\u0e48\u0e21\u0e35 --</option>${depts.map(d=>`<option ${emp?.sub2===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">Lock \u0e01\u0e30</label><select class="fs" id="ef-lk"><option value="">-- \u0e2b\u0e21\u0e38\u0e19\u0e1b\u0e01\u0e15\u0e34 --</option><option value="morning" ${emp?.lockShift==='morning'?'selected':''}>\ud83d\udd12 \u0e01\u0e30\u0e40\u0e0a\u0e49\u0e32\u0e15\u0e25\u0e2d\u0e14</option><option value="afternoon" ${emp?.lockShift==='afternoon'?'selected':''}>\ud83d\udd12 \u0e01\u0e30\u0e1a\u0e48\u0e32\u0e22\u0e15\u0e25\u0e2d\u0e14</option><option value="night" ${emp?.lockShift==='night'?'selected':''}>\ud83d\udd12 \u0e01\u0e30\u0e14\u0e36\u0e01\u0e15\u0e25\u0e2d\u0e14</option></select></div>
+      <div class="fg"><label class="fl">\u0e23\u0e39\u0e1b\u0e42\u0e1b\u0e23\u0e44\u0e1f\u0e25\u0e4c</label><div style="display:flex;gap:10px;align-items:center">
+        <div id="ef-pv" style="width:48px;height:48px;border-radius:50%;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${emp?.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:'\ud83d\udcf7'}</div>
+        <button onclick="document.getElementById('ef-pi').click()" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif">\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e23\u0e39\u0e1b</button>
+        <input type="file" id="ef-pi" accept="image/*" style="display:none" onchange="EMP.onPhoto(this)">
+      </div></div>
+    </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-e')">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button><button class="btn-confirm" onclick="EMP.save(${idx})">\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button></div></div>`;
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};
+    this._photo=emp?.photo||null;openMo('mo-e');
+  },
+  onPhoto(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{this._photo=e.target.result;const pv=document.getElementById('ef-pv');if(pv)pv.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};r.readAsDataURL(f);},
+  save(idx){
+    const name=document.getElementById('ef-n').value.trim();
+    const pin=document.getElementById('ef-p').value.trim();
+    const md=document.getElementById('ef-md').value;
+    const s1=document.getElementById('ef-s1').value;
+    const s2=document.getElementById('ef-s2').value;
+    const lk=document.getElementById('ef-lk').value||undefined;
+    if(!name){toast('\u274c \u0e43\u0e2a\u0e48\u0e0a\u0e37\u0e48\u0e2d');return;}if(!md){toast('\u274c \u0e40\u0e25\u0e37\u0e2d\u0e01\u0e41\u0e1c\u0e19\u0e01\u0e2b\u0e25\u0e31\u0e01');return;}
+    const emps=D.getEmps();
+    if(idx<0&&(!pin||pin.length!==4)){toast('\u274c PIN \u0e15\u0e49\u0e2d\u0e07 4 \u0e2b\u0e25\u0e31\u0e01');return;}
+    if(idx<0&&emps.find(e=>e.pin===pin)){toast('\u274c PIN \u0e19\u0e35\u0e49\u0e21\u0e35\u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27');return;}
+    const emp=idx>=0?{...emps[idx]}:{av:Math.floor(Math.random()*8)};
+    emp.name=name;emp.dept=md;emp.mainDept=md;
+    if(s1)emp.sub1=s1;else delete emp.sub1;
+    if(s2)emp.sub2=s2;else delete emp.sub2;
+    if(lk)emp.lockShift=lk;else delete emp.lockShift;
+    if(pin)emp.pin=pin;
+    if(this._photo)emp.photo=this._photo;
+    if(idx>=0)emps[idx]=emp;else emps.push(emp);
+    D.saveEmps(emps);closeMo('mo-e');this.render();toast('\u2705 '+(idx>=0?'\u0e41\u0e01\u0e49\u0e44\u0e02':'\u0e40\u0e1e\u0e34\u0e48\u0e21')+name);
+  },
+  del(i){const emps=D.getEmps();confirm2('\u0e25\u0e1a '+emps[i].name+'?',()=>{emps.splice(i,1);D.saveEmps(emps);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e1a\u0e41\u0e25\u0e49\u0e27');});},
+  openLeave(idx){
+    const emps=D.getEmps();
+    const emp=typeof idx==='number'?emps[idx]:emps.find(e=>e.name===idx);
+    if(!emp){toast('❌ ไม่พบพนักงาน');return;}
+    const name=emp.name;
+    const reqs=D.getLeaveReq().filter(r=>r.name===name);
+    const today=new Date();
+    const minDate=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    const mo=document.getElementById('mo-e');
+    const listHTML=(()=>{
+      const active=reqs.filter(r=>r.status!=='rejected').sort((a,b)=>a.date.localeCompare(b.date));
+      if(!active.length)return '<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">ยังไม่มีคำขอลา</div>';
+      return active.map(r=>{
+        const dt=new Date(r.date);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+        const dayN=['อา','จ','อ','พ','พฤ','ศ','ส'][dt.getDay()];
+        const isPend=r.status==='pending';const isApp=r.status==='approved';const isCan=r.status==='cancel_req';
+        const col=isPend?'#F59E0B':isApp?'#16A34A':isCan?'#DC2626':'#334155';
+        const bg=isPend?'rgba(245,158,11,.1)':isApp?'rgba(22,163,74,.1)':isCan?'rgba(220,38,38,.1)':'var(--bg3)';
+        const ic=isPend?'🟡 รออนุมัติ':isApp?'✅ อนุมัติ':isCan?'🔴 ขอยกเลิก':'';
+        let btns='';
+        if(isPend)btns='<button data-date="'+r.date+'" data-name="'+name+'" onclick="EMP.cancelLeaveDate(this.dataset.date,this.dataset.name)" style="width:24px;height:24px;background:rgba(220,38,38,.2);border:none;border-radius:6px;color:#EF4444;font-size:12px">✕</button>';
+        if(isApp)btns='<button data-id="'+r.id+'" data-idx="'+idx+'" onclick="EMP.reqCancelLeave(this.dataset.id,this.dataset.idx)" style="padding:3px 8px;background:rgba(220,38,38,.15);border:1px solid #DC2626;border-radius:6px;color:#EF4444;font-size:10px;font-weight:700;font-family:Sarabun,sans-serif">ขอยกเลิก</button>';
+        if(isCan)btns='<span style="font-size:10px;color:#64748B">รอ Admin</span>';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:'+bg+';border:1px solid '+col+';border-radius:8px;margin-bottom:4px">'+
+          '<span style="flex:1;font-size:12px;font-weight:700">'+dayN+' '+ds+'</span>'+
+          '<span style="font-size:10px;font-weight:800;color:'+col+'">'+ic+'</span>'+btns+'</div>';
+      }).join('');
+    })();
+    mo.innerHTML='<div class="md"><div class="md-handle"></div>'+
+      '<div class="md-hdr"><div class="md-title">📅 แจ้งลา — '+name+'</div>'+
+      '<button class="md-close" onclick="closeMo(&quot;mo-e&quot;)">✕</button></div>'+
+      '<div class="md-body"><div class="fg"><label class="fl">เลือกวันที่จะลา</label>'+
+      '<input type="date" class="fi" id="lv-date" min="'+minDate+'" data-name="'+name+'" style="font-size:14px;padding:10px" onchange="EMP.onLeaveDate(this.value,this.dataset.name)">'+
+      '<div style="font-size:11px;color:var(--text3);margin-top:4px">เลือกได้ล่วงหน้าไม่จำกัด</div></div>'+
+      '<div style="margin-top:4px">'+listHTML+'</div>'+
+      '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:var(--amber)">'+
+      'ℹ️ หลังเลือกวัน ระบบจะส่งคำขอให้ Admin อนุมัติก่อน</div>'+
+      '</div><div class="md-foot"><button class="btn-cancel" onclick="closeMo(&quot;mo-e&quot;)">ปิด</button></div></div>';
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};openMo('mo-e');
+  },
+  onLeaveDate(date,name){
+    if(!date)return;
+    const reqs=D.getLeaveReq();
+    if(reqs.find(r=>r.name===name&&r.date===date&&r.status!=='rejected')){toast('❌ ขอลาวันนี้ไปแล้ว');return;}
+    const emp=D.getEmps().find(e=>e.name===name);
+    reqs.push({id:Date.now()+'_'+date+'_'+name,name,dept:emp?.mainDept||emp?.dept||'-',sys:S.sys,date,status:'pending',requestAt:new Date().toISOString()});
+    D.saveLeaveReq(reqs);LEAVE.render();LEAVE.updBadge();
+    const emps2=D.getEmps();const ei2=emps2.findIndex(e=>e.name===name);
+    this.openLeave(ei2);
+    const dt=new Date(date);const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
+    toast('✅ ส่งคำขอลาวัน '+ds+' แล้ว');
+  },
+  reqCancelLeave(id,idx){
+    const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(!r)return;
+    r.status='cancel_req';r.cancelReqAt=new Date().toISOString();
+    D.saveLeaveReq(reqs);LEAVE.render();LEAVE.updBadge();
+    this.openLeave(parseInt(idx));toast('✅ ส่งคำขอยกเลิกแล้ว');
+  },
+  cancelLeaveDate(date,name){
+    const reqs=D.getLeaveReq();
+    const idx2=reqs.findIndex(r=>r.name===name&&r.date===date&&r.status==='pending');
+    if(idx2<0)return;reqs.splice(idx2,1);D.saveLeaveReq(reqs);
+    LEAVE.render();LEAVE.updBadge();
+    const emps=D.getEmps();const ei=emps.findIndex(e=>e.name===name);
+    this.openLeave(ei);toast('✅ ยกเลิกคำขอลาแล้ว');
+  },
+  toggleLock(i){
+    const emps=D.getEmps();const shs=[undefined,'morning','afternoon','night'];
+    const cur=shs.indexOf(emps[i].lockShift);const next=shs[(cur+1)%shs.length];
+    if(next)emps[i].lockShift=next;else delete emps[i].lockShift;
+    D.saveEmps(emps);this.render();toast(next?'\ud83d\udd12 Lock '+emps[i].name+' \u2192 '+SHTH[next]:'\ud83d\udd13 \u0e1b\u0e25\u0e14 Lock');
+  }
+};
 
 const PROD={
   render(){
     const master=D.getProductMaster();
+    const el=document.getElementById('prod-list');if(!el)return;
+    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
+    const lf=document.getElementById('prod-filter-line');
     const q=(document.getElementById('prod-search')?.value||'').toLowerCase();
     const filterLine=document.getElementById('prod-filter-line')?.value||'';
-    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
-
-    // อัพเดท line filter dropdown
-    const lf=document.getElementById('prod-filter-line');
-    if(lf&&lf.options.length<=1){
-      depts.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;lf.appendChild(o);});
-    }
-
-    // อัพเดท display mode buttons
-    const mode=D.getDisplayMode();
-    ['mat','name','both'].forEach(m=>{
-      const btn=document.getElementById('dm-'+m);
-      if(btn){
-        btn.style.background=m===mode?'rgba(37,99,235,.2)':'transparent';
-        btn.style.color=m===mode?'var(--blue2)':'var(--text3)';
-        btn.style.borderColor=m===mode?'var(--blue)':'var(--border)';
-      }
-    });
-
-    // จัดกลุ่มตาม Line
+    if(lf){lf.innerHTML='<option value="">ทุก Line</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');}
     const byLine={};
     master.forEach((p,i)=>{
-      const line=p.line||'ไม่ระบุ Line';
+      const line=p.line||'ไม่ระบุ';
       if(filterLine&&line!==filterLine)return;
       if(q&&!p.name.toLowerCase().includes(q)&&!(p.mat||'').toLowerCase().includes(q))return;
       if(!byLine[line])byLine[line]=[];
       byLine[line].push({...p,idx:i});
     });
-
-    const el=document.getElementById('prod-list');if(!el)return;
-    if(!Object.keys(byLine).length){
-      el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">ยังไม่มีข้อมูล กด + เพิ่ม</div>';
-      return;
-    }
-
+    if(!Object.keys(byLine).length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">ยังไม่มีข้อมูล</div>';return;}
     el.innerHTML=Object.entries(byLine).map(([line,prods])=>`
-      <div style="margin-bottom:4px">
-        <!-- Line Header -->
-        <div style="padding:8px 14px;background:var(--navy);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:3">
+      <div>
+        <div style="padding:8px 14px;background:var(--navy);display:flex;align-items:center;justify-content:space-between">
           <div style="font-size:13px;font-weight:900;color:#fff">📋 ${line}</div>
-          <button onclick="PROD.openAdd('${line}')" style="padding:4px 10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่มใน ${line}</button>
+          <button onclick="PROD.openAdd('${line}')" style="padding:4px 10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:7px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่ม</button>
         </div>
-        <!-- Column Headers -->
-        <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;gap:0;padding:6px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
-          <div style="font-size:10px;font-weight:800;color:var(--text3)">Material No.</div>
-          <div style="font-size:10px;font-weight:800;color:var(--text3)">ชื่อ Product</div>
-          <div style="font-size:10px;font-weight:800;color:var(--text3);text-align:center">มล./กล่อง</div>
-          <div style="font-size:10px;font-weight:800;color:var(--text3);text-align:center">คน/กะ</div>
+        <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;padding:5px 14px;background:var(--bg2);border-bottom:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--text3)">Material</div>
+          <div style="font-size:10px;color:var(--text3)">Product</div>
+          <div style="font-size:10px;color:var(--text3);text-align:center">มล.</div>
+          <div style="font-size:10px;color:var(--text3);text-align:center">คน</div>
           <div></div>
         </div>
-        <!-- Products -->
         ${prods.map(p=>`
-          <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;gap:0;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;background:var(--bg)">
+          <div style="display:grid;grid-template-columns:90px 1fr 75px 60px 40px;padding:9px 14px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center">
             <div style="font-size:11px;font-weight:800;color:var(--amber)">${p.mat||'-'}</div>
             <div style="font-size:13px;font-weight:700">${p.name}</div>
-            <div style="text-align:center;font-size:12px;font-weight:700;color:var(--blue2)">${(p.ml||0).toLocaleString()}</div>
-            <div style="text-align:center;font-size:12px;font-weight:700;color:var(--green2)">${p.count||1}</div>
-            <div style="display:flex;gap:3px;justify-content:flex-end">
-              <button onclick="PROD.openEdit(${p.idx})" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text2);font-size:12px">✏️</button>
+            <div style="text-align:center;font-size:12px;color:var(--blue2)">${(p.ml||0).toLocaleString()}</div>
+            <div style="text-align:center;font-size:12px;color:var(--green2)">${p.count||1}</div>
+            <div style="display:flex;gap:3px">
+              <button onclick="PROD.openEdit(${p.idx})" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px">✏️</button>
               <button onclick="PROD.del(${p.idx})" style="width:28px;height:28px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:7px;color:var(--red2);font-size:12px">✕</button>
             </div>
-          </div>
-        `).join('')}
-      </div>
-    `).join('');
+          </div>`).join('')}
+      </div>`).join('');
   },
-
-  setDisplay(mode){
-    D.saveDisplayMode(mode);
-    this.render();PLAN.render();
-    toast('✅ เปลี่ยนเป็น '+(mode==='mat'?'Material No.':mode==='name'?'ชื่อ Product':'ทั้งคู่'));
-  },
-
+  setDisplay(mode){D.saveDisplayMode(mode);this.render();PLAN.render();toast('✅');},
   openAdd(line=''){
     const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
     const mo=document.getElementById('mo-pr');
-    mo.innerHTML=`<div class="md">
-      <div class="md-handle"></div>
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">+ เพิ่ม Product</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
       <div class="md-body">
-        <div class="fg"><label class="fl">Line ผลิต *</label>
-          <select class="fs" id="pm-line">
-            <option value="">-- เลือก Line --</option>
+        <div class="fg"><label class="fl">Line *</label>
+          <select class="fs" id="pm-line"><option value="">-- เลือก --</option>
             ${depts.map(d=>`<option value="${d}" ${d===line?'selected':''}>${d}</option>`).join('')}
           </select>
         </div>
-        <div class="fg"><label class="fl">Material No.</label>
-          <input type="text" class="fi" id="pm-mat" placeholder="MAT-001">
-        </div>
-        <div class="fg"><label class="fl">ชื่อ Product *</label>
-          <input type="text" class="fi" id="pm-name" placeholder="Milo, Ovaltine...">
-        </div>
-        <div class="fg"><label class="fl">มล. ต่อ 1 กล่อง</label>
-          <input type="number" class="fi" id="pm-ml" placeholder="2000" min="0">
-          <div style="font-size:10px;color:var(--text3);margin-top:3px">ถ้า 1 กล่อง = 20 ชิ้น × 100 มล. → ใส่ 2000</div>
-        </div>
-        <div class="fg"><label class="fl">จำนวนคน/กะ *</label>
-          <input type="number" class="fi" id="pm-count" placeholder="3" min="1" max="50" value="1">
-        </div>
+        <div class="fg"><label class="fl">Material No.</label><input type="text" class="fi" id="pm-mat" placeholder="MAT-001"></div>
+        <div class="fg"><label class="fl">ชื่อ *</label><input type="text" class="fi" id="pm-name"></div>
+        <div class="fg"><label class="fl">มล./กล่อง</label><input type="number" class="fi" id="pm-ml" min="0" value="0"></div>
+        <div class="fg"><label class="fl">คน/กะ *</label><input type="number" class="fi" id="pm-count" min="1" value="1"></div>
       </div>
-      <div class="md-foot">
-        <button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button>
-        <button class="btn-confirm" onclick="PROD.save(-1)">เพิ่ม</button>
-      </div>
+      <div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PROD.save(-1)">เพิ่ม</button></div>
     </div>`;
-    mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};
-    openMo('mo-pr');
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};openMo('mo-pr');
   },
-
   openEdit(idx){
     const master=D.getProductMaster();const p=master[idx];if(!p)return;
     const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
     const mo=document.getElementById('mo-pr');
-    mo.innerHTML=`<div class="md">
-      <div class="md-handle"></div>
-      <div class="md-hdr"><div class="md-title">✏️ แก้ไข Product</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div>
+      <div class="md-hdr"><div class="md-title">✏️ แก้ไข</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
       <div class="md-body">
-        <div class="fg"><label class="fl">Line ผลิต *</label>
-          <select class="fs" id="pm-line">
-            ${depts.map(d=>`<option value="${d}" ${d===p.line?'selected':''}>${d}</option>`).join('')}
-          </select>
+        <div class="fg"><label class="fl">Line *</label>
+          <select class="fs" id="pm-line">${depts.map(d=>`<option value="${d}" ${d===p.line?'selected':''}>${d}</option>`).join('')}</select>
         </div>
-        <div class="fg"><label class="fl">Material No.</label>
-          <input type="text" class="fi" id="pm-mat" value="${p.mat||''}">
-        </div>
-        <div class="fg"><label class="fl">ชื่อ Product *</label>
-          <input type="text" class="fi" id="pm-name" value="${p.name}">
-        </div>
-        <div class="fg"><label class="fl">มล. ต่อ 1 กล่อง</label>
-          <input type="number" class="fi" id="pm-ml" value="${p.ml||0}" min="0">
-        </div>
-        <div class="fg"><label class="fl">จำนวนคน/กะ *</label>
-          <input type="number" class="fi" id="pm-count" value="${p.count||1}" min="1" max="50">
-        </div>
+        <div class="fg"><label class="fl">Material</label><input type="text" class="fi" id="pm-mat" value="${p.mat||''}"></div>
+        <div class="fg"><label class="fl">ชื่อ *</label><input type="text" class="fi" id="pm-name" value="${p.name}"></div>
+        <div class="fg"><label class="fl">มล./กล่อง</label><input type="number" class="fi" id="pm-ml" value="${p.ml||0}" min="0"></div>
+        <div class="fg"><label class="fl">คน/กะ</label><input type="number" class="fi" id="pm-count" value="${p.count||1}" min="1"></div>
       </div>
-      <div class="md-foot">
-        <button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button>
-        <button class="btn-confirm" onclick="PROD.save(${idx})">บันทึก</button>
-      </div>
+      <div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-pr')">ยกเลิก</button><button class="btn-confirm" onclick="PROD.save(${idx})">บันทึก</button></div>
     </div>`;
-    mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};
-    openMo('mo-pr');
+    mo.onclick=e=>{if(e.target===mo)closeMo('mo-pr');};openMo('mo-pr');
   },
-
   save(idx){
     const line=document.getElementById('pm-line')?.value;
     const mat=document.getElementById('pm-mat')?.value.trim();
@@ -1888,130 +3670,74 @@ const PROD={
     const ml=parseInt(document.getElementById('pm-ml')?.value)||0;
     const count=parseInt(document.getElementById('pm-count')?.value)||1;
     if(!line){toast('❌ เลือก Line');return;}
-    if(!name){toast('❌ ใส่ชื่อ Product');return;}
+    if(!name){toast('❌ ใส่ชื่อ');return;}
     const master=D.getProductMaster();
     if(idx<0){
-      if(master.find(m=>m.name===name&&m.line===line)){toast('❌ Product นี้มีใน Line นี้แล้ว');return;}
+      if(master.find(m=>m.name===name&&m.line===line)){toast('❌ มีอยู่แล้ว');return;}
       master.push({line,mat,name,ml,count});
-      // sync ไป prods ด้วย
-      const prods=D.getProds(line==='Polo 12A'||line==='Polo 12B'||line==='Comet'||line==='Mach'||line==='Sandwich'||line==='Hoyer'||line==='Extrud 3'||line==='Glacé'||line==='Scooping'?'fill':'proc');
-      if(!prods[line])prods[line]=[];
-      prods[line]=prods[line].map(x=>typeof x==='object'?x:{name:x,count:3});
-      const existProd=prods[line].find(x=>x.name===name);
-      if(existProd)existProd.count=count;
-      else prods[line].push({name,count});
-      D.saveProds(prods, D.getDepts('fill').includes(line)?'fill':'proc');
-    } else {
-      master[idx]={line,mat,name,ml,count};
-    }
-    D.saveProductMaster(master);
-    closeMo('mo-pr');this.render();
-    toast('✅ '+(idx<0?'เพิ่ม':'แก้ไข')+' '+name+' แล้ว');
+      const sys=D.getDepts('fill').includes(line)?'fill':'proc';
+      const prods=D.getProds(sys);if(!prods[line])prods[line]=[];
+      const ep=prods[line].find(x=>(typeof x==='object'?x.name:x)===name);
+      if(ep&&typeof ep==='object')ep.count=count;else prods[line].push({name,count});
+      D.saveProds(prods,sys);
+    } else {master[idx]={line,mat,name,ml,count};}
+    D.saveProductMaster(master);closeMo('mo-pr');this.render();
+    toast('✅ '+(idx<0?'เพิ่ม':'แก้ไข')+' '+name);
   },
-
   del(idx){
-    const master=D.getProductMaster();
-    const p=master[idx];if(!p)return;
-    confirm2('ลบ '+p.name+' จาก '+p.line+'?',()=>{
-      // ลบจาก master
+    const master=D.getProductMaster();const p=master[idx];if(!p)return;
+    confirm2('ลบ '+p.name+'?',()=>{
       master.splice(idx,1);D.saveProductMaster(master);
-      // ลบจาก prods ด้วย
       const sys=D.getDepts('fill').includes(p.line)?'fill':'proc';
       const prods=D.getProds(sys);
-      if(prods[p.line]){
-        prods[p.line]=prods[p.line].filter(x=>(typeof x==='object'?x.name:x)!==p.name);
-        D.saveProds(prods,sys);
-      }
-      this.render();PLAN.render();toast('🗑️ ลบ '+p.name+' แล้ว');
+      if(prods[p.line])prods[p.line]=prods[p.line].filter(x=>(typeof x==='object'?x.name:x)!==p.name);
+      D.saveProds(prods,sys);this.render();PLAN.render();toast('🗑️ ลบแล้ว');
     });
   }
 };
 
 const LHIST={
   render(){
-    // Archive past approved leaves ก่อน
     LEAVE.archivePast();
-    // ประวัติรวมทั้ง Process และ Filling
     const hist=D.getLeaveHist();
     const emps=[...D.getEmps('proc'),...D.getEmps('fill')];
-    const depts=[...new Set([...D.getDepts('proc'),...D.getDepts('fill')])];
     const el=document.getElementById('lh-list');if(!el)return;
-
-    // ดึงปีที่มีข้อมูล
-    const years=[...new Set(hist.map(r=>new Date(r.date).getFullYear()))].sort((a,b)=>b-a);
     const curYr=parseInt(document.getElementById('lh-year')?.value)||new Date().getFullYear();
-
-    // อัพเดท year dropdown
     const yrSel=document.getElementById('lh-year');
-    if(yrSel&&yrSel.options.length===0){
-      const allYears=[...new Set([new Date().getFullYear(),...years])].sort((a,b)=>b-a);
-      yrSel.innerHTML=allYears.map(y=>`<option value="${y}" ${y===curYr?'selected':''}>${y+543}</option>`).join('');
+    if(yrSel){
+      const allYrs=[...new Set([new Date().getFullYear(),...[...new Set(hist.map(r=>new Date(r.date).getFullYear()))]])].sort((a,b)=>b-a);
+      yrSel.innerHTML=allYrs.map(y=>`<option value="${y}" ${y===curYr?'selected':''}>${y+543}</option>`).join('');
     }
-
-    // อัพเดท dept dropdown (reset ทุกครั้ง)
+    const depts=[...new Set([...D.getDepts('proc'),...D.getDepts('fill')])];
     const deptSel=document.getElementById('lh-dept');
-    if(deptSel){
-      deptSel.innerHTML='<option value="">ทุกแผนก</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');
-    }
-
-    // อัพเดท emp dropdown (reset ทุกครั้ง)
+    if(deptSel)deptSel.innerHTML='<option value="">ทุกแผนก</option>'+depts.map(d=>`<option value="${d}">${d}</option>`).join('');
     const empSel=document.getElementById('lh-emp');
-    if(empSel){
-      empSel.innerHTML='<option value="">พนักงานทั้งหมด</option>'+emps.map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
-    }
-
+    if(empSel)empSel.innerHTML='<option value="">ทั้งหมด</option>'+emps.map(e=>`<option value="${e.name}">${e.name}</option>`).join('');
     const selDept=document.getElementById('lh-dept')?.value||'';
     const selEmp=document.getElementById('lh-emp')?.value||'';
-
-    // filter
     let filtered=hist.filter(r=>new Date(r.date).getFullYear()===curYr);
     if(selDept)filtered=filtered.filter(r=>r.dept===selDept);
     if(selEmp)filtered=filtered.filter(r=>r.name===selEmp);
     filtered.sort((a,b)=>b.date.localeCompare(a.date));
-
-    // summary
     const summary=document.getElementById('lh-summary');
     if(summary){
-      const totalDays=filtered.length;
-      const uniqueEmps=new Set(filtered.map(r=>r.name)).size;
-      const avgDays=uniqueEmps>0?(totalDays/uniqueEmps).toFixed(1):0;
-      summary.innerHTML=`
-        <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${totalDays}</div><div style="font-size:10px;color:var(--text2)">วันลารวม</div></div>
-        <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${uniqueEmps}</div><div style="font-size:10px;color:var(--text2)">คนที่ลา</div></div>
-        <div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${avgDays}</div><div style="font-size:10px;color:var(--text2)">เฉลี่ย วัน/คน</div></div>`;
+      const tot=filtered.length;const uniq=new Set(filtered.map(r=>r.name)).size;
+      const avg=uniq>0?(tot/uniq).toFixed(1):0;
+      summary.innerHTML=`<div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${tot}</div><div style="font-size:10px;color:var(--text2)">วันลา</div></div><div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${uniq}</div><div style="font-size:10px;color:var(--text2)">คน</div></div><div style="flex:1;text-align:center"><div style="font-size:20px;font-weight:900">${avg}</div><div style="font-size:10px;color:var(--text2)">เฉลี่ย</div></div>`;
     }
-
-    if(!filtered.length){
-      el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">ไม่มีประวัติการลา</div>';
-      return;
-    }
-
-    // จัดกลุ่มตามพนักงาน
-    const byEmp={};
-    filtered.forEach(r=>{if(!byEmp[r.name])byEmp[r.name]=[];byEmp[r.name].push(r);});
-
+    if(!filtered.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">ไม่มีประวัติ</div>';return;}
+    const byEmp={};filtered.forEach(r=>{if(!byEmp[r.name])byEmp[r.name]=[];byEmp[r.name].push(r);});
     el.innerHTML=Object.entries(byEmp).sort((a,b)=>b[1].length-a[1].length).map(([name,recs])=>{
       const emp=emps.find(e=>e.name===name);
       return`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden">
         <div style="padding:10px 14px;background:var(--bg2);display:flex;align-items:center;gap:10px">
-          <div style="width:34px;height:34px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0;overflow:hidden">
-            ${emp?.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:name.charAt(0)}
-          </div>
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff">${name.charAt(0)}</div>
           <div style="flex:1"><div style="font-size:13px;font-weight:800">${name}</div><div style="font-size:11px;color:var(--text2)">${emp?.mainDept||emp?.dept||'-'}</div></div>
-          <div style="text-align:right">
-            <div style="font-size:18px;font-weight:900;color:var(--amber)">${recs.length}</div>
-            <div style="font-size:10px;color:var(--text3)">วัน</div>
-          </div>
+          <div><div style="font-size:18px;font-weight:900;color:var(--amber)">${recs.length}</div><div style="font-size:10px;color:var(--text3)">วัน</div></div>
         </div>
         <div style="padding:8px 14px;display:flex;flex-wrap:wrap;gap:4px">
-          ${recs.map(r=>{
-            const dt=new Date(r.date);
-            const ds=dt.getDate()+'/'+(dt.getMonth()+1);
-            const dayN=['อา','จ','อ','พ','พฤ','ศ','ส'][dt.getDay()];
-            return`<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(245,158,11,.15);color:var(--amber)">${dayN} ${ds}</span>`;
-          }).join('')}
+          ${recs.map(r=>{const dt=new Date(r.date);return`<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(245,158,11,.15);color:var(--amber)">${['อา','จ','อ','พ','พฤ','ศ','ส'][dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}</span>`;}).join('')}
         </div>
-        <div style="padding:4px 14px 10px;font-size:10px;color:var(--text3)">อนุมัติโดย: ${recs[0]?.approvedBy||'Admin'}</div>
       </div>`;
     }).join('');
   }
@@ -2019,11 +3745,7 @@ const LHIST={
 
 const LEAVE={
   tab:'pending',
-  setTab(t){
-    this.tab=t;
-    ['pending','approved','all'].forEach(x=>document.getElementById('lv-tab-'+x)?.classList.toggle('active',x===t));
-    this.render();
-  },
+  setTab(t){this.tab=t;['pending','approved','all'].forEach(x=>document.getElementById('lv-tab-'+x)?.classList.toggle('active',x===t));this.render();},
   updBadge(){
     const myEmps=new Set(D.getEmps().map(e=>e.name));
     const cnt=D.getLeaveReq().filter(r=>(r.status==='pending'||r.status==='cancel_req')&&myEmps.has(r.name)).length;
@@ -2033,20 +3755,12 @@ const LEAVE={
   render(){
     const el=document.getElementById('leave-list');if(!el)return;
     this.updBadge();
-    // กรองตาม sys ปัจจุบัน
     const empNames=new Set(D.getEmps().map(e=>e.name));
     const all=D.getLeaveReq().filter(r=>empNames.has(r.name));
     const filtered=this.tab==='pending'?all.filter(r=>r.status==='pending'||r.status==='cancel_req')
-      :this.tab==='approved'?all.filter(r=>r.status==='approved')
-      :all;
-    // เรียงตามวันที่
+      :this.tab==='approved'?all.filter(r=>r.status==='approved'):all;
     filtered.sort((a,b)=>a.date.localeCompare(b.date));
-    if(!filtered.length){
-      el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-size:13px">
-        ${this.tab==='pending'?'ไม่มีคำขอรออนุมัติ':this.tab==='approved'?'ยังไม่มีการอนุมัติ':'ยังไม่มีคำขอลา'}
-      </div>`;return;
-    }
-    // จัดกลุ่มตามวันที่
+    if(!filtered.length){el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3)">${this.tab==='pending'?'ไม่มีรออนุมัติ':this.tab==='approved'?'ไม่มี':'ไม่มีคำขอ'}</div>`;return;}
     const byDate={};
     filtered.forEach(r=>{if(!byDate[r.date])byDate[r.date]=[];byDate[r.date].push(r);});
     el.innerHTML=Object.entries(byDate).map(([date,reqs])=>{
@@ -2054,105 +3768,54 @@ const LEAVE={
       return`<div style="margin-bottom:14px">
         <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px;padding:6px 10px;background:var(--bg2);border-radius:8px">${DAYS[d.getDay()===0?5:d.getDay()-1]} ${ds}</div>
         ${reqs.map(r=>{
-          const isPending=r.status==='pending';
-          const isApproved=r.status==='approved';
-          const isRejected=r.status==='rejected';
-          const isCancelReq=r.status==='cancel_req';
-          return`<div style="background:var(--card);border:1px solid ${isPending?'rgba(245,158,11,.4)':isApproved?'rgba(22,163,74,.4)':'rgba(220,38,38,.4)'};border-radius:12px;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
-            <div style="width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">${r.name.charAt(0)}</div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:800">${r.name}</div>
-              <div style="font-size:11px;color:var(--text2);margin-top:2px">${r.dept}</div>
-            </div>
-            <div style="font-size:12px;font-weight:800;padding:4px 10px;border-radius:8px;
-              background:${isPending?'rgba(245,158,11,.15)':isApproved?'rgba(22,163,74,.15)':isRejected?'rgba(220,38,38,.15)':'rgba(220,38,38,.1)'};
-              color:${isPending?'var(--amber)':isApproved?'var(--green2)':isRejected?'var(--red2)':'var(--red2)'}">
-              ${isPending?'🟡 รออนุมัติ':isApproved?'✅ อนุมัติ':isRejected?'❌ ปฏิเสธ':'🔴 ขอยกเลิก'}
+          const isPending=r.status==='pending';const isApproved=r.status==='approved';
+          const isRejected=r.status==='rejected';const isCancelReq=r.status==='cancel_req';
+          const col=isPending?'var(--amber)':isApproved?'var(--green)':isCancelReq?'var(--red2)':'var(--border)';
+          return`<div style="background:var(--card);border:1px solid ${col};border-radius:12px;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;flex-shrink:0">${r.name.charAt(0)}</div>
+            <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800">${r.name}</div><div style="font-size:11px;color:var(--text2)">${r.dept}</div></div>
+            <div style="font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px;
+              background:${isPending?'rgba(245,158,11,.15)':isApproved?'rgba(22,163,74,.15)':'rgba(220,38,38,.1)'};
+              color:${isPending?'var(--amber)':isApproved?'var(--green2)':'var(--red2)'}">
+              ${isPending?'🟡 รอ':isApproved?'✅ อนุมัติ':isCancelReq?'🔴 ขอยกเลิก':'❌'}
             </div>
             ${S.user?.isAdmin&&isPending?`
-              <button onclick="LEAVE.approve('${r.id}')" style="padding:6px 10px;background:rgba(22,163,74,.2);border:1px solid var(--green);border-radius:8px;color:var(--green2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ อนุมัติ</button>
-              <button onclick="LEAVE.reject('${r.id}')" style="padding:6px 10px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:8px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">❌ ปฏิเสธ</button>
-            `:''}
-            ${S.user?.isAdmin&&r.status==='cancel_req'?`
-              <button onclick="LEAVE.confirmCancel('${r.id}')" style="padding:6px 10px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:8px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ ยืนยันยกเลิก</button>
-            `:''}
-            ${S.user?.isAdmin&&!isPending?`
-              <button onclick="LEAVE.del('${r.id}')" style="width:28px;height:28px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:12px">✕</button>
-            `:''}
+              <button onclick="LEAVE.approve('${r.id}')" style="padding:5px 8px;background:rgba(22,163,74,.2);border:1px solid var(--green);border-radius:7px;color:var(--green2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅</button>
+              <button onclick="LEAVE.reject('${r.id}')" style="padding:5px 8px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:7px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">❌</button>`:''}
+            ${S.user?.isAdmin&&isCancelReq?`
+              <button onclick="LEAVE.confirmCancel('${r.id}')" style="padding:5px 8px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:7px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ ยกเลิก</button>`:''}
+            ${S.user?.isAdmin&&(isApproved||isRejected)?`
+              <button onclick="LEAVE.del('${r.id}')" style="width:26px;height:26px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:11px">✕</button>`:''}
           </div>`;
         }).join('')}
       </div>`;
     }).join('');
   },
-  approve(id){
-    const reqs=D.getLeaveReq();
-    const r=reqs.find(x=>x.id===id);if(!r)return;
-    r.status='approved';r.approvedAt=new Date().toISOString();r.approvedBy=S.user?.name||'Admin';
-    D.saveLeaveReq(reqs);
-    // ถ้าวันลาผ่านไปแล้วให้ย้ายไปประวัติทันที
-    LEAVE.archivePast();
-    this.render();
-    toast('✅ อนุมัติการลาของ '+r.name+' แล้ว');
-  },
-  confirmCancel(id){
-    const reqs=D.getLeaveReq();
-    const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;
-    const r=reqs[idx];
-    reqs.splice(idx,1);
-    D.saveLeaveReq(reqs);
-    this.render();
-    // โหลดพนักงานใหม่อัตโนมัติ
-    const dt=new Date(r.date);
-    const ds=dt.getDate()+'/'+(dt.getMonth()+1)+'/'+(dt.getFullYear()+543);
-    toast('✅ ยกเลิกการลาของ '+r.name+' วัน '+ds+' แล้ว — กำลังโหลดตารางใหม่...');
-    setTimeout(()=>{ PLAN.autoLoad(); }, 800);
-  },
-  reject(id){
-    const reqs=D.getLeaveReq();
-    const r=reqs.find(x=>x.id===id);if(!r)return;
-    r.status='rejected';D.saveLeaveReq(reqs);this.render();
-    toast('❌ ปฏิเสธการลาของ '+r.name);
-  },
+  approve(id){const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(!r)return;r.status='approved';r.approvedAt=new Date().toISOString();r.approvedBy=S.user?.name||'Admin';D.saveLeaveReq(reqs);LEAVE.archivePast();this.render();toast('✅ อนุมัติ '+r.name);},
+  reject(id){const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(!r)return;r.status='rejected';D.saveLeaveReq(reqs);this.render();toast('❌ ปฏิเสธ');},
+  confirmCancel(id){const reqs=D.getLeaveReq();const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;const r=reqs[idx];reqs.splice(idx,1);D.saveLeaveReq(reqs);this.render();toast('✅ ยกเลิก '+r.name);setTimeout(()=>{PLAN.autoLoad();},800);},
+  del(id){const reqs=D.getLeaveReq();const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;reqs.splice(idx,1);D.saveLeaveReq(reqs);this.render();toast('🗑️ ลบแล้ว');},
   archivePast(){
     const today=new Date();today.setHours(0,0,0,0);
-    const reqs=D.getLeaveReq();
-    const hist=D.getLeaveHist();
-    const remaining=[];
-    reqs.forEach(r=>{
-      const d=new Date(r.date);
-      if(r.status==='approved'&&d<today){
-        // ย้ายไปประวัติ
-        hist.push({...r,archivedAt:new Date().toISOString()});
-      } else {
-        remaining.push(r);
-      }
-    });
-    if(hist.length>D.getLeaveHist().length){
-      D.saveLeaveHist(hist);
-      D.saveLeaveReq(remaining);
-    }
-  },
-  del(id){
-    const reqs=D.getLeaveReq();
-    const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;
-    reqs.splice(idx,1);D.saveLeaveReq(reqs);this.render();
-    toast('🗑️ ลบแล้ว');
+    const reqs=D.getLeaveReq();const hist=D.getLeaveHist();const remaining=[];
+    reqs.forEach(r=>{const d=new Date(r.date);if(r.status==='approved'&&d<today)hist.push({...r,archivedAt:new Date().toISOString()});else remaining.push(r);});
+    if(hist.length>D.getLeaveHist().length){D.saveLeaveHist(hist);D.saveLeaveReq(remaining);}
   }
 };
 
 const TEAM={
   getConfig(){return LS.get('team_cfg',{rotateSW:2,startWk:1});},
   saveConfig(cfg){LS.set('team_cfg',cfg);FB.set('team_cfg',cfg);},
-  saveRotate(v){const cfg=this.getConfig();cfg.rotateSW=parseInt(v)||2;cfg.startWk=wNum(S.wkStart);this.saveConfig(cfg);this.render();toast('✅ หมุนทุก '+v+' สัปดาห์');},
+  saveRotate(v){const cfg=this.getConfig();cfg.rotateSW=parseInt(v)||2;cfg.startWk=wNum(S.wkStart);this.saveConfig(cfg);this.render();toast('\u2705 \u0e2b\u0e21\u0e38\u0e19\u0e17\u0e38\u0e01 '+v+' \u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c');},
 
   getCurShifts(){
     const cfg=this.getConfig();
     const wn=wNum(S.wkStart);
     const rot=Math.floor((wn-(cfg.startWk||1))/(cfg.rotateSW||2));
     return{
-      A:['ดึก','บ่าย','เช้า'][rot%3],
-      B:['บ่าย','เช้า','ดึก'][rot%3],
-      C:['เช้า','ดึก','บ่าย'][rot%3],
+      A:['\u0e14\u0e36\u0e01','\u0e1a\u0e48\u0e32\u0e22','\u0e40\u0e0a\u0e49\u0e32'][rot%3],
+      B:['\u0e1a\u0e48\u0e32\u0e22','\u0e40\u0e0a\u0e49\u0e32','\u0e14\u0e36\u0e01'][rot%3],
+      C:['\u0e40\u0e0a\u0e49\u0e32','\u0e14\u0e36\u0e01','\u0e1a\u0e48\u0e32\u0e22'][rot%3],
     };
   },
 
@@ -2166,50 +3829,50 @@ const TEAM={
     if(ri)ri.value=cfg.rotateSW||2;
     // update label
     const lbl=document.getElementById('team-cur-label');
-    if(lbl)lbl.textContent=`สัปดาห์นี้: A=${shifts.A} B=${shifts.B} C=${shifts.C}`;
+    if(lbl)lbl.textContent=`\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e19\u0e35\u0e49: A=${shifts.A} B=${shifts.B} C=${shifts.C}`;
 
     const teams={A:[],B:[],C:[],none:[]};
     emps.forEach(e=>{if(e.team&&teams[e.team])teams[e.team].push(e);else teams.none.push(e);});
 
-    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
+    const shMap={'\u0e40\u0e0a\u0e49\u0e32':'morning','\u0e1a\u0e48\u0e32\u0e22':'afternoon','\u0e14\u0e36\u0e01':'night'};
     const colors={A:'var(--blue)',B:'var(--teal)',C:'var(--purple)'};
 
     el.innerHTML=['A','B','C'].map(t=>`
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden">
         <div style="background:${colors[t]};padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
-          <div style="font-size:14px;font-weight:900;color:#fff">ทีม ${t} — ${teams[t].length} คน</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700">กะนี้: ${shifts[t]}</div>
+          <div style="font-size:14px;font-weight:900;color:#fff">\u0e17\u0e35\u0e21 ${t} \u2014 ${teams[t].length} \u0e04\u0e19</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700">\u0e01\u0e30\u0e19\u0e35\u0e49: ${shifts[t]}</div>
         </div>
         <div style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px">
           ${teams[t].length?teams[t].map(e=>`
             <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700">
               ${e.name}<span style="font-size:10px;color:var(--text3);margin-left:4px">${e.mainDept||''}</span>
-            </div>`).join(''):'<div style="font-size:11px;color:var(--text3)">ยังไม่มีสมาชิก</div>'}
+            </div>`).join(''):'<div style="font-size:11px;color:var(--text3)">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e2a\u0e21\u0e32\u0e0a\u0e34\u0e01</div>'}
         </div>
         <div style="padding:0 14px 12px">
           <button onclick="TEAM.loadTeam('${t}')" style="width:100%;padding:8px;background:rgba(255,255,255,.08);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">
-            → โหลดทีม ${t} เข้ากะ${shifts[t]}
+            \u2192 \u0e42\u0e2b\u0e25\u0e14\u0e17\u0e35\u0e21 ${t} \u0e40\u0e02\u0e49\u0e32\u0e01\u0e30${shifts[t]}
           </button>
         </div>
       </div>`).join('')+
       (teams.none.length?`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-        <div style="font-size:12px;font-weight:800;color:var(--text3);margin-bottom:8px">ยังไม่ได้กำหนดทีม (${teams.none.length} คน)</div>
+        <div style="font-size:12px;font-weight:800;color:var(--text3);margin-bottom:8px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e01\u0e33\u0e2b\u0e19\u0e14\u0e17\u0e35\u0e21 (${teams.none.length} \u0e04\u0e19)</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px">${teams.none.map(e=>`<span style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px">${e.name}</span>`).join('')}</div>
       </div>`:'');
   },
 
   loadTeam(teamName){
-    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
     const emps=D.getEmps();
     const shifts=this.getCurShifts();
-    const shMap={'เช้า':'morning','บ่าย':'afternoon','ดึก':'night'};
+    const shMap={'\u0e40\u0e0a\u0e49\u0e32':'morning','\u0e1a\u0e48\u0e32\u0e22':'afternoon','\u0e14\u0e36\u0e01':'night'};
     const sh=shMap[shifts[teamName]];
     const members=emps.filter(e=>e.team===teamName);
-    if(!members.length){toast('❌ ทีม '+teamName+' ไม่มีสมาชิก');return;}
+    if(!members.length){toast('\u274c \u0e17\u0e35\u0e21 '+teamName+' \u0e44\u0e21\u0e48\u0e21\u0e35\u0e2a\u0e21\u0e32\u0e0a\u0e34\u0e01');return;}
     const wk=wKey(S.wkStart);const allSched=D.getSched();
     if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
     const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
-    // กระจายสมาชิกตามแผนกหลัก
+    // \u0e01\u0e23\u0e30\u0e08\u0e32\u0e22\u0e2a\u0e21\u0e32\u0e0a\u0e34\u0e01\u0e15\u0e32\u0e21\u0e41\u0e1c\u0e19\u0e01\u0e2b\u0e25\u0e31\u0e01
     members.forEach(emp=>{
       const dept=emp.mainDept||emp.dept;
       if(!dept||!depts.includes(dept))return;
@@ -2223,38 +3886,24 @@ const TEAM={
       }
     });
     allSched[wk]=sched;D.saveSched(allSched);
-    SCHED.render();toast('✅ โหลดทีม '+teamName+' เข้ากะ'+shifts[teamName]+' แล้ว');
+    SCHED.render();toast('\u2705 \u0e42\u0e2b\u0e25\u0e14\u0e17\u0e35\u0e21 '+teamName+' \u0e40\u0e02\u0e49\u0e32\u0e01\u0e30'+shifts[teamName]+' \u0e41\u0e25\u0e49\u0e27');
     APP.goPage('pg-sched');
   },
 
   autoLoadAll(){
-    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
+    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
     ['A','B','C'].forEach(t=>this.loadTeam(t));
-    toast('✅ โหลดทุกทีมแล้ว');
+    toast('\u2705 \u0e42\u0e2b\u0e25\u0e14\u0e17\u0e38\u0e01\u0e17\u0e35\u0e21\u0e41\u0e25\u0e49\u0e27');
   }
 };
 
-// เช็ค session ทุก 1 นาที แสดงเตือนเมื่อเหลือ 5 นาที
-setInterval(()=>{
-  if(!S.user) return;
-  const remaining = SESSION_TIMEOUT - (Date.now() - _lastActivity);
-  if(remaining < 5*60*1000 && remaining > 0) {
-    const mins = Math.ceil(remaining/60000);
-    toast('⏰ จะ Logout อัตโนมัติใน '+mins+' นาที กรุณาบันทึกงาน');
-  }
-}, 60000);
-
 document.addEventListener('DOMContentLoaded',()=>{
-  initFB();
-  ['proc','fill'].forEach(sys=>{
-    FB.on(sys+'/depts',v=>{if(v&&v.length)LS.set('depts_'+sys,v);});
-    FB.on(sys+'/emps',v=>{if(v&&v.length)LS.set('emps_'+sys,v);});
-    FB.on(sys+'/target',v=>{if(v!=null)LS.set('target_'+sys,v);});
-    FB.on(sys+'/products',v=>{if(v)LS.set('prods_'+sys,v);});
-  });
-  FB.on('config/admin_pin',v=>{if(v)LS.set('admin_pin',v);});
-  FB.on('config/max_ot',v=>{if(v)LS.set('max_ot',v);});
-  FB.on('config/ot_reasons',v=>{if(v&&v.length)LS.set('ot_reasons',v);});
-  document.getElementById('lp').addEventListener('keydown',e=>{if(e.key==='Enter')AUTH.submit();});
+  if(!fbDb){setTimeout(()=>{APP.init();},500);return;}
+  APP.init();
+  LEAVE.updBadge();
+  LEAVE.archivePast();
+  resetSessionTimer();
 });
-</script></body></html>
+
+</script>
+</body></html>
