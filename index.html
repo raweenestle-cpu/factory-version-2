@@ -1576,7 +1576,57 @@ const PLAN={
 };
 
 const SET={
-chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
+  render(){
+    const el=document.getElementById('sl');if(!el)return;
+    const depts=D.getDepts();const tgt=D.getTarget();
+    const maxOT=D.getMaxOT();const reasons=D.getReasons();
+    const isFill=S.sys==='fill';
+    el.innerHTML=`<div style="padding:14px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:10px">⚡ OT Settings</div>
+        <div class="fg"><label class="fl">OT Target (%)</label>
+          <input type="number" class="fi" value="${tgt}" min="0" max="50"
+            onchange="D.saveTarget(parseInt(this.value)||15);toast('✅')"></div>
+        <div class="fg"><label class="fl">OT สูงสุด/คน (ครั้ง/สัปดาห์)</label>
+          <input type="number" class="fi" value="${maxOT}" min="1" max="7"
+            onchange="D.saveMaxOT(parseInt(this.value)||3);toast('✅')"></div>
+        <div class="fg"><label class="fl">เหตุผล OT (ใส่ทีละบรรทัด)</label>
+          <textarea class="fi" id="st-rsn" rows="4" style="resize:vertical">${reasons.join('\n')}</textarea>
+          <button onclick="SET.saveReasons()" style="margin-top:6px;width:100%;padding:8px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif">💾 บันทึกเหตุผล</button>
+        </div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:10px">🔐 Admin PIN</div>
+        <div class="fg"><label class="fl">PIN ใหม่ (6 หลัก)</label>
+          <input type="password" class="fi" id="nap" maxlength="6" inputmode="numeric"
+            style="letter-spacing:4px;text-align:center" placeholder="ใส่ PIN ใหม่"></div>
+        <button onclick="SET.chgPin()" style="width:100%;padding:8px;background:var(--amber);border:none;border-radius:8px;color:#000;font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">🔑 เปลี่ยน PIN</button>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:10px">🏭 แผนก ${isFill?'Filling':'Process'}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          ${depts.filter(d=>d!==AL).map((d,i)=>`<div style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:4px 8px">
+            <span style="font-size:12px">${d}</span>
+            <button onclick="SET.delMat(${i})" style="background:none;border:none;color:var(--red2);font-size:14px;cursor:pointer;padding:0 2px">✕</button>
+          </div>`).join('')}
+        </div>
+        <div style="display:flex;gap:6px">
+          <input type="text" class="fi" id="new-mat-name" placeholder="ชื่อแผนกใหม่" style="flex:1">
+          <button onclick="SET.addMat()" style="padding:8px 12px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่ม</button>
+        </div>
+        <button onclick="SET.resetDepts()" style="margin-top:8px;width:100%;padding:7px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:8px;color:var(--red2);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">🔄 รีเซ็ตแผนก</button>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:800;margin-bottom:10px">🗑️ จัดการข้อมูล</div>
+        <button onclick="SET.clearSched()" style="width:100%;padding:9px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:8px;color:var(--red2);font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">🗑️ ล้างตารางกะทั้งหมด</button>
+      </div>
+    </div>`;
+  },
+  saveReasons(){
+    const arr=(document.getElementById('st-rsn')?.value||'').split('\n').map(x=>x.trim()).filter(Boolean);
+    D.saveReasons(arr);toast('✅ บันทึกเหตุผล OT แล้ว');
+  },
+  chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
