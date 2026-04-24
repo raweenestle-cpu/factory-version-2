@@ -1431,6 +1431,24 @@ const PLAN={
       console.error('loadFromFilling error:',e);
     }
   },
+  renderMixSummary(){
+    if(!this._dayData)return;
+    const ms=document.getElementById('mixing-summary');
+    if(ms)ms.style.display='block';
+    const body=document.getElementById('mix-sum-body');
+    if(!body)return;
+    const cfg=D.getMixingCfg();
+    body.innerHTML=this._dayData.map(d=>{
+      if(d.units===0)return`<div style="padding:4px 0;font-size:11px;color:var(--text3)">วัน${['จ','อ','พ','พฤ','ศ','ส'][d.di]}: ไม่ต้องผลิต</div>`;
+      return`<div style="padding:4px 0;font-size:11px;display:flex;gap:8px">
+        <span style="color:var(--text2);min-width:20px">วัน${['จ','อ','พ','พฤ','ศ','ส'][d.di]}:</span>
+        <span style="color:var(--amber);font-weight:700">${d.units===2?'2 ชุด':'1 ชุด'}</span>
+        <span style="color:var(--blue2)">${d.hoursNeeded} ชม.</span>
+        <span style="color:var(--green2)">${d.totalP} คน</span>
+        <span style="color:var(--text3)">(ต้องการ ${(d.demandLiter||0).toLocaleString()} ล.)</span>
+      </div>`;
+    }).join('');
+  },
   toggleMixSummary(){
     const body=document.getElementById('mix-sum-body');
     const arrow=document.getElementById('mix-sum-arrow');
@@ -1439,7 +1457,7 @@ const PLAN={
     if(hidden){body.style.display='block';if(arrow)arrow.textContent='▲';}
     else{body.style.display='none';if(arrow)arrow.textContent='▼';}
   },
-  updateMixingSummary(){if(S.sys==='proc')this.loadFromFilling();},
+  updateMixingSummary(){if(S.sys==='proc'&&this._dayData)this.renderMixSummary();},
   save(){D.savePlan(this.plan);FB.set(S.sys+'/plan',this.plan);markSaved();toast('✅ บันทึกแผนการผลิต');},
   clearPlan(){
     confirm2('ล้างแผนการผลิต?\n(ล้าง Product, Volume ทุก Line\nตารางกะไม่ถูกแตะ)',()=>{
