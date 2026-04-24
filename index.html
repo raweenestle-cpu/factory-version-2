@@ -3655,7 +3655,10 @@ const PROD={
   render(){
     const master=D.getProductMaster();
     const el=document.getElementById('prod-list');if(!el)return;
-    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
+    // ดึง depts — fallback เป็น default ถ้า localStorage ว่าง
+    const fillDepts=D.getDepts('fill').length?D.getDepts('fill'):[...FDEPT];
+    const procDepts=D.getDepts('proc').length?D.getDepts('proc'):[...PDEPT];
+    const depts=[...new Set([...fillDepts,...procDepts])].filter(d=>d!=='AL');
     const lf=document.getElementById('prod-filter-line');
     const q=(document.getElementById('prod-search')?.value||'').toLowerCase();
     const filterLine=document.getElementById('prod-filter-line')?.value||'';
@@ -3697,7 +3700,9 @@ const PROD={
   },
   setDisplay(mode){D.saveDisplayMode(mode);this.render();PLAN.render();toast('✅');},
   openAdd(line=''){
-    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
+    const fillD=D.getDepts('fill').length?D.getDepts('fill'):[...FDEPT];
+    const procD=D.getDepts('proc').length?D.getDepts('proc'):[...PDEPT];
+    const depts=[...new Set([...fillD,...procD])].filter(d=>d!=='AL');
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">+ เพิ่ม Product</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
@@ -3718,7 +3723,9 @@ const PROD={
   },
   openEdit(idx){
     const master=D.getProductMaster();const p=master[idx];if(!p)return;
-    const depts=[...new Set([...D.getDepts('fill'),...D.getDepts('proc')])].filter(d=>d!=='AL');
+    const fillD=D.getDepts('fill').length?D.getDepts('fill'):[...FDEPT];
+    const procD=D.getDepts('proc').length?D.getDepts('proc'):[...PDEPT];
+    const depts=[...new Set([...fillD,...procD])].filter(d=>d!=='AL');
     const mo=document.getElementById('mo-pr');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
       <div class="md-hdr"><div class="md-title">✏️ แก้ไข</div><button class="md-close" onclick="closeMo('mo-pr')">✕</button></div>
