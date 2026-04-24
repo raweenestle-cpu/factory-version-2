@@ -3671,8 +3671,11 @@ const PROD={
       if(!byLine[line])byLine[line]=[];
       byLine[line].push({...p,idx:i});
     });
-    if(!Object.keys(byLine).length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--text3)">ยังไม่มีข้อมูล</div>';return;}
-    el.innerHTML=Object.entries(byLine).map(([line,prods])=>`
+    // แสดงทุก LINE เสมอ แม้ไม่มี product
+    const allLines=[...new Set([...depts])];
+    allLines.forEach(line=>{if(!byLine[line])byLine[line]=[];});
+    const displayLines=filterLine?{[filterLine]:byLine[filterLine]||[]}:Object.fromEntries(allLines.map(l=>[l,byLine[l]||[]]));
+    el.innerHTML=Object.entries(displayLines).map(([line,prods])=>`
       <div>
         <div style="padding:8px 14px;background:var(--navy);display:flex;align-items:center;justify-content:space-between">
           <div style="font-size:13px;font-weight:900;color:#fff">📋 ${line}</div>
