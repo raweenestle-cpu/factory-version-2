@@ -1459,9 +1459,9 @@ const PLAN={
   autoLoad(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
     const emps=D.getEmps();if(!emps.length){alert2('ยังไม่มีพนักงาน','❌');return;}
-    // Process — โหลดจาก Filling ก่อน
+    // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
-      if(!this._dayData)this.loadFromFilling();
+      if(!this._dayData){toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
       if(this._dayData){
         const wk2=wKey(S.wkStart);const allSched2=D.getSched();
         if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
@@ -1492,7 +1492,7 @@ const PLAN={
               });
             });
             const got=procDepts.reduce((a,dept)=>(sched2[dept]?.[d.di]?.[sh]||[]).length+a,0);
-            if(got<needPpl)short2.push(dept+' '+DAYS[d.di]+' '+SHTH[sh]+': ขาด '+(needPpl-got)+' คน');
+            if(got<needPpl)short2.push('Process '+DAYS[d.di]+' '+SHTH[sh]+': ขาด '+(needPpl-got)+' คน');
           });
         });
         allSched2[wk2]=sched2;D.saveSched(allSched2);
