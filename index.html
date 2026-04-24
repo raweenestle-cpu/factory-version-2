@@ -1476,6 +1476,9 @@ const PLAN={
     const leaveData=D.getLeave();
     const short=[];const used=new Set();const usedByDayShift={};
     const AL2=AL;
+    // ตรวจว่ามีพนักงานที่กำหนด team แล้วไหม
+    const hasTeam=emps.some(e=>e.team);
+    if(!hasTeam){alert2('⚠️ ยังไม่ได้กำหนดทีมให้พนักงาน\n\nกรุณาไปที่หน้า 🔄 ทีม แล้วกำหนดทีม A/B/C ให้พนักงานก่อนครับ','❌');return;}
     function checkRest2(name,di,sh,sc){
       if(sh==='morning'){
         const prev=di>0?sc:null;
