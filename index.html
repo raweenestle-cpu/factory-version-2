@@ -1287,7 +1287,7 @@ const PLAN={
       const volInput=isFill?`<input type="number" min="0" value="${curVol}" placeholder="กล่อง/วัน"
         oninput="PLAN.setVol('${dept}',${di},this.value)"
         style="width:100%;padding:3px 6px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:5px;color:var(--amber);font-size:11px;font-weight:700;text-align:center;font-family:'Sarabun',sans-serif;margin-bottom:4px">`:'' ;
-      return `<td><div>${volInput}${items.map((item,ii)=>`<div class="pp"><div class="pp-name">${getProdLabel(item.product)}</div><button class="pp-del" onclick="PLAN.delProd('${dept}',${di},${ii})">✕</button></div>`).join('')}<button class="pa-btn" onclick="PLAN.addProd('${dept}',${di})">+ เพิ่ม Product</button></div></td>`;
+      return `<td><div>${volInput}${items.map((item,ii)=>`<div class="pp"><div class="pp-name">${getProdLabel(typeof item==='object'?item.product:item)}</div><button class="pp-del" onclick="PLAN.delProd('${dept}',${di},${ii})">✕</button></div>`).join('')}<button class="pa-btn" onclick="PLAN.addProd('${dept}',${di})">+ เพิ่ม Product</button></div></td>`;
     }).join('')}</tr>`).join('');
   },
   setVol(dept,di,v){
