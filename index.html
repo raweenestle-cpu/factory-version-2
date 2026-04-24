@@ -470,8 +470,8 @@ const PROD={
   render(){
     const el=document.getElementById('prod-list');if(!el)return;
     const master=D.getProductMaster();
-    // ดึง LINE จาก default เหมือน Settings
-    // D.getDepts มี default FDEPT/PDEPT อยู่แล้ว ใช้ตรงๆ ได้เลย
+    // ดึง LINE จาก Firebase ผ่าน D.getDepts (sync มาแล้วใน localStorage)
+    // D.getDepts มี hardcode default ถ้า localStorage ว่าง
     const fillDepts=D.getDepts('fill').filter(d=>d!=='AL');
     const procDepts=D.getDepts('proc').filter(d=>d!=='AL');
     const allLines=[...new Set([...fillDepts,...procDepts])];
@@ -1679,7 +1679,7 @@ function alert2(msg,ic='ℹ️'){
 
 const D={
   getDepts(sys=S.sys){return LS.get('depts_'+sys,sys==='proc'?[...PDEPT]:[...FDEPT]);},
-  saveDepts(d,sys=S.sys){LS.set('depts_'+sys,d);FB.set(sys+'/depts',d);},
+  saveDepts(d,sys=S.sys){LS.set('depts_'+sys,d);FB.set(sys+'/depts',d);if(typeof PROD!=='undefined')PROD.render();PLAN.render();SCHED.render();},
   getEmps(sys=S.sys){return LS.get('emps_'+sys,[]);},
   saveEmps(e,sys=S.sys){LS.set('emps_'+sys,e);FB.set(sys+'/emps',e);},
   getTarget(sys=S.sys){return LS.get('target_'+sys,15);},
@@ -1824,7 +1824,7 @@ const APP={
       // emps
       FB.on(sys+'/emps',v=>{if(v)LS.set('emps_'+sys,v);EMP.render();});
       // depts
-      FB.on(sys+'/depts',v=>{if(v)LS.set('depts_'+sys,v);SCHED.render();PLAN.render();});
+      FB.on(sys+'/depts',v=>{if(v)LS.set('depts_'+sys,v);SCHED.render();PLAN.render();if(typeof PROD!=='undefined')PROD.render();});
       // target
       FB.on(sys+'/target',v=>{if(v!==null)LS.set('target_'+sys,v);});
       // products
