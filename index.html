@@ -475,6 +475,7 @@ const PROD={
     const fillDepts=D.getDepts('fill').filter(d=>d!=='AL');
     const procDepts=D.getDepts('proc').filter(d=>d!=='AL');
     const allLines=[...new Set([...fillDepts,...procDepts])];
+    alert('fill:'+fillDepts.length+' proc:'+procDepts.length+' all:'+allLines.length+' sys:'+S.sys);
     console.log('PROD.render fillDepts:',fillDepts,'procDepts:',procDepts,'allLines:',allLines);
     // filter
     const q=(document.getElementById('prod-search')?.value||'').toLowerCase();
