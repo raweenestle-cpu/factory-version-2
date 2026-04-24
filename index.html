@@ -1330,98 +1330,93 @@ const PLAN={
     D.savePlan(this.plan);closeMo('mo-pr');this.render();toast('✅ เพิ่ม '+prod);
   },
   loadFromFilling(){
-    // ดึงแผนผลิตจาก Filling มาแสดงใน Process
-    const fillPlan=D.getPlan('fill');
-    const fillVol=D.getVolume();
     const cfg=D.getMixingCfg();
     const summary=document.getElementById('mixing-summary');
     if(!summary)return;
     summary.style.display='block';
-    // คำนวณแต่ละวัน
-    const rawDayData=Array.from({length:6},(_,di)=>{
-      // รวม volume โดยคำนวณจากกล่อง × มล./กล่อง
+    summary.innerHTML='<div style="padding:10px;color:#aaa;font-size:11px">⏳ กำลังโหลดแผน Filling จาก Firebase...</div>';
+    // โหลดจาก Firebase โดยตรงเสมอ
+    Promise.all([FB.get('fill/plan'),FB.get('fill/volume')]).then(([fp,fv])=>{
+      if(fp)LS.set('plan_fill',fp);
+      if(fv)LS.set('fill_volume',fv);
+      const fillPlan=fp||{};
+      const fillVol=fv||{};
       const master=D.getProductMaster();
-      let totalMl=0;
-      const fillDepts2=D.getDepts('fill');
-      fillDepts2.forEach(dept=>{
-        const items=(fillPlan[dept]||{})[di]||[];
-        const boxes=parseInt((fillVol[dept]||{})[di])||0;
-        if(!boxes||!items.length)return;
-        // หา ml/กล่อง จาก Product แรกของ Line นั้น
-        const prodName=typeof items[0]==='object'?items[0].product:items[0];
-        const pm=master.find(m=>m.name===prodName);
-        const mlPerBox=pm?.ml||0;
-        totalMl+=boxes*mlPerBox;
-      });
-      const totalVol=Math.round(totalMl/1000); // แปลงเป็นลิตร
-      // เช็ค Oreo เฉพาะ Extrud 3 และ Glacé เท่านั้น
-      const oreoLines=['Extrud 3','Glacé'];
-      const hasOreo=oreoLines.some(dept=>{
-        const items=(fillPlan[dept]||{})[di]||[];
-        return items.some(it=>{
-          const name=typeof it==='object'?it.product:it;
-          return name&&name.toLowerCase().includes('oreo');
+      const fillDepts=D.getDepts('fill');
+      // คำนวณลิตรต่อวัน
+      const rawDayData=Array.from({length:6},(_,di)=>{
+        let totalMl=0;
+        fillDepts.forEach(dept=>{
+          const items=(fillPlan[dept]||{})[di]||[];
+          const boxes=parseInt((fillVol[dept]||{})[di])||0;
+          if(!boxes||!items.length)return;
+          const prodName=typeof items[0]==='object'?items[0].product:items[0];
+          const pm=master.find(m=>m.name===prodName&&m.line===dept)||master.find(m=>m.name===prodName);
+          const mlPerBox=pm?.ml||0;
+          totalMl+=boxes*mlPerBox;
         });
+        const totalLiter=Math.round(totalMl/1000);
+        // เช็ค Oreo เฉพาะ Extrud 3 และ Glacé
+        const oreoLines=['Extrud 3','Glacé'];
+        const hasOreo=oreoLines.some(dept=>{
+          const items=(fillPlan[dept]||{})[di]||[];
+          return items.some(it=>{
+            const name=typeof it==='object'?it.product:it;
+            return name&&name.toLowerCase().includes('oreo');
+          });
+        });
+        return{di,totalLiter,hasOreo};
       });
-      // คำนวณ Mixing
-      const need2=(totalVol>cfg.threshold)||hasOreo;
-      const mixingPpl=need2?cfg.mix2:cfg.mix1;
-      const oreoPpl=hasOreo?1:0;
-      const totalPpl=mixingPpl+oreoPpl;
-      const totalLiter=totalVol; // totalVol คือลิตรแล้ว (คำนวณจาก ml/1000)
-      return{di,totalLiter,hasOreo};
+      // คำนวณ Mixing Plan
+      const mixPlan=calcMixingPlan(rawDayData);
+      this._dayData=mixPlan;
+      // แสดง summary
+      let stock=parseFloat(LS.get('mix_stock',0)||0);
+      summary.innerHTML=`
+        <div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px">📊 สรุปแผน Process จาก Filling</div>
+        <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:10px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;font-weight:800;color:var(--blue2)">🪣 Stock ตั้งต้น</span>
+          <input type="number" min="0" value="${LS.get('mix_stock',0)}"
+            onchange="LS.set('mix_stock',parseFloat(this.value)||0);PLAN.loadFromFilling()"
+            style="width:80px;padding:5px 8px;background:var(--bg3);border:1.5px solid var(--blue);border-radius:8px;color:var(--blue2);font-size:13px;font-weight:800;text-align:center;font-family:'Sarabun',sans-serif">
+          <span style="font-size:11px;color:var(--text2)">ลิตร</span>
+        </div>
+        <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
+          ${mixPlan.map(d=>{
+            const col=d.units===0?'var(--text3)':d.units===1?'var(--green2)':'var(--red2)';
+            const label=d.units===0?'ไม่ผลิต':d.units===1?'Mixing 2':'Mixing 1+2';
+            return`<div style="flex-shrink:0;background:rgba(0,0,0,.3);border:1.5px solid ${col};border-radius:12px;padding:10px 12px;min-width:100px;text-align:center">
+              <div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:4px">${DAYS[d.di]}</div>
+              <div style="font-size:10px;color:var(--amber)">${d.needed.toLocaleString()} ลิตร</div>
+              <div style="font-size:12px;font-weight:900;color:${col};margin:3px 0">${label}</div>
+              ${d.units>0?`<div style="font-size:10px;color:var(--text2)">${d.startTime} - ${d.endTime}</div><div style="font-size:11px;color:var(--blue2);font-weight:800">${d.hoursNeeded} ชม.</div>`:''}
+              <div style="font-size:12px;font-weight:900;color:#fff;margin-top:3px">${d.totalP} คน</div>
+              ${d.hasOreo&&d.units>0?`<div style="font-size:9px;color:var(--amber);margin-top:2px">🍪 +Oreo</div>`:''}
+              ${d.units>0?`
+              <div style="border-top:1px solid rgba(255,255,255,.1);margin-top:5px;padding-top:5px">
+                ${['morning','afternoon','night'].map(sh=>{
+                  const u=d.shiftUnits[sh];const p=d.shiftPeople[sh];
+                  const sn={morning:'เช้า',afternoon:'บ่าย',night:'ดึก'}[sh];
+                  const sc=u===2?'#EF4444':'#22C55E';
+                  return`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:2px">
+                    <span style="color:var(--text3)">${sn}</span>
+                    <span style="color:${sc};font-weight:800">${u===2?'2ชุด':'1ชุด'} ${p}คน</span>
+                  </div>`;
+                }).join('')}
+              </div>`:''}
+              <div style="font-size:9px;color:var(--text3);margin-top:3px">Stock หลัง</div>
+              <div style="font-size:10px;color:var(--green2);font-weight:700">${Math.round(d.stockAfter+d.produced).toLocaleString()} ล.</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:var(--text3)">
+          Mixing 2: ${cfg.cap2.toLocaleString()} ล/ชม. | Mixing 1+2: ${(cfg.cap2+cfg.cap1).toLocaleString()} ล/ชม. | เริ่มจันทร์: ${cfg.startMon} | Break: ${cfg.breakH} ชม. | Buffer: ${cfg.bufferH} ชม.
+        </div>`;
+      toast('✅ โหลดแผน Filling แล้ว');
+    }).catch(e=>{
+      console.log('loadFromFilling error:',e);
+      toast('❌ โหลดไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อ');
     });
-    // คำนวณ Mixing Plan
-    const mixPlan=calcMixingPlan(rawDayData);
-    this._dayData=mixPlan;
-    // แสดง summary
-    summary.innerHTML=`<div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:8px">📊 สรุปแผน Process จาก Filling</div>
-      <div style="display:flex;gap:6px;overflow-x:auto">
-        <!-- Stock ตั้งต้น -->
-      <div style="padding:8px 12px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:10px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:12px;font-weight:800;color:var(--blue2)">🪣 Stock ตั้งต้น</span>
-        <input type="number" min="0" value="${LS.get('mix_stock',0)}"
-          onchange="LS.set('mix_stock',parseFloat(this.value)||0);PLAN.loadFromFilling()"
-          style="width:80px;padding:5px 8px;background:var(--bg3);border:1.5px solid var(--blue);border-radius:8px;color:var(--blue2);font-size:13px;font-weight:800;text-align:center;font-family:'Sarabun',sans-serif">
-        <span style="font-size:11px;color:var(--text2)">ลิตร</span>
-      </div>
-      <!-- Day cards -->
-      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
-        ${mixPlan.map(d=>{
-          const col=d.units===0?'var(--text3)':d.units===1?'var(--green2)':'var(--red2)';
-          const label=d.units===0?'ไม่ผลิต':d.units===1?'Mixing 2':'Mixing 1+2';
-          return `<div style="flex-shrink:0;background:rgba(0,0,0,.3);border:1.5px solid ${col};border-radius:12px;padding:10px 12px;min-width:100px;text-align:center">
-            <div style="font-size:11px;font-weight:800;color:var(--text2);margin-bottom:4px">${DAYS[d.di]}</div>
-            <div style="font-size:9px;color:var(--text3)">ผลิตให้วันถัดไป</div>
-            <div style="font-size:11px;color:var(--amber);font-weight:800">${d.demandLiter.toLocaleString()} ลิตร</div>
-            ${d.needed>0?`<div style="font-size:9px;color:var(--text3)">ต้องผลิต</div><div style="font-size:11px;color:var(--red2);font-weight:800">${d.needed.toLocaleString()} ลิตร</div>`:`<div style="font-size:10px;color:var(--green2);font-weight:700">✅ Stock พอ</div>`}
-            <div style="font-size:12px;font-weight:900;color:${col};margin:3px 0">${label}</div>
-            ${d.units>0?`<div style="font-size:10px;color:var(--text2)">${d.startTime} - ${d.endTime}</div><div style="font-size:11px;color:var(--blue2);font-weight:800">${d.hoursNeeded} ชม.</div>`:''}
-            <div style="font-size:12px;font-weight:900;color:#fff;margin-top:3px">${d.totalP} คน</div>
-            ${d.hasOreo&&d.units>0?`<div style="font-size:9px;color:var(--amber);margin-top:2px">🍪 +Oreo</div>`:''}
-            ${d.units>0?`
-            <div style="border-top:1px solid rgba(255,255,255,.1);margin-top:5px;padding-top:5px">
-              ${['morning','afternoon','night'].map(sh=>{
-                const u=d.shiftUnits[sh];const p=d.shiftPeople[sh];
-                const shName={morning:'เช้า',afternoon:'บ่าย',night:'ดึก'}[sh];
-                const col=u===2?'#EF4444':'#22C55E';
-                return`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:2px">
-                  <span style="color:var(--text3)">${shName}</span>
-                  <span style="color:${col};font-weight:800">${u===2?'2ชุด':'1ชุด'} ${p}คน</span>
-                </div>`;
-              }).join('')}
-            </div>`:''}
-            <div style="font-size:9px;color:var(--text3);margin-top:3px">Stock หลังผลิต</div>
-            <div style="font-size:10px;color:var(--green2);font-weight:700">${Math.round(d.stockAfter+d.produced).toLocaleString()} ล.</div>
-          </div>`;
-        }).join('')}
-      </div>
-      </div>
-      <div style="margin-top:8px;font-size:10px;color:var(--text3)">
-        Mixing 2: ${cfg.cap2.toLocaleString()} ล/ชม. | Mixing 1+2: ${(cfg.cap2+cfg.cap1).toLocaleString()} ล/ชม. | เริ่มจันทร์: ${cfg.startMon} | Break: ${cfg.breakH} ชม. | Buffer: ${cfg.bufferH} ชม.
-      </div>`;
-    toast('✅ โหลดแผน Filling แล้ว');
-    this._dayData=dayData;
   },
 
   updateMixingSummary(){
