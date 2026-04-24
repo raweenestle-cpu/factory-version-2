@@ -1023,16 +1023,39 @@ const APP={
     LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
   },
   syncFB(){
-    // โหลดตารางกะสัปดาห์ปัจจุบันจาก Firebase ก่อนเสมอ
-    const wkNow=wKey(S.wkStart);
+    // Listen ทุก path สำคัญ
     ['proc','fill'].forEach(sys=>{
-      FB.get(sys+'/sched/'+wkNow).then(v=>{
-        if(!v)return;
-        const all=LS.get('sched_'+sys,{});
-        all[wkNow]=v;LS.set('sched_'+sys,all);
-        if(sys===S.sys)SCHED.render();
-      });
+      // emps
+      FB.on(sys+'/emps',v=>{if(v)LS.set('emps_'+sys,v);EMP.render();});
+      // depts
+      FB.on(sys+'/depts',v=>{if(v)LS.set('depts_'+sys,v);SCHED.render();PLAN.render();});
+      // target
+      FB.on(sys+'/target',v=>{if(v!==null)LS.set('target_'+sys,v);});
+      // products
+      FB.on(sys+'/products',v=>{if(v)LS.set('prods_'+sys,v);PLAN.render();});
+      // plan
+      FB.on(sys+'/plan',v=>{if(v)LS.set('plan_'+sys,v);PLAN.render();});
+      // sched — listen ทุก week
+      FB.on(sys+'/sched',v=>{if(v){LS.set('sched_'+sys,v);if(sys===S.sys)SCHED.render();}});
+      // otlog
+      FB.on(sys+'/otlog',v=>{if(v)LS.set('otlog_'+sys,v);DASH.render();});
     });
+    // signs
+    FB.on('signs',v=>{if(v)LS.set('signs',v);});
+    // product_master
+    FB.on('product_master',v=>{if(v){LS.set('product_master',v);PROD.render();}});
+    // fill volume
+    FB.on('fill/volume',v=>{if(v)LS.set('fill_volume',v);});
+    // mixing cfg
+    FB.on('config/mixing_cfg',v=>{if(v)LS.set('mixing_cfg',v);});
+    // mix_stock
+    FB.on('config/mix_stock',v=>{if(v!==null)LS.set('mix_stock',v);});
+    // prod_display
+    FB.on('config/prod_display',v=>{if(v)LS.set('prod_display',v);});
+    // leave_req badge update
+    FB.on('leave_req',v=>{if(v){LS.set('leave_req',v);LEAVE.render();LEAVE.updBadge();}});
+    // leave_hist
+    FB.on('leave_hist',v=>{if(v)LS.set('leave_hist',v);});
     ['proc','fill'].forEach(sys=>{
       FB.on(sys+'/depts',v=>{if(v&&v.length){LS.set('depts_'+sys,v);if(sys===S.sys){SCHED.render();SET.render();}}});
       FB.on(sys+'/emps',v=>{if(v&&v.length){LS.set('emps_'+sys,v);if(sys===S.sys)EMP.render();updEmpCnt();}});
