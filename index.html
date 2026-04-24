@@ -1259,7 +1259,9 @@ const DASH={
 const PLAN={
   plan:{},
   render(){
-    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    let depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    // fallback ถ้า depts ว่าง
+    if(!depts.length){depts=(S.sys==='fill'?FDEPT:PDEPT).filter(d=>d!==AL);}
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));
     // แสดงปุ่มโหลดแผน Filling เฉพาะ Process
     const procLoadBtn=document.getElementById('plan-load-fill-btn');
@@ -1277,8 +1279,9 @@ const PLAN={
     const isFill=S.sys==='fill';
     const th=document.getElementById('pth');
     if(th)th.innerHTML=`<tr><th class="dc">แผนก / Line</th>${DAYS.map((d,di)=>`<th>${d}${isFill?`<br><span style="font-size:9px;font-weight:400;color:var(--amber)">Volume</span>`:''}  </th>`).join('')}</tr>`;
-    const tbEl=document.getElementById('ptb');if(!tbEl)return;
+    const tbEl=document.getElementById('ptb');if(!tbEl){console.log('ptb not found');return;}
     const vol=D.getVolume();
+    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
     tbEl.innerHTML=depts.map(dept=>`<tr><td class="dn">${dept}</td>${Array.from({length:6},(_,di)=>{
       const items=(this.plan[dept]||{})[di]||[];
       const dkey=dept.replace(/[\s/]/g,'_');
@@ -1893,29 +1896,40 @@ const SCHED={
   render(){
     const depts=D.getDepts();const wk=wKey(S.wkStart);const allSched=D.getSched();const sched=allSched[wk]||{};
     const wn=wNum(S.wkStart);
-    document.getElementById('swl').textContent='\u0e2a\u0e31\u0e1b\u0e14\u0e32\u0e2b\u0e4c\u0e17\u0e35\u0e48 '+wn;
+    document.getElementById('swl').textContent='สัปดาห์ที่ '+wn;
     const ws=S.wkStart;
     const th=document.getElementById('sth');
-    if(th)th.innerHTML=`<tr><th class="sc">\u0e01\u0e30 / \u0e41\u0e1c\u0e19\u0e01</th>${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th>${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;}).join('')}</tr>`;
+    if(th)th.innerHTML=`<tr>
+      <th class="sc" rowspan="2">แผนก</th>
+      ${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+        return`<th colspan="3">${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;
+      }).join('')}
+    </tr>
+    <tr>
+      ${DAYS.map(()=>SHS.map(sh=>`<th style="font-size:9px;font-weight:700;padding:3px 2px;color:var(--text2)">
+        ${sh==='morning'?'เช้า':sh==='afternoon'?'บ่าย':'ดึก'}
+      </th>`).join('')).join('')}
+    </tr>`;
     const tb=document.getElementById('stb');if(!tb)return;
     let html='';
-    SHS.forEach(sh=>{
-      depts.forEach(dept=>{
-        const isLocked=LOCK_D.includes(dept)&&S.sys==='fill';
-        html+=`<tr><td class="sn">${SHTH[sh]}<br><span style="font-size:10px;color:var(--text3)">${dept}</span></td>`;
-        for(let di=0;di<6;di++){
-          if(isLocked&&sh!=='morning'){html+=`<td style="background:rgba(255,255,255,.02)"><div style="text-align:center;padding:8px;font-size:10px;color:var(--text3)">\ud83d\udd12</div></td>`;continue;}
+    depts.forEach(dept=>{
+      html+=`<tr><td class="sn">${dept}</td>`;
+      for(let di=0;di<6;di++){
+        SHS.forEach(sh=>{
+          const isLocked=LOCK_D.includes(dept)&&sh!=='morning';
+          if(isLocked){html+=`<td style="background:rgba(255,255,255,.02)"><div style="text-align:center;padding:4px;font-size:10px;color:var(--text3)">🔒</div></td>`;return;}
           const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
           let otTime='';
           html+=`<td>${ws2.map(w=>{
             const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
             if(w.ot){if(sh==='morning')otTime='06:00-18:00';else if(sh==='night')otTime='18:00-06:00';else otTime=w.sr==='10-22'?'10:00-22:00':w.sr==='14-02'?'14:00-02:00':'14:00-22:00';}
-            const ne=w.name.replace(/'/g,"\\'");
-            return `<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">${w.name}${w.ot?`<span class="ot-t">${otTime}</span>`:''}${sg?'\u2705':w.ot?'\u270d\ufe0f':''}</span>`;
+            const ne=w.name.replace(/'/g,"\'");
+            const subCls=w.isSub?'sub':'';const lvCls=w.isLeave?'leave':'';
+            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''} ${subCls} ${lvCls}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">${w.name}${w.ot?`<span class="ot-t">${otTime}</span>`:''}${sg?'✅':w.ot?'✍️':''}</span>`;
           }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
-        }
-        html+='</tr>';
-      });
+        });
+      }
+      html+='</tr>';
     });
     tb.innerHTML=html;
     this.renderAL(sched,wk);
@@ -2387,7 +2401,9 @@ c = c.replace(
     const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));\
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));",
     """  render(){
-    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    let depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    // fallback ถ้า depts ว่าง
+    if(!depts.length){depts=(S.sys==='fill'?FDEPT:PDEPT).filter(d=>d!==AL);}
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));
     // \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 team bar
     const shifts=TEAM.getCurShifts();
@@ -2567,7 +2583,9 @@ c = c.replace(
     const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));\
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));",
     """  render(){
-    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    let depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    // fallback ถ้า depts ว่าง
+    if(!depts.length){depts=(S.sys==='fill'?FDEPT:PDEPT).filter(d=>d!==AL);}
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));
     // \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17 team bar
     const shifts=TEAM.getCurShifts();
@@ -2766,11 +2784,13 @@ with open('/home/claude/v2.html','r',encoding='utf-8') as f:
 # \u0e41\u0e01\u0e49\u0e15\u0e31\u0e27\u0e41\u0e1b\u0e23\u0e0b\u0e49\u0e33 tb \u2192 tbEl
 c = c.replace(
     "    const tb=document.getElementById('ptb');if(!tb)return;",
-    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;"
+    "    const tbEl=document.getElementById('ptb');if(!tbEl){console.log('ptb not found');return;}"
 )
 c = c.replace(
-    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
-    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+    "    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
+    "    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
 ) if "    tbEl.innerHTML=depts" in c else None
 
 # \u0e2b\u0e32 tb.innerHTML \u0e17\u0e35\u0e48\u0e40\u0e1b\u0e47\u0e19 plan
@@ -2779,7 +2799,8 @@ if idx == -1:
     # \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19 \u0e2b\u0e32 tb.innerHTML
     c = c.replace(
         "    tb.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
-        "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+        "    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
     )
 
 with open('/home/claude/v2.html','w',encoding='utf-8') as f:
@@ -2813,11 +2834,13 @@ with open('/home/claude/v2.html','r',encoding='utf-8') as f:
 # \u0e41\u0e01\u0e49\u0e15\u0e31\u0e27\u0e41\u0e1b\u0e23\u0e0b\u0e49\u0e33 tb \u2192 tbEl
 c = c.replace(
     "    const tb=document.getElementById('ptb');if(!tb)return;",
-    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;"
+    "    const tbEl=document.getElementById('ptb');if(!tbEl){console.log('ptb not found');return;}"
 )
 c = c.replace(
-    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
-    "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+    "    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
+    "    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
 ) if "    tbEl.innerHTML=depts" in c else None
 
 # \u0e2b\u0e32 tb.innerHTML \u0e17\u0e35\u0e48\u0e40\u0e1b\u0e47\u0e19 plan
@@ -2826,7 +2849,8 @@ if idx == -1:
     # \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19 \u0e2b\u0e32 tb.innerHTML
     c = c.replace(
         "    tb.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>",
-        "    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
+        "    if(!depts.length){tbEl.innerHTML='<tr><td style="padding:20px;color:var(--text3)">ยังไม่มีข้อมูลแผนก</td></tr>';return;}
+    tbEl.innerHTML=depts.map(dept=>`<tr><td class=\"dn\">${dept}</td>"
     )
 
 with open('/home/claude/v2.html','w',encoding='utf-8') as f:
@@ -2900,7 +2924,7 @@ with open('/home/claude/v2.html','r',encoding='utf-8') as f:
 c = c.replace(
     "    const tb=document.getElementById('ptb');if(!tb)return;\
     tb.innerHTML=depts.map",
-    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;\
+    "    const tbEl=document.getElementById('ptb');if(!tbEl){console.log('ptb not found');return;}\
     tbEl.innerHTML=depts.map"
 )
 
@@ -2935,7 +2959,7 @@ with open('/home/claude/v2.html','r',encoding='utf-8') as f:
 c = c.replace(
     "    const tb=document.getElementById('ptb');if(!tb)return;\
     tb.innerHTML=depts.map",
-    "    const tbEl=document.getElementById('ptb');if(!tbEl)return;\
+    "    const tbEl=document.getElementById('ptb');if(!tbEl){console.log('ptb not found');return;}\
     tbEl.innerHTML=depts.map"
 )
 
