@@ -1028,8 +1028,12 @@ const AUTH={
 const APP={
   init(){
     this.syncFB();
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
-    LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
+    const renders=[
+      ()=>DASH.render(),()=>PLAN.render(),()=>SCHED.render(),
+      ()=>OT.render(),()=>EMP.render(),()=>SET.render(),
+      ()=>LEAVE.render(),()=>LEAVE.updBadge(),()=>LEAVE.archivePast()
+    ];
+    renders.forEach(fn=>{try{fn();}catch(e){console.log('render error:',e.message);}});
   },
   syncFB(){
     const wk=wKey(S.wkStart);
@@ -1136,6 +1140,7 @@ const DASH={
     document.getElementById('dwl').textContent='สัปดาห์ที่ '+wNum(ws)+' ('+dStr(ws)+' - '+dStr(we)+')';
   },
   renderChart(type){
+    try{
     const yr=S.yr;
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
@@ -1157,6 +1162,8 @@ const DASH={
     const tl=document.createElement('div');tl.className='tgt-line';tl.style.bottom=Math.min(tgt/mx*100,100)+'%';
     const old=ce.querySelector('.tgt-line');if(old)old.remove();
     ce.style.position='relative';ce.appendChild(tl);
+  
+    }catch(e){console.log("renderChart error",e.message);}
   },
   renderPareto(){
     const per=document.getElementById('pp-period')?.value||'month';
@@ -1533,22 +1540,21 @@ const PLAN={
       }
     };
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');doneLoad(false,'Admin เท่านั้น');return;}
-    toast('🔍 step1: เช็ค emps sys='+S.sys);
     const emps=D.getEmps(S.sys);
-    toast('🔍 step2: emps='+emps.length+' คน');
     if(!emps.length){doneLoad(false,'ไม่มีพนักงาน');alert2('ยังไม่มีพนักงานใน '+(S.sys==='proc'?'Process':'Filling'),'❌');return;}
-    toast('🔍 step3: ผ่าน emps check');
     // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
       if(!this._dayData){doneLoad(false,'โหลดแผน Filling ก่อน');toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
-      const wk2=wKey(S.wkStart);const allSched2=D.getSched();
-      if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
+      const wk2=wKey(S.wkStart);
+      const allSched2=D.getSched();
+      if(!allSched2[wk2])allSched2[wk2]={};
+      const sched2=allSched2[wk2];
       Object.keys(sched2).forEach(k=>delete sched2[k]);
+
       const procDepts=D.getDepts('proc').filter(d=>d!==AL);
       const leaveData2=D.getLeave();
-      const teamShifts2=TEAM.getCurShifts();
-      const shMap2={morning:'morning',afternoon:'afternoon',night:'night'};
-      const short2=[];
+      const teamShifts=TEAM.getCurShifts();
+      const shMap={morning:'morning',afternoon:'afternoon',night:'night'};
 
       // init structure
       procDepts.forEach(dept=>{
@@ -1558,83 +1564,126 @@ const PLAN={
       if(!sched2[AL])sched2[AL]={};
       for(let di=0;di<6;di++) if(!sched2[AL][di])sched2[AL][di]={morning:[],afternoon:[],night:[]};
 
-      // สร้าง pool พนักงาน proc
-      const procEmps=emps.filter(e=>(e.sys||'fill')==='proc');
+      // กรองเฉพาะ proc emps
+      const procEmps=emps.filter(e=>(e.sys||'fill')==='proc'||(e.mainDept&&procDepts.includes(e.mainDept)));
 
-      // วนแต่ละวัน (di=0 จันทร์ ... di=5 เสาร์)
       this._dayData.forEach(dayInfo=>{
         const di=dayInfo.di;
         const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
         const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+        const hoursNeeded=dayInfo.hoursNeeded||0;
+        const units=dayInfo.units||0;
 
-        SHS.forEach(sh=>{
-          // จำนวนคนที่ต้องการในกะนี้ของวันนี้
-          const needPpl=dayInfo.units===0?0:(dayInfo.shiftPeople?.[sh]||0);
-
-          // assign คนลาเข้า AL ก่อน
-          procEmps.forEach(e=>{
-            const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
-            if(empSh!==sh)return; // ไม่ใช่กะนี้
-            if((leaveData2[e.name]||[]).includes(dk)){
-              // คนลา → AL
-              if(!sched2[AL][di][sh].find(w=>w.name===e.name))
-                sched2[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
-            }
-          });
-
-          if(needPpl===0)return; // วันนี้กะนี้ไม่ต้องผลิต
-
-          // assign คนเข้ากะตาม dept หลัก
-          procEmps.forEach(e=>{
-            const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
-            const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
-            if(empSh!==sh)return;
-            if((leaveData2[e.name]||[]).includes(dk))return; // ลาแล้ว
-            if(!sched2[dept][di][sh].find(w=>w.name===e.name))
-              sched2[dept][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
-          });
-
-          // หาคนสำรอง (sub1/sub2) สำหรับคนที่ลา
-          procEmps.forEach(e=>{
-            const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
-            const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
-            if(empSh!==sh)return;
-            if(!(leaveData2[e.name]||[]).includes(dk))return; // ไม่ได้ลา ไม่ต้องหาสำรอง
-            // หาคนสำรองกะเดียวกันก่อน แล้วค่อยกะอื่น
-            const working=new Set();
-            procDepts.forEach(d=>SHS.forEach(s=>(sched2[d]?.[di]?.[s]||[]).forEach(w=>working.add(w.name))));
-            const subs=procEmps.filter(sub=>{
-              if(working.has(sub.name))return false;
-              if((leaveData2[sub.name]||[]).includes(dk))return false;
-              return sub.sub1===dept||sub.sub2===dept;
-            });
-            const subSameSh=subs.filter(sub=>{
-              const s=sub.lockShift||(sub.team?shMap2[teamShifts2[sub.team]]:null);
-              return s===sh;
-            });
-            const sub=(subSameSh.length?subSameSh:subs)[0];
-            if(sub){
-              if(!sched2[dept][di][sh].find(w=>w.name===sub.name))
-                sched2[dept][di][sh].push({name:sub.name,ot:false,otHrs:4,av:sub.av||0,isSub:true});
-            } else {
-              short2.push(dept+' '+DAYS[di]+' '+SHTH[sh]+': '+e.name+' ลา — ขาดมือรอง');
-            }
-          });
-
-          // ตรวจว่าคนพอไหม
-          const got=procDepts.reduce((a,d)=>a+(sched2[d]?.[di]?.[sh]||[]).length,0);
-          if(got<needPpl) short2.push('Process '+DAYS[di]+' '+SHTH[sh]+': ต้องการ '+needPpl+' คน มี '+got+' คน');
+        // คนที่ลาวันนี้ → AL
+        procEmps.forEach(e=>{
+          if((leaveData2[e.name]||[]).includes(dk)){
+            const empSh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
+            if(!sched2[AL][di][empSh].find(w=>w.name===e.name))
+              sched2[AL][di][empSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
+          }
         });
+
+        if(units===0)return; // ไม่ต้องผลิตวันนี้
+
+        // pool คนที่ไม่ลา
+        const avail=procEmps.filter(e=>!(leaveData2[e.name]||[]).includes(dk));
+
+        // จำนวนคนที่ต้องการ
+        const needPpl=units>=2?12:9; // เช้า
+        const nightPpl=9; // ดึกเสมอ
+
+        // แยกตามกะที่ถูกกำหนด
+        const byShift={morning:[],afternoon:[],night:[]};
+        avail.forEach(e=>{
+          const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
+          if(byShift[sh])byShift[sh].push(e);
+        });
+
+        // 1. กะดึก → 9 คนก่อน
+        const nightPool=[...byShift.night];
+        const nightAssigned=[];
+        procDepts.forEach(dept=>{
+          const deptNight=nightPool.filter(e=>(e.mainDept||e.dept)===dept&&!nightAssigned.find(x=>x.name===e.name));
+          deptNight.forEach(e=>{
+            if(nightAssigned.length<nightPpl){
+              sched2[dept][di].night.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+              nightAssigned.push(e);
+            }
+          });
+        });
+
+        // 2. กะเช้า → needPpl คน
+        const morningPool=[...byShift.morning];
+        const morningAssigned=[];
+        procDepts.forEach(dept=>{
+          const deptMorn=morningPool.filter(e=>(e.mainDept||e.dept)===dept&&!morningAssigned.find(x=>x.name===e.name));
+          deptMorn.forEach(e=>{
+            if(morningAssigned.length<needPpl){
+              sched2[dept][di].morning.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+              morningAssigned.push(e);
+            }
+          });
+        });
+
+        // 3. กะบ่าย → ที่เหลือ
+        const afternoonPool=[...byShift.afternoon];
+        const afternoonAssigned=[];
+        procDepts.forEach(dept=>{
+          const deptAfter=afternoonPool.filter(e=>(e.mainDept||e.dept)===dept&&!afternoonAssigned.find(x=>x.name===e.name));
+          deptAfter.forEach(e=>{
+            sched2[dept][di].afternoon.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+            afternoonAssigned.push(e);
+          });
+        });
+
+        // 4. คำนวณ OT ถ้าต้องผลิตเกิน 14:00 (กะเช้าหมด)
+        // hoursNeeded คือชั่วโมงที่ต้องผลิต เริ่มจาก 6:00
+        // กะเช้า cover 6:00-14:00 = 8 ชม.
+        // ถ้า hoursNeeded > 8 → ต้องมีคนต่อ
+
+        if(hoursNeeded>8){
+          const endTime=6+hoursNeeded; // เช่น 16ชม. → 22:00
+
+          // ---- ช่วง 14:00-18:00 ----
+          // กะบ่ายรับหลัก ถ้าขาดดึงกะเช้า OT ได้สูงสุด 4 ชม.
+          const needAt14=needPpl; // ต้องการกี่คนในช่วงนี้
+          const coveredAt14=afternoonAssigned.length;
+          const needOt1=Math.max(0,needAt14-coveredAt14);
+          const ot1Hours=Math.min(4,18-14); // สูงสุด 4 ชม.
+          let ot1Count=0;
+          if(needOt1>0){
+            morningAssigned.forEach(e=>{
+              if(ot1Count>=needOt1)return;
+              const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
+              const w=sched2[dept][di].morning.find(x=>x.name===e.name);
+              if(w&&!w.ot){w.ot=true;w.otHrs=ot1Hours;ot1Count++;}
+            });
+          }
+
+          // ---- ช่วง 18:00-endTime ----
+          // OT กะเช้าหมดแล้วที่ 18:00 → ดึงกะดึกมา OT ก่อนเวลา
+          if(endTime>18){
+            const ot2Hours=Math.min(endTime-18,4); // สูงสุด 4 ชม.
+            // คนที่ cover ช่วงนี้: กะบ่าย (ทำถึง 22:00 อยู่แล้ว)
+            const coveredAt18=afternoonAssigned.length;
+            const needOt2=Math.max(0,needPpl-coveredAt18);
+            let ot2Count=0;
+            if(needOt2>0){
+              nightAssigned.forEach(e=>{
+                if(ot2Count>=needOt2)return;
+                const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
+                const w=sched2[dept][di].night.find(x=>x.name===e.name);
+                if(w&&!w.ot){w.ot=true;w.otHrs=ot2Hours;ot2Count++;}
+              });
+            }
+          }
+        }
       });
 
-      allSched2[wk2]=sched2;D.saveSched(allSched2);
+      allSched2[wk2]=sched2;
+      D.saveSched(allSched2);
       FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
       markUnsaved();SCHED.render();doneLoad(true);
-      if(short2.length){
-        const rows=short2.map(s=>'<tr><td style="padding:6px 10px;border:1px solid #334155;font-size:12px">'+s+'</td></tr>').join('');
-        alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d:\n'+short2.join('\n'),'\ud83d\ude1f');
-      }
-      doneLoad(true);
       return;
     }
     // Filling — autoLoad ปกติ
@@ -2201,6 +2250,21 @@ const SCHED={
     });
     tb.innerHTML=html;
     this.renderAL(sched,wk);
+  },
+  renderAL(sched,wk){
+    const alSched=sched[AL]||{};
+    const el=document.getElementById('sched-al');if(!el)return;
+    const depts=D.getDepts().filter(d=>d!==AL);
+    let html='';
+    for(let di=0;di<6;di++){
+      SHS.forEach(sh=>{
+        const workers=(alSched[di]||{})[sh]||[];
+        workers.forEach(w=>{
+          html+=`<span class="wc leave">${w.name}${w.isLeave?' 🏖️':''}</span>`;
+        });
+      });
+    }
+    el.innerHTML=html||'<span style="font-size:11px;color:var(--text3)">ไม่มีผู้ลา</span>';
   },
   openW(name,dept,di,sh){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
