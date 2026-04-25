@@ -1471,8 +1471,7 @@ const PLAN={
     });
   },
   autoLoad(){
-    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
-    // แสดงสถานะกำลังโหลด
+    // แสดงสถานะกำลังโหลด — define ก่อนเสมอ
     const autoBtn=document.querySelector('.btn-p.btn-amber[onclick="PLAN.autoLoad()"]');
     const origText=autoBtn?.textContent;
     if(autoBtn){autoBtn.textContent='⏳ กำลังโหลด...';autoBtn.disabled=true;autoBtn.style.opacity='0.6';}
@@ -1490,12 +1489,9 @@ const PLAN={
         setTimeout(()=>{autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';},3000);
       }
     };
+    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');doneLoad(false,'Admin เท่านั้น');return;}
     // ดึง emps ของ sys นี้ — fallback จาก all emps ถ้า LS ว่าง
-    let emps=D.getEmps(S.sys);
-    if(!emps.length){
-      const allEmps=[...D.getEmps('fill'),...D.getEmps('proc')];
-      emps=allEmps.filter(e=>(e.sys||'fill')===S.sys);
-    }
+    const emps=D.getEmps(S.sys);
     if(!emps.length){doneLoad(false,'ไม่มีพนักงาน');alert2('ยังไม่มีพนักงานใน '+(S.sys==='proc'?'Process':'Filling'),'❌');return;}
     // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
@@ -1605,7 +1601,7 @@ const PLAN={
     const AL2=AL;
     // ตรวจว่ามีพนักงานที่กำหนด team แล้วไหม
     const hasTeam=emps.some(e=>e.team);
-    if(!hasTeam){alert2('⚠️ ยังไม่ได้กำหนดทีมให้พนักงาน\n\nกรุณาไปที่หน้า 🔄 ทีม แล้วกำหนดทีม A/B/C ให้พนักงานก่อนครับ','❌');return;}
+    if(!hasTeam){doneLoad(false,'ยังไม่ได้กำหนดทีม');alert2('⚠️ ยังไม่ได้กำหนดทีมให้พนักงาน\n\nกรุณาไปที่หน้า 🔄 ทีม แล้วกำหนดทีม A/B/C ให้พนักงานก่อนครับ','❌');return;}
     function checkRest2(name,di,sh,sc){
       if(sh==='morning'){
         const prev=di>0?sc:null;
