@@ -1458,7 +1458,7 @@ const PLAN={
   },
   autoLoad(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
-    const emps=D.getEmps();if(!emps.length){alert2('ยังไม่มีพนักงาน','❌');return;}
+    const emps=D.getEmps(S.sys);if(!emps.length){alert2('ยังไม่มีพนักงานใน '+(S.sys==='proc'?'Process':'Filling'),'❌');return;}
     // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
       if(!this._dayData){toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
