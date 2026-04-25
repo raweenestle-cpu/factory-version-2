@@ -892,7 +892,7 @@ function alert2(msg,ic='ℹ️'){
 const D={
   getDepts(sys=S.sys){return LS.get('depts_'+sys,sys==='proc'?[...PDEPT]:[...FDEPT]);},
   saveDepts(d,sys=S.sys){LS.set('depts_'+sys,d);FB.set(sys+'/depts',d);if(typeof PROD!=='undefined')PROD.render();PLAN.render();SCHED.render();},
-  getEmps(sys=S.sys){return LS.get('emps_'+sys,[]);},
+  getEmps(sys=S.sys){const v=LS.get('emps_'+sys,[]);return Array.isArray(v)?v:Object.values(v||{});},
   saveEmps(e,sys=S.sys){LS.set('emps_'+sys,e);FB.set(sys+'/emps',e);},
   getTarget(sys=S.sys){return LS.get('target_'+sys,15);},
   saveTarget(v,sys=S.sys){LS.set('target_'+sys,v);FB.set(sys+'/target',v);},
@@ -1034,7 +1034,7 @@ const APP={
   syncFB(){
     const wk=wKey(S.wkStart);
     ['proc','fill'].forEach(sys=>{
-      FB.on(sys+'/emps',v=>{if(v&&v.length){LS.set('emps_'+sys,v);if(sys===S.sys)EMP.render();updEmpCnt();}});
+      FB.on(sys+'/emps',v=>{if(v){const arr=Array.isArray(v)?v:Object.values(v);if(arr.length){LS.set('emps_'+sys,arr);if(sys===S.sys)EMP.render();updEmpCnt();}}});
       FB.on(sys+'/depts',v=>{if(v&&v.length){LS.set('depts_'+sys,v);if(sys===S.sys){SCHED.render();SET.render();}PROD.render();PLAN.render();}});
       FB.on(sys+'/target',v=>{if(v!=null){LS.set('target_'+sys,v);DASH.render();}});
       FB.on(sys+'/products',v=>{if(v){LS.set('prods_'+sys,v);if(sys===S.sys){PLAN.render();SET.render();}}});
@@ -1794,13 +1794,15 @@ const SET={
         <div style="font-size:13px;font-weight:800;margin-bottom:10px">🏭 แผนก ${isFill?'Filling':'Process'}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
           ${depts.filter(d=>d!==AL).map((d,i)=>`<div style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:4px 8px">
-            <span style="font-size:12px">${d}</span>
+            <span id="dept-lbl-${i}" style="font-size:12px">${d}</span>
+            <input id="dept-inp-${i}" value="${d}" style="display:none;font-size:12px;padding:2px 4px;background:var(--bg2);border:1px solid var(--blue);border-radius:4px;color:var(--text);width:90px;font-family:'Sarabun',sans-serif" onblur="SET.updDept(${i},this.value)">
+            <button onclick="SET.editMat(${i})" style="background:none;border:none;color:var(--blue2);font-size:12px;cursor:pointer;padding:0 2px">✏️</button>
             <button onclick="SET.delMat(${i})" style="background:none;border:none;color:var(--red2);font-size:14px;cursor:pointer;padding:0 2px">✕</button>
           </div>`).join('')}
         </div>
         <div style="display:flex;gap:6px">
           <input type="text" class="fi" id="new-mat-name" placeholder="ชื่อแผนกใหม่" style="flex:1">
-          <button onclick="SET.addMat()" style="padding:8px 12px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่ม</button>
+          <button onclick="SET.addDept()" style="padding:8px 12px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif">+ เพิ่ม</button>
         </div>
         <button onclick="SET.resetDepts()" style="margin-top:8px;width:100%;padding:7px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:8px;color:var(--red2);font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif">🔄 รีเซ็ตแผนก</button>
       </div>
@@ -1820,6 +1822,38 @@ const SET={
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
     FB.remove('signs');SCHED.render();DASH.render();DASH.renderPareto();toast('✅ ล้างทั้งหมดแล้ว');
   });},
+  addDept(){
+    const inp=document.getElementById('new-mat-name');
+    const name=inp?.value.trim();
+    if(!name){toast('❌ ใส่ชื่อแผนก');return;}
+    const d=D.getDepts();
+    if(d.includes(name)){toast('❌ มีแผนกนี้แล้ว');return;}
+    // เพิ่มก่อน AL
+    const al_idx=d.indexOf(AL);
+    if(al_idx>=0)d.splice(al_idx,0,name);
+    else d.push(name);
+    D.saveDepts(d);
+    if(inp)inp.value='';
+    SET.render();
+    toast('✅ เพิ่มแผนก '+name+' แล้ว');
+  },
+  updDept(i,newName){
+    newName=newName.trim();
+    if(!newName)return SET.render();
+    const d=D.getDepts();
+    d[i]=newName;
+    D.saveDepts(d);
+    SET.render();
+    toast('✅ แก้ชื่อแผนกแล้ว');
+  },
+  editMat(i){
+    const lbl=document.getElementById('dept-lbl-'+i);
+    const inp=document.getElementById('dept-inp-'+i);
+    if(!lbl||!inp)return;
+    lbl.style.display='none';
+    inp.style.display='inline-block';
+    inp.focus();inp.select();
+  },
   addMat(){
     const no=document.getElementById('new-mat-no')?.value.trim();
     const name=document.getElementById('new-mat-name')?.value.trim();
