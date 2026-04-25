@@ -2266,7 +2266,23 @@ const SCHED={
           html+=`<td style="min-width:52px;vertical-align:top;padding:3px">${ws2.map(w=>{
             const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
             const ne=w.name.replace(/'/g,"\'");
-            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">${w.name}${sg?'✅':w.ot?'✍️':''}</span>`;
+            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+            const normalEndH={morning:14,afternoon:22,night:30}[sh]||14;
+            // OT ก่อนเวลา (กะดึก เข้า 18:00) หรือ OT ปกติ (ต่อจาก normal end)
+            const isPreOT=w.otBefore; // OT ก่อนกะ (18:00-22:00)
+            const otStartH=isPreOT?normalEndH-(w.otHrs||4):shStartH;
+            const otEndRaw=(isPreOT?normalEndH:normalEndH+(w.otHrs||4));
+            const preOTStartH=isPreOT?(shStartH-( w.otHrs||4)+24)%24:shStartH;
+            const displayStart=String(isPreOT?preOTStartH:shStartH).padStart(2,'0')+':00';
+            // pre-OT: แสดงเวลาตั้งแต่เริ่ม pre-OT จนถึง normal end ของกะ
+            const normalEndDisplay={morning:6,afternoon:22,night:22}[sh]||0;
+            const displayEnd=isPreOT?String(normalEndDisplay).padStart(2,'0')+':00':String(otEndRaw%24).padStart(2,'0')+':00';
+            const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
+            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
+              <span style="font-size:11px;font-weight:800">${w.name}</span>
+              ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span><span style="font-size:11px" title="เซ็นยินยอม OT">✍️</span>`:''}
+              ${sg?'✅':''}
+            </span>`;
           }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
         });
       }
