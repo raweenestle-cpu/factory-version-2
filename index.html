@@ -1400,11 +1400,11 @@ const PLAN={
       const dayData=Array.from({length:6},(_,di)=>{
         let totalLiter=0;let hasOreo=false;
         depts.forEach(dept=>{
-          const boxes=(fillVol[dept]||{})[di]||0;
-          const items=(fillPlan[dept]||{})[di]||[];
+          const boxes=(fillVol[dept]||{})[di]||(fillVol[dept]||{})[String(di)]||0;
+          const items=(fillPlan[dept]||{})[di]||(fillPlan[dept]||{})[String(di)]||[];
           items.forEach(item=>{
             const name=typeof item==='object'?item.product:item;
-            const pm=master.find(m=>m.name===name&&m.line===dept)||master.find(m=>m.name===name);
+            const pm=master.find(m=>m.name===name&&(m.line===dept||m.line?.trim().toLowerCase()===dept.trim().toLowerCase()))||master.find(m=>m.name===name);
             const ml=parseFloat(pm?.ml)||0;
             totalLiter+=Math.round(boxes*ml/1000);
           });
@@ -1596,6 +1596,7 @@ const PLAN={
         const rows=short2.map(s=>'<tr><td style="padding:6px 10px;border:1px solid #334155;font-size:12px">'+s+'</td></tr>').join('');
         alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d:\n'+short2.join('\n'),'\ud83d\ude1f');
       }
+      doneLoad(true);
       return;
     }
     // Filling — autoLoad ปกติ
@@ -1623,7 +1624,7 @@ const PLAN={
     const teamCfg=D.getTeamCfg();
     const teamShifts=TEAM.getCurShifts();
     const shMap={morning:'morning',afternoon:'afternoon',night:'night'};
-    const allEmpsPool=D.getEmps(S.sys);
+    const allEmpsPool=D.getEmps(S.sys).length?D.getEmps(S.sys):emps;
     function findSub(dept,di,sh,excludeNames){
       const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
       const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
@@ -1647,7 +1648,6 @@ const PLAN={
     }
     emps.forEach(e=>{
       if(!e.team)return;
-      if((e.sys||'fill')!==S.sys)return; // ข้าม sys ไม่ได้
       const sh=shMap[teamShifts[e.team]];if(!sh)return;
       const actualSh=e.lockShift||sh;
       const dept=e.mainDept||e.dept;if(!dept)return;
@@ -1688,11 +1688,35 @@ const PLAN={
           }
         }
       }
+      // assign sub1 และ sub2 ด้วย (Lead Man ดูแลหลาย LINE)
+      const subDepts=[e.sub1,e.sub2].filter(d=>d&&depts.includes(d));
+      subDepts.forEach(subDept=>{
+        const myLeave=leaveData[e.name]||[];
+        for(let di=0;di<6;di++){
+          const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+          const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+          if(myLeave.includes(dk))continue; // ลา → ไม่ assign sub
+          if(!sched[subDept])sched[subDept]={};
+          if(!sched[subDept][di])sched[subDept][di]={morning:[],afternoon:[],night:[]};
+          if(!sched[subDept][di][actualSh])sched[subDept][di][actualSh]=[];
+          if(!sched[subDept][di][actualSh].find(w=>w.name===e.name)){
+            sched[subDept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLead:true});
+          }
+        }
+      });
       used.add(e.name);
     });
     // IDLE
     const IDLE='__IDLE__';
-    const idleEmps=emps.filter(e=>!used.has(e.name)&&!(leaveData[e.name]||[]).length);
+    // กรองเฉพาะคนที่ mainDept อยู่ใน sys นี้ แต่ไม่ได้ถูก assign
+    const idleEmps=emps.filter(e=>{
+      if(used.has(e.name))return false;
+      if((leaveData[e.name]||[]).length)return false;
+      const dept=e.mainDept||e.dept;
+      // ถ้า dept ไม่อยู่ใน depts ของ sys นี้ → ไม่ใช่คนของ sys นี้ → ไม่นับเป็น IDLE
+      if(dept&&!depts.includes(dept)&&dept!==AL2)return false;
+      return true;
+    });
     if(idleEmps.length)toast('ℹ️ มีพนักงานว่าง '+idleEmps.length+' คน',4000);
     allSched[wk]=sched;D.saveSched(allSched);
     FB.set(S.sys+'/sched/'+wk,sched);
