@@ -1468,37 +1468,28 @@ const PLAN={
         Object.keys(sched2).forEach(k=>delete sched2[k]);
         const procDepts=D.getDepts('proc').filter(d=>d!==AL);
         const short2=[];
-        this._dayData.forEach(d=>{
-          SHS.forEach(sh=>{
-            const needPpl=d.units===0?0:(d.shiftPeople?.[sh]||d.totalP);
-            if(!needPpl)return;
-            procDepts.forEach(dept=>{
-              if(!sched2[dept])sched2[dept]={};
-              if(!sched2[dept][d.di])sched2[dept][d.di]={morning:[],afternoon:[],night:[]};
-            });
-            const teamShifts2=TEAM.getCurShifts();
-            const shMap2={morning:'morning',afternoon:'afternoon',night:'night'};
-            const cands=emps.filter(e=>{
-              if(e.lockShift&&e.lockShift!==sh)return false;
-              // เช็ค shift ตามทีม — ห้ามใส่ผิดกะ
-              const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
-              if(empSh&&empSh!==sh)return false;
-              return procDepts.includes(e.mainDept||e.dept)||procDepts.includes(e.sub1)||procDepts.includes(e.sub2);
-            });
-            const leaveData=D.getLeave();
-            const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+d.di);
+        const teamShifts2=TEAM.getCurShifts();
+        const shMap2={morning:'morning',afternoon:'afternoon',night:'night'};
+        const leaveData2=D.getLeave();
+        // init sched2 structure
+        procDepts.forEach(dept=>{
+          if(!sched2[dept])sched2[dept]={};
+          for(let di=0;di<6;di++){
+            if(!sched2[dept][di])sched2[dept][di]={morning:[],afternoon:[],night:[]};
+          }
+        });
+        // assign พนักงานตาม mainDept และ shift ของทีม
+        emps.forEach(e=>{
+          if((e.sys||'fill')!=='proc')return;
+          const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
+          const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);if(!empSh)return;
+          for(let di=0;di<6;di++){
+            const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
             const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-            const avail=cands.filter(e=>!(leaveData[e.name]||[]).includes(dk));
-            procDepts.forEach(dept=>{
-              const deptEmps=avail.filter(e=>(e.mainDept||e.dept)===dept||e.sub1===dept||e.sub2===dept);
-              deptEmps.forEach(e=>{
-                if(!sched2[dept][d.di][sh].find(w=>w.name===e.name))
-                  sched2[dept][d.di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
-              });
-            });
-            const got=procDepts.reduce((a,dept)=>(sched2[dept]?.[d.di]?.[sh]||[]).length+a,0);
-            if(got<needPpl)short2.push('Process '+DAYS[d.di]+' '+SHTH[sh]+': ขาด '+(needPpl-got)+' คน');
-          });
+            if((leaveData2[e.name]||[]).includes(dk))continue;
+            if(!sched2[dept][di][empSh].find(w=>w.name===e.name))
+              sched2[dept][di][empSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+          }
         });
         allSched2[wk2]=sched2;D.saveSched(allSched2);
         FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
