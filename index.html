@@ -1639,6 +1639,22 @@ const PLAN={
           });
         });
 
+        // 2.5 ถ้าเปิด 2 ชุด → ดึงคนกะบ่ายมา pre-OT 4 ชม. (10:00-14:00)
+        if(units>=2&&morningAssigned.length<needPpl){
+          const afternoonPool2=[...byShift.afternoon];
+          const shortfall=needPpl-morningAssigned.length;
+          let preOTCount=0;
+          procDepts.forEach(dept=>{
+            const deptAfPre=afternoonPool2.filter(e=>effectiveDept(e)===dept&&!morningAssigned.find(x=>x.name===e.name));
+            deptAfPre.forEach(e=>{
+              if(preOTCount>=shortfall)return;
+              sched2[dept][di].morning.push({name:e.name,ot:true,otHrs:4,otBefore:true,av:e.av||0});
+              morningAssigned.push(e);
+              preOTCount++;
+            });
+          });
+        }
+
         // 3. กะบ่าย → ที่เหลือ
         const afternoonPool=[...byShift.afternoon];
         const afternoonAssigned=[];
@@ -1703,6 +1719,39 @@ const PLAN={
           }
         }
       });
+
+      // ตรวจ Oreo Coating: ถ้ามีแผน Oreo ต้องมีคนครบ 3 กะ
+      if(this._dayData){
+        this._dayData.forEach(dayInfo2=>{
+          const di2=dayInfo2.di;
+          const d3=new Date(S.wkStart);d3.setDate(S.wkStart.getDate()+di2);
+          const dk2=d3.getFullYear()+'-'+String(d3.getMonth()+1).padStart(2,'0')+'-'+String(d3.getDate()).padStart(2,'0');
+          const fp=D.getPlan?D.getPlan('fill'):{};
+          const oreoLns=['Glacé','Glace','Extrud 3','Extru 3'];
+          const hasOreo2=oreoLns.some(ln=>{
+            const its=(fp[ln]||{})[di2]||(fp[ln]||{})[String(di2)]||[];
+            return its.length>0;
+          });
+          if(!hasOreo2)return;
+          if(!sched2['Oreo Coating'])return;
+          SHS.forEach(sh2=>{
+            const existing=(sched2['Oreo Coating'][di2]||{})[sh2]||[];
+            if(existing.length>=1)return; // มีคนอยู่แล้ว (ต้องการแค่ 1 คน/กะ)
+            // หาคนที่มี sub1=Oreo Coating หรือ sub2=Oreo Coating มาเพิ่ม
+            const allAvail=procEmps.filter(e=>!(leaveData2[e.name]||[]).includes(dk2));
+            const subForOreo=allAvail.find(e=>{
+              if((sched2['Oreo Coating'][di2]||{})[sh2]?.find(w=>w.name===e.name))return false;
+              const alreadyInSched=procDepts.some(d=>SHS.some(s=>(sched2[d]?.[di2]?.[s]||[]).find(w=>w.name===e.name&&!w.ot)));
+              if(alreadyInSched)return false;
+              return e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating';
+            });
+            if(subForOreo){
+              if(!sched2['Oreo Coating'][di2])sched2['Oreo Coating'][di2]={morning:[],afternoon:[],night:[]};
+              sched2['Oreo Coating'][di2][sh2].push({name:subForOreo.name,ot:false,otHrs:4,av:subForOreo.av||0,isSub:true});
+            }
+          });
+        });
+      }
 
       allSched2[wk2]=sched2;
       D.saveSched(allSched2);
@@ -2623,6 +2672,15 @@ const EMP={
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-e')">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button><button class="btn-confirm" onclick="EMP.save(${idx})">\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button></div></div>`;
     mo.onclick=e=>{if(e.target===mo)closeMo('mo-e');};
     this._photo=emp?.photo||null;openMo('mo-e');
+  },
+  onSign(inp){
+    const f=inp.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=e=>{
+      const sv=document.getElementById('ef-sv');
+      if(sv){sv.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain">`;sv.dataset.sign=e.target.result;}
+    };
+    r.readAsDataURL(f);
   },
   onPhoto(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{this._photo=e.target.result;const pv=document.getElementById('ef-pv');if(pv)pv.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};r.readAsDataURL(f);},
   save(idx){
