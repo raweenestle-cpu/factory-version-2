@@ -2969,9 +2969,9 @@ const TEAM={
     const wn=wNum(S.wkStart);
     const rot=Math.floor((wn-(cfg.startWk||1))/(cfg.rotateSW||2));
     return{
-      A:['\u0e14\u0e36\u0e01','\u0e1a\u0e48\u0e32\u0e22','\u0e40\u0e0a\u0e49\u0e32'][rot%3],
-      B:['\u0e1a\u0e48\u0e32\u0e22','\u0e40\u0e0a\u0e49\u0e32','\u0e14\u0e36\u0e01'][rot%3],
-      C:['\u0e40\u0e0a\u0e49\u0e32','\u0e14\u0e36\u0e01','\u0e1a\u0e48\u0e32\u0e22'][rot%3],
+      A:['morning','afternoon','night'][rot%3],
+      B:['afternoon','night','morning'][rot%3],
+      C:['night','morning','afternoon'][rot%3],
     };
   },
 
@@ -2989,7 +2989,7 @@ const TEAM={
     emps.forEach(e=>{if(e.team&&teams[e.team])teams[e.team].push(e);else teams.none.push(e);});
 
     const colors={A:'var(--blue)',B:'var(--teal)',C:'var(--purple)'};
-    const shLabel={morning:'กะเช้า',afternoon:'กะบ่าย',night:'กะดึก'};
+    const shLabel={morning:'กะเช้า',afternoon:'กะบ่าย',night:'กะดึก',เช้า:'กะเช้า',บ่าย:'กะบ่าย',ดึก:'กะดึก'};
 
     el.innerHTML=`
     <!-- คนที่ยังไม่มีทีม -->
