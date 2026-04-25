@@ -1057,8 +1057,22 @@ const APP={
     S.sys=sys;
     document.getElementById('sp').classList.toggle('active',sys==='proc');
     document.getElementById('sf').classList.toggle('active',sys==='fill');
-    DASH.render();PLAN.render();SCHED.render();OT.render();EMP.render();SET.render();
-    LEAVE.render();LEAVE.updBadge();LEAVE.updBadge();LEAVE.archivePast();
+    // render หน้าที่กำลังแสดงอยู่ทันที
+    const activePage=document.querySelector('.page.active')?.id||'';
+    if(activePage==='pg-dash')DASH.render();
+    else if(activePage==='pg-plan')PLAN.render();
+    else if(activePage==='pg-sched')SCHED.render();
+    else if(activePage==='pg-ot')OT.render();
+    else if(activePage==='pg-emp')EMP.render();
+    else if(activePage==='pg-settings')SET.render();
+    else if(activePage==='pg-products')PROD.render();
+    else PLAN.render();
+    // render หน้าอื่นหลังจากนั้น
+    setTimeout(()=>{
+      DASH.render();SCHED.render();OT.render();
+      EMP.render();SET.render();PROD.render();
+      LEAVE.updBadge();
+    },100);
   },
   goPage(id,adminOnly=false,force=false){
     if(adminOnly&&!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}
@@ -1452,16 +1466,40 @@ const PLAN={
       const ms=document.getElementById('mixing-summary');
       if(ms)ms.style.display='none';
       this._dayData=null;
-      this.render();
+      this.render();SCHED.render();DASH.render();
       toast('✅ ล้างแผนแล้ว พร้อมรับข้อมูลสัปดาห์ใหม่');
     });
   },
   autoLoad(){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
-    const emps=D.getEmps(S.sys);if(!emps.length){alert2('ยังไม่มีพนักงานใน '+(S.sys==='proc'?'Process':'Filling'),'❌');return;}
+    // แสดงสถานะกำลังโหลด
+    const autoBtn=document.querySelector('.btn-p.btn-amber[onclick="PLAN.autoLoad()"]');
+    const origText=autoBtn?.textContent;
+    if(autoBtn){autoBtn.textContent='⏳ กำลังโหลด...';autoBtn.disabled=true;autoBtn.style.opacity='0.6';}
+    const doneLoad=(ok,msg)=>{
+      if(!autoBtn)return;
+      autoBtn.disabled=false;autoBtn.style.opacity='1';
+      if(ok){
+        autoBtn.textContent='✅ โหลดแล้ว';
+        autoBtn.style.background='var(--green)';autoBtn.style.color='#fff';
+        toast('✅ โหลดพนักงานสำเร็จ');
+        setTimeout(()=>{autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';},3000);
+      } else {
+        autoBtn.textContent='❌ '+msg;
+        autoBtn.style.background='var(--red)';autoBtn.style.color='#fff';
+        setTimeout(()=>{autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';},3000);
+      }
+    };
+    // ดึง emps ของ sys นี้ — fallback จาก all emps ถ้า LS ว่าง
+    let emps=D.getEmps(S.sys);
+    if(!emps.length){
+      const allEmps=[...D.getEmps('fill'),...D.getEmps('proc')];
+      emps=allEmps.filter(e=>(e.sys||'fill')===S.sys);
+    }
+    if(!emps.length){doneLoad(false,'ไม่มีพนักงาน');alert2('ยังไม่มีพนักงานใน '+(S.sys==='proc'?'Process':'Filling'),'❌');return;}
     // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
-      if(!this._dayData){toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
+      if(!this._dayData){doneLoad(false,'โหลดแผน Filling ก่อน');toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
       if(this._dayData){
         const wk2=wKey(S.wkStart);const allSched2=D.getSched();
         if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
@@ -1493,7 +1531,7 @@ const PLAN={
         });
         allSched2[wk2]=sched2;D.saveSched(allSched2);
         FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
-        markUnsaved();SCHED.render();
+        markUnsaved();SCHED.render();doneLoad(true);
         if(short2.length)alert2('⚠️ พนักงานไม่พอ:\n'+short2.join('\n'),'😟');
       }
       return;
@@ -1523,23 +1561,27 @@ const PLAN={
     const teamCfg=D.getTeamCfg();
     const teamShifts=TEAM.getCurShifts();
     const shMap={morning:'morning',afternoon:'afternoon',night:'night'};
-    const allEmpsPool=D.getEmps();
+    const allEmpsPool=D.getEmps(S.sys);
     function findSub(dept,di,sh,excludeNames){
       const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
       const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-      // หาคนที่ยังไม่ได้เข้างานใน sched วันนี้กะนี้เลย
+      // หาคนที่ยังไม่ได้เข้างานในวันนั้นเลย (ทุกกะ)
       const alreadyWorking=new Set();
       depts.forEach(d=>{
-        (sched[d]?.[di]?.[sh]||[]).forEach(w=>alreadyWorking.add(w.name));
+        SHS.forEach(s=>(sched[d]?.[di]?.[s]||[]).forEach(w=>alreadyWorking.add(w.name)));
       });
-      return allEmpsPool.filter(e=>{
+      const cands=allEmpsPool.filter(e=>{
         if(excludeNames.has(e.name))return false;
-        if(alreadyWorking.has(e.name))return false; // เข้างานแล้ว ห้ามเอามาซ้ำ
-        if((e.sys||'fill')!==S.sys)return false; // ข้าม sys ไม่ได้
-        if(e.lockShift&&e.lockShift!==sh)return false;
+        if(alreadyWorking.has(e.name))return false;
+        if((e.sys||'fill')!==S.sys)return false;
         const myLv=leaveData[e.name]||[];if(myLv.includes(dk))return false;
         return e.sub1===dept||e.sub2===dept;
       });
+      // เรียง: กะเดียวกันก่อน แล้วค่อยกะอื่น
+      const empSh=e=>e.lockShift||(e.team?({morning:'morning',afternoon:'afternoon',night:'night'}[teamShifts[e.team]]):null);
+      const sameShift=cands.filter(e=>empSh(e)===sh);
+      const otherShift=cands.filter(e=>empSh(e)!==sh);
+      return [...sameShift,...otherShift];
     }
     emps.forEach(e=>{
       if(!e.team)return;
@@ -1592,7 +1634,7 @@ const PLAN={
     if(idleEmps.length)toast('ℹ️ มีพนักงานว่าง '+idleEmps.length+' คน',4000);
     allSched[wk]=sched;D.saveSched(allSched);
     FB.set(S.sys+'/sched/'+wk,sched);
-    markUnsaved();SCHED.render();
+    markUnsaved();SCHED.render();doneLoad(true);
     if(short.length){
       const rows=short.map(s=>{
         const parts=s.split(':');
