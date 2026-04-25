@@ -1442,17 +1442,40 @@ const PLAN={
     if(ms)ms.style.display='block';
     const body=document.getElementById('mix-sum-body');
     if(!body)return;
-    const cfg=D.getMixingCfg();
-    body.innerHTML=this._dayData.map(d=>{
-      if(d.units===0)return`<div style="padding:4px 0;font-size:11px;color:var(--text3)">วัน${['จ','อ','พ','พฤ','ศ','ส'][d.di]}: ไม่ต้องผลิต</div>`;
-      return`<div style="padding:4px 0;font-size:11px;display:flex;gap:8px">
-        <span style="color:var(--text2);min-width:20px">วัน${['จ','อ','พ','พฤ','ศ','ส'][d.di]}:</span>
-        <span style="color:var(--amber);font-weight:700">${d.units===2?'2 ชุด':'1 ชุด'}</span>
-        <span style="color:var(--blue2)">${d.hoursNeeded} ชม.</span>
-        <span style="color:var(--green2)">${d.totalP} คน</span>
-        <span style="color:var(--text3)">(ต้องการ ${(d.demandLiter||0).toLocaleString()} ล.)</span>
-      </div>`;
-    }).join('');
+    const DAYTH=['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+    const DAYSH=['จ','อ','พ','พฤ','ศ','ส'];
+    body.innerHTML=`
+    <div style="overflow-x:auto;padding:8px 14px 14px">
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;min-width:480px">
+        ${this._dayData.map(d=>{
+          const noWork=d.units===0;
+          const twoUnits=d.units===2;
+          const accent=noWork?'var(--bg3)':twoUnits?'rgba(245,158,11,.15)':'rgba(37,99,235,.15)';
+          const border=noWork?'var(--border)':twoUnits?'rgba(245,158,11,.4)':'rgba(37,99,235,.4)';
+          const unitColor=noWork?'var(--text3)':twoUnits?'var(--amber)':'var(--blue2)';
+          return`<div style="background:${accent};border:1px solid ${border};border-radius:10px;padding:10px 8px;text-align:center">
+            <div style="font-size:11px;font-weight:900;color:var(--text2);margin-bottom:6px">${DAYTH[d.di]}</div>
+            ${noWork
+              ?`<div style="font-size:18px;margin:4px 0">😴</div>
+                <div style="font-size:10px;color:var(--text3)">ไม่ผลิต</div>`
+              :`<div style="font-size:11px;font-weight:900;color:${unitColor};margin-bottom:4px">${twoUnits?'🔥 2 ชุด':'⚙️ 1 ชุด'}</div>
+                <div style="font-size:13px;font-weight:900;color:var(--text)">${d.hoursNeeded}<span style="font-size:10px;font-weight:400;color:var(--text3)"> ชม.</span></div>
+                <div style="font-size:11px;color:var(--green2);margin-top:2px">👷 ${d.totalP} คน</div>
+                <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.4">
+                  ต้องการ<br>${(d.demandLiter||0).toLocaleString()} ล.
+                </div>
+                ${d.oreoP>0?`<div style="font-size:10px;color:var(--purple);margin-top:3px">🍪 +Oreo</div>`:''}
+              `
+            }
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap">
+        <span>⚙️ 1 ชุด = Mixing ชุดที่ 2 (หลัก)</span>
+        <span>🔥 2 ชุด = เปิดทั้ง 2 ชุด</span>
+        <span>😴 ไม่ผลิต = Stock พอ</span>
+      </div>
+    </div>`;
   },
   toggleMixSummary(){
     const body=document.getElementById('mix-sum-body');
@@ -1483,17 +1506,21 @@ const PLAN={
     const origText=autoBtn?.textContent;
     if(autoBtn){autoBtn.textContent='⏳ กำลังโหลด...';autoBtn.disabled=true;autoBtn.style.opacity='0.6';}
     const doneLoad=(ok,msg)=>{
+      if(ok){
+        toast('✅ โหลดพนักงานสำเร็จ');
+      } else {
+        toast('❌ '+(msg||'ไม่สำเร็จ'));
+      }
       if(!autoBtn)return;
       autoBtn.disabled=false;autoBtn.style.opacity='1';
       if(ok){
         autoBtn.textContent='✅ โหลดแล้ว';
         autoBtn.style.background='var(--green)';autoBtn.style.color='#fff';
-        toast('✅ โหลดพนักงานสำเร็จ');
-        setTimeout(()=>{autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';},3000);
+        setTimeout(()=>{if(autoBtn){autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';}},3000);
       } else {
-        autoBtn.textContent='❌ '+msg;
+        autoBtn.textContent='❌ '+(msg||'');
         autoBtn.style.background='var(--red)';autoBtn.style.color='#fff';
-        setTimeout(()=>{autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';},3000);
+        setTimeout(()=>{if(autoBtn){autoBtn.textContent=origText;autoBtn.style.background='';autoBtn.style.color='';}},3000);
       }
     };
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');doneLoad(false,'Admin เท่านั้น');return;}
