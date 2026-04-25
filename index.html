@@ -1500,39 +1500,98 @@ const PLAN={
     // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
       if(!this._dayData){doneLoad(false,'โหลดแผน Filling ก่อน');toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
-      if(this._dayData){
-        const wk2=wKey(S.wkStart);const allSched2=D.getSched();
-        if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
-        Object.keys(sched2).forEach(k=>delete sched2[k]);
-        const procDepts=D.getDepts('proc').filter(d=>d!==AL);
-        const short2=[];
-        const teamShifts2=TEAM.getCurShifts();
-        const shMap2={morning:'morning',afternoon:'afternoon',night:'night'};
-        const leaveData2=D.getLeave();
-        // init sched2 structure
-        procDepts.forEach(dept=>{
-          if(!sched2[dept])sched2[dept]={};
-          for(let di=0;di<6;di++){
-            if(!sched2[dept][di])sched2[dept][di]={morning:[],afternoon:[],night:[]};
-          }
+      const wk2=wKey(S.wkStart);const allSched2=D.getSched();
+      if(!allSched2[wk2])allSched2[wk2]={};const sched2=allSched2[wk2];
+      Object.keys(sched2).forEach(k=>delete sched2[k]);
+      const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+      const leaveData2=D.getLeave();
+      const teamShifts2=TEAM.getCurShifts();
+      const shMap2={morning:'morning',afternoon:'afternoon',night:'night'};
+      const short2=[];
+
+      // init structure
+      procDepts.forEach(dept=>{
+        sched2[dept]={};
+        for(let di=0;di<6;di++) sched2[dept][di]={morning:[],afternoon:[],night:[]};
+      });
+      if(!sched2[AL])sched2[AL]={};
+      for(let di=0;di<6;di++) if(!sched2[AL][di])sched2[AL][di]={morning:[],afternoon:[],night:[]};
+
+      // สร้าง pool พนักงาน proc
+      const procEmps=emps.filter(e=>(e.sys||'fill')==='proc');
+
+      // วนแต่ละวัน (di=0 จันทร์ ... di=5 เสาร์)
+      this._dayData.forEach(dayInfo=>{
+        const di=dayInfo.di;
+        const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+        const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+
+        SHS.forEach(sh=>{
+          // จำนวนคนที่ต้องการในกะนี้ของวันนี้
+          const needPpl=dayInfo.units===0?0:(dayInfo.shiftPeople?.[sh]||0);
+
+          // assign คนลาเข้า AL ก่อน
+          procEmps.forEach(e=>{
+            const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
+            if(empSh!==sh)return; // ไม่ใช่กะนี้
+            if((leaveData2[e.name]||[]).includes(dk)){
+              // คนลา → AL
+              if(!sched2[AL][di][sh].find(w=>w.name===e.name))
+                sched2[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
+            }
+          });
+
+          if(needPpl===0)return; // วันนี้กะนี้ไม่ต้องผลิต
+
+          // assign คนเข้ากะตาม dept หลัก
+          procEmps.forEach(e=>{
+            const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
+            const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
+            if(empSh!==sh)return;
+            if((leaveData2[e.name]||[]).includes(dk))return; // ลาแล้ว
+            if(!sched2[dept][di][sh].find(w=>w.name===e.name))
+              sched2[dept][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+          });
+
+          // หาคนสำรอง (sub1/sub2) สำหรับคนที่ลา
+          procEmps.forEach(e=>{
+            const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
+            const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
+            if(empSh!==sh)return;
+            if(!(leaveData2[e.name]||[]).includes(dk))return; // ไม่ได้ลา ไม่ต้องหาสำรอง
+            // หาคนสำรองกะเดียวกันก่อน แล้วค่อยกะอื่น
+            const working=new Set();
+            procDepts.forEach(d=>SHS.forEach(s=>(sched2[d]?.[di]?.[s]||[]).forEach(w=>working.add(w.name))));
+            const subs=procEmps.filter(sub=>{
+              if(working.has(sub.name))return false;
+              if((leaveData2[sub.name]||[]).includes(dk))return false;
+              return sub.sub1===dept||sub.sub2===dept;
+            });
+            const subSameSh=subs.filter(sub=>{
+              const s=sub.lockShift||(sub.team?shMap2[teamShifts2[sub.team]]:null);
+              return s===sh;
+            });
+            const sub=(subSameSh.length?subSameSh:subs)[0];
+            if(sub){
+              if(!sched2[dept][di][sh].find(w=>w.name===sub.name))
+                sched2[dept][di][sh].push({name:sub.name,ot:false,otHrs:4,av:sub.av||0,isSub:true});
+            } else {
+              short2.push(dept+' '+DAYS[di]+' '+SHTH[sh]+': '+e.name+' ลา — ขาดมือรอง');
+            }
+          });
+
+          // ตรวจว่าคนพอไหม
+          const got=procDepts.reduce((a,d)=>a+(sched2[d]?.[di]?.[sh]||[]).length,0);
+          if(got<needPpl) short2.push('Process '+DAYS[di]+' '+SHTH[sh]+': ต้องการ '+needPpl+' คน มี '+got+' คน');
         });
-        // assign พนักงานตาม mainDept และ shift ของทีม
-        emps.forEach(e=>{
-          if((e.sys||'fill')!=='proc')return;
-          const dept=e.mainDept||e.dept;if(!dept||!procDepts.includes(dept))return;
-          const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);if(!empSh)return;
-          for(let di=0;di<6;di++){
-            const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
-            const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-            if((leaveData2[e.name]||[]).includes(dk))continue;
-            if(!sched2[dept][di][empSh].find(w=>w.name===e.name))
-              sched2[dept][di][empSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
-          }
-        });
-        allSched2[wk2]=sched2;D.saveSched(allSched2);
-        FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
-        markUnsaved();SCHED.render();doneLoad(true);
-        if(short2.length)alert2('⚠️ พนักงานไม่พอ:\n'+short2.join('\n'),'😟');
+      });
+
+      allSched2[wk2]=sched2;D.saveSched(allSched2);
+      FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
+      markUnsaved();SCHED.render();doneLoad(true);
+      if(short2.length){
+        const rows=short2.map(s=>'<tr><td style="padding:6px 10px;border:1px solid #334155;font-size:12px">'+s+'</td></tr>').join('');
+        alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d:\n'+short2.join('\n'),'\ud83d\ude1f');
       }
       return;
     }
