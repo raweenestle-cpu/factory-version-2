@@ -1533,9 +1533,11 @@ const PLAN={
       }
     };
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');doneLoad(false,'Admin เท่านั้น');return;}
-    // ดึง emps ของ sys นี้ — fallback จาก all emps ถ้า LS ว่าง
+    toast('🔍 step1: เช็ค emps sys='+S.sys);
     const emps=D.getEmps(S.sys);
+    toast('🔍 step2: emps='+emps.length+' คน');
     if(!emps.length){doneLoad(false,'ไม่มีพนักงาน');alert2('ยังไม่มีพนักงานใน '+(S.sys==='proc'?'Process':'Filling'),'❌');return;}
+    toast('🔍 step3: ผ่าน emps check');
     // Process — ต้องโหลดแผน Filling ก่อน
     if(S.sys==='proc'){
       if(!this._dayData){doneLoad(false,'โหลดแผน Filling ก่อน');toast('⚠️ กรุณากดปุ่ม 📥 โหลดแผน Filling ก่อนครับ');return;}
