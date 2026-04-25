@@ -1256,9 +1256,11 @@ const PLAN={
     const procLoadBtn=document.getElementById('plan-load-fill-btn');
     const fillEmpBtn=document.getElementById('plan-load-emp-fill-btn');
     const procEmpBtn=document.getElementById('plan-load-emp-proc-btn');
-    if(procLoadBtn) procLoadBtn.style.display=S.sys==='proc'?'inline-flex':'none';
-    if(fillEmpBtn) fillEmpBtn.style.display=S.sys==='fill'?'inline-flex':'none';
-    if(procEmpBtn) procEmpBtn.style.display=S.sys==='proc'?'inline-flex':'none';
+    const isFillSys=S.sys==='fill';
+    const isProcSys=S.sys==='proc';
+    if(procLoadBtn) procLoadBtn.style.display=isProcSys?'inline-flex':'none';
+    if(fillEmpBtn) fillEmpBtn.style.display=isFillSys?'inline-flex':'none';
+    if(procEmpBtn) procEmpBtn.style.display=isProcSys?'inline-flex':'none';
     // อัพเดท team bar
     try{
       const shifts=TEAM.getCurShifts();
