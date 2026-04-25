@@ -1250,7 +1250,7 @@ const PLAN={
     const mixSum=document.getElementById('mixing-summary');
     const teamBar=document.getElementById('plan-team-bar');
     if(planWrap)planWrap.style.display=S.sys==='proc'?'none':'';
-    if(mixSum&&S.sys==='proc'){mixSum.style.display='block';}
+    if(mixSum)mixSum.style.display=S.sys==='proc'&&this._dayData?'block':'none';
     if(teamBar)teamBar.style.display=S.sys==='proc'?'none':'';
     // แสดงปุ่มตาม sys
     const procLoadBtn=document.getElementById('plan-load-fill-btn');
