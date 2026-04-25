@@ -2154,9 +2154,10 @@ const SCHED={
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     let tH=0,oH=0;
     D.getDepts().forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched[d]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
-    const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
-    if(pct>tgt){this.showOTReason(pct,tgt,()=>{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();});}
-    else{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();}
+        const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
+    const doSave=()=>{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);markSaved();toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();};
+    if(oH>1){this.showOTReason(pct,tgt,doSave);}
+    else{doSave();}
   },
   showOTReason(pct,tgt,onSave){
     const reasons=D.getReasons();let rows=[{reason:reasons[0]||'',hours:0}];
