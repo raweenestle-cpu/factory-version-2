@@ -1531,8 +1531,15 @@ const PLAN={
     function findSub(dept,di,sh,excludeNames){
       const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
       const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+      // หาคนที่ยังไม่ได้เข้างานใน sched วันนี้กะนี้เลย
+      const alreadyWorking=new Set();
+      depts.forEach(d=>{
+        (sched[d]?.[di]?.[sh]||[]).forEach(w=>alreadyWorking.add(w.name));
+      });
       return allEmpsPool.filter(e=>{
         if(excludeNames.has(e.name))return false;
+        if(alreadyWorking.has(e.name))return false; // เข้างานแล้ว ห้ามเอามาซ้ำ
+        if((e.sys||'fill')!==S.sys)return false; // ข้าม sys ไม่ได้
         if(e.lockShift&&e.lockShift!==sh)return false;
         const myLv=leaveData[e.name]||[];if(myLv.includes(dk))return false;
         return e.sub1===dept||e.sub2===dept;
@@ -1540,6 +1547,7 @@ const PLAN={
     }
     emps.forEach(e=>{
       if(!e.team)return;
+      if((e.sys||'fill')!==S.sys)return; // ข้าม sys ไม่ได้
       const sh=shMap[teamShifts[e.team]];if(!sh)return;
       const actualSh=e.lockShift||sh;
       const dept=e.mainDept||e.dept;if(!dept)return;
