@@ -1476,8 +1476,13 @@ const PLAN={
               if(!sched2[dept])sched2[dept]={};
               if(!sched2[dept][d.di])sched2[dept][d.di]={morning:[],afternoon:[],night:[]};
             });
+            const teamShifts2=TEAM.getCurShifts();
+            const shMap2={morning:'morning',afternoon:'afternoon',night:'night'};
             const cands=emps.filter(e=>{
               if(e.lockShift&&e.lockShift!==sh)return false;
+              // เช็ค shift ตามทีม — ห้ามใส่ผิดกะ
+              const empSh=e.lockShift||(e.team?shMap2[teamShifts2[e.team]]:null);
+              if(empSh&&empSh!==sh)return false;
               return procDepts.includes(e.mainDept||e.dept)||procDepts.includes(e.sub1)||procDepts.includes(e.sub2);
             });
             const leaveData=D.getLeave();
