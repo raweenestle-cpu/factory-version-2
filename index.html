@@ -429,8 +429,11 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
   <div class="page" id="pg-plan">
     <div class="plan-tb" style="flex-wrap:wrap;gap:6px">
       <h2 style="width:100%;margin-bottom:2px">📋 วางแผนการผลิต</h2>
+      <!-- Filling buttons -->
+      <button id="plan-load-emp-fill-btn" class="btn-p btn-amber" style="display:none" onclick="PLAN.autoLoad()">⚡ โหลดพนักงาน Filling</button>
+      <!-- Process buttons -->
       <button id="plan-load-fill-btn" class="btn-p" style="background:var(--purple);color:#fff;display:none" onclick="PLAN.loadFromFilling()">📥 โหลดแผน Filling</button>
-      <button class="btn-p btn-amber" onclick="PLAN.autoLoad()">⚡ โหลดพนักงาน</button>
+      <button id="plan-load-emp-proc-btn" class="btn-p btn-amber" style="display:none" onclick="PLAN.autoLoad()">⚡ โหลดพนักงาน Process</button>
       <button class="btn-p btn-green" onclick="PLAN.save()">💾 บันทึก</button>
       <button class="btn-p" style="background:rgba(220,38,38,.2);border:1px solid rgba(220,38,38,.4);color:var(--red2)" onclick="PLAN.clearPlan()">🗑️ ล้างแผน</button>
     </div>
@@ -1242,9 +1245,13 @@ const PLAN={
     // fallback ถ้า depts ว่าง
     if(!depts.length){depts=(S.sys==='fill'?FDEPT:PDEPT).filter(d=>d!==AL);}
     this.plan=JSON.parse(JSON.stringify(D.getPlan()));
-    // แสดงปุ่มโหลดแผน Filling เฉพาะ Process
+    // แสดงปุ่มตาม sys
     const procLoadBtn=document.getElementById('plan-load-fill-btn');
+    const fillEmpBtn=document.getElementById('plan-load-emp-fill-btn');
+    const procEmpBtn=document.getElementById('plan-load-emp-proc-btn');
     if(procLoadBtn) procLoadBtn.style.display=S.sys==='proc'?'inline-flex':'none';
+    if(fillEmpBtn) fillEmpBtn.style.display=S.sys==='fill'?'inline-flex':'none';
+    if(procEmpBtn) procEmpBtn.style.display=S.sys==='proc'?'inline-flex':'none';
     // อัพเดท team bar
     try{
       const shifts=TEAM.getCurShifts();
@@ -1472,7 +1479,7 @@ const PLAN={
   },
   autoLoad(){
     // แสดงสถานะกำลังโหลด — define ก่อนเสมอ
-    const autoBtn=document.querySelector('.btn-p.btn-amber[onclick="PLAN.autoLoad()"]');
+    const autoBtn=S.sys==='fill'?document.getElementById('plan-load-emp-fill-btn'):document.getElementById('plan-load-emp-proc-btn');
     const origText=autoBtn?.textContent;
     if(autoBtn){autoBtn.textContent='⏳ กำลังโหลด...';autoBtn.disabled=true;autoBtn.style.opacity='0.6';}
     const doneLoad=(ok,msg)=>{
