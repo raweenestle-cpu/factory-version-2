@@ -16,6 +16,19 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* Desktop Mode */
+body.desktop-mode #app{display:grid;grid-template-columns:200px 1fr;grid-template-rows:auto 1fr;height:100vh;overflow:hidden;}
+body.desktop-mode .topbar{grid-column:1/-1;}
+body.desktop-mode .bottomnav{display:none;}
+body.desktop-mode #sidebar{display:flex;}
+body.desktop-mode .page-wrap{overflow-y:auto;height:calc(100vh - 56px);}
+#sidebar{display:none;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border);padding:8px 0;gap:2px;overflow-y:auto;}
+.side-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border:none;background:transparent;color:var(--text3);font-size:13px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;width:100%;text-align:left;border-radius:8px;margin:0 4px;width:calc(100% - 8px);}
+.side-item:hover{background:var(--bg3);color:var(--text);}
+.side-item.active{background:rgba(37,99,235,.2);color:var(--blue2);}
+.side-icon{font-size:18px;width:24px;text-align:center;}
+body.desktop-mode .page{font-size:13px;}
+body.desktop-mode .wc{font-size:11px;}
 :root{--bg:#0F172A;--bg2:#1E293B;--bg3:#334155;--card:#1E293B;--border:#334155;--text:#F8FAFC;--text2:#94A3B8;--text3:#64748B;--navy:#1E3A5F;--blue:#2563EB;--blue2:#3B82F6;--teal:#0D9488;--green:#16A34A;--green2:#22C55E;--amber:#F59E0B;--red:#DC2626;--red2:#EF4444;--purple:#7C3AED;--radius:14px;--shadow:0 4px 24px rgba(0,0,0,.4)}
 html,body{height:100%;overflow:hidden;font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 button{font-family:'Sarabun',sans-serif;cursor:pointer;transition:all .15s}
@@ -399,7 +412,14 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
   </div>
 
   <div class="page active" id="pg-dash">
-    <div class="dash-header"><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p></div>
+    <div class="dash-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p></div>
+      <button onclick="APP.toggleDesktop()" id="view-mode-btn"
+        style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;flex-shrink:0">
+        <span id="view-mode-icon">🖥️</span>
+        <span id="view-mode-label">Desktop Mode</span>
+      </button>
+    </div>
     <div class="dash-cards">
       <div class="dash-card" style="--accent:var(--blue)" onclick="APP.goPage('pg-ot')">
         <div class="dc-label">Process OT%</div><div class="dc-val ot-none" id="pp">-</div>
@@ -604,6 +624,16 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     </div>
   </div>
 
+  <div id="sidebar">
+    <button class="side-item active" id="side-dash" onclick="APP.goPage('pg-dash')"><span class="side-icon">📊</span>Dashboard</button>
+    <button class="side-item" id="side-plan" onclick="APP.goPage('pg-plan')"><span class="side-icon">📋</span>วางแผน</button>
+    <button class="side-item" id="side-sched" onclick="APP.goPage('pg-sched')"><span class="side-icon">📅</span>ตารางกะ</button>
+    <button class="side-item" id="side-ot" onclick="APP.goPage('pg-ot')"><span class="side-icon">👤</span>OT</button>
+    <button class="side-item" id="side-emp" onclick="APP.goPage('pg-emp')"><span class="side-icon">👥</span>พนักงาน</button>
+    <button class="side-item" id="side-team" onclick="APP.goPage('pg-team')"><span class="side-icon">🔄</span>ทีม</button>
+    <button class="side-item" id="side-leave" onclick="APP.goPage('pg-leave')"><span class="side-icon">🏖️</span>ลา</button>
+    <button class="side-item" id="side-set" onclick="APP.goPage('pg-set')"><span class="side-icon">⚙️</span>ตั้งค่า</button>
+  </div>
   <div class="bottomnav">
     <button class="nav-item active" id="nav-dash" onclick="APP.goPage('pg-dash')"><span class="nav-icon">📊</span>Dashboard</button>
     <button class="nav-item" id="nav-plan" onclick="APP.goPage('pg-plan')"><span class="nav-icon">📋</span>วางแผน</button>
@@ -1034,6 +1064,14 @@ const AUTH={
 
 const APP={
   init(){
+    // restore view mode
+    if(LS.get('view_mode','mobile')==='desktop'){
+      document.body.classList.add('desktop-mode');
+      const icon=document.getElementById('view-mode-icon');
+      const label=document.getElementById('view-mode-label');
+      if(icon)icon.textContent='📱';
+      if(label)label.textContent='Mobile Mode';
+    }
     this.syncFB();
     const renders=[
       ()=>DASH.render(),()=>PLAN.render(),()=>SCHED.render(),
@@ -1088,7 +1126,21 @@ const APP={
       LEAVE.updBadge();
     },100);
   },
+  toggleDesktop(){
+    const isDesktop=document.body.classList.toggle('desktop-mode');
+    LS.set('view_mode',isDesktop?'desktop':'mobile');
+    const icon=document.getElementById('view-mode-icon');
+    const label=document.getElementById('view-mode-label');
+    if(icon)icon.textContent=isDesktop?'📱':'🖥️';
+    if(label)label.textContent=isDesktop?'Mobile Mode':'Desktop Mode';
+    document.querySelectorAll('.side-item').forEach(b=>b.classList.remove('active'));
+    const cur=document.querySelector('.nav-item.active');
+    if(cur){const pg=cur.id.replace('nav-','');const sb=document.getElementById('side-'+pg);if(sb)sb.classList.add('active');}
+  },
   goPage(id,adminOnly=false,force=false){
+    // sync sidebar
+    document.querySelectorAll('.side-item').forEach(b=>b.classList.remove('active'));
+    const pg=id.replace('pg-','');const sb=document.getElementById('side-'+pg);if(sb)sb.classList.add('active');
     if(adminOnly&&!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}
     // เตือนถ้ายังไม่ได้ Save ตารางกะ
     if(_unsaved&&id!=='pg-sched'&&!force){
