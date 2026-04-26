@@ -1477,7 +1477,7 @@ const PLAN={
         </div>
         <input type="number" min="0" value="${mixStockVal}"
           style="width:110px;padding:6px 10px;background:var(--bg2);border:1.5px solid var(--blue);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;font-family:'Sarabun',sans-serif;text-align:right"
-          oninput="PLAN.setMixStock(this.value)">
+          id="mix-stock-inp" onblur="PLAN.setMixStock(this.value)" onkeydown="if(event.key==='Enter'){PLAN.setMixStock(this.value);this.blur();}">
         <span style="font-size:11px;color:var(--text3)">ลิตร</span>
         <span style="font-size:11px;color:var(--amber);font-weight:700">⚠️ วันเสาร์ผลิตขั้นต่ำ 30,000 ลิตรเป็นสต๊อก</span>
       </div>
