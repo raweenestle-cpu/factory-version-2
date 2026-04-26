@@ -1466,8 +1466,21 @@ const PLAN={
     if(!body)return;
     const DAYTH=['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
     const DAYSH=['จ','อ','พ','พฤ','ศ','ส'];
+    const mixStockVal=LS.get('mix_stock',0)||0;
     body.innerHTML=`
     <div style="overflow-x:auto;padding:8px 14px 14px">
+      <div style="background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.3);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:18px">📦</div>
+        <div>
+          <div style="font-size:11px;font-weight:900;color:var(--blue2)">สต๊อกยกมาจากสัปดาห์ที่แล้ว</div>
+          <div style="font-size:10px;color:var(--text3)">บวกเพิ่มสต๊อกวันจันทร์</div>
+        </div>
+        <input type="number" min="0" value="${mixStockVal}"
+          style="width:110px;padding:6px 10px;background:var(--bg2);border:1.5px solid var(--blue);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;font-family:'Sarabun',sans-serif;text-align:right"
+          oninput="PLAN.setMixStock(this.value)">
+        <span style="font-size:11px;color:var(--text3)">ลิตร</span>
+        <span style="font-size:11px;color:var(--amber);font-weight:700">⚠️ วันเสาร์ผลิตขั้นต่ำ 30,000 ลิตรเป็นสต๊อก</span>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;min-width:480px">
         ${this._dayData.map(d=>{
           const noWork=d.units===0;
@@ -1491,6 +1504,7 @@ const PLAN={
             }
           </div>`;
         }).join('')}
+      </div>
       </div>
       <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap">
         <span>⚙️ 1 ชุด = Mixing ชุดที่ 2 (หลัก)</span>
@@ -1652,6 +1666,7 @@ const PLAN={
           });
         });
 
+        const preOTFromAfternoon=new Set();
         // 2.5 ถ้าเปิด 2 ชุด → ดึงคนกะบ่ายมา pre-OT 4 ชม. (10:00-14:00)
         if(units>=2&&morningAssigned.length<needPpl){
           const afternoonPool2=[...byShift.afternoon];
@@ -1668,16 +1683,27 @@ const PLAN={
           });
         }
 
-        // 3. กะบ่าย → ที่เหลือ
+        // 3. กะบ่าย → ที่เหลือ (ไม่รวมคนที่ถูกดึง pre-OT)
         const afternoonPool=[...byShift.afternoon];
         const afternoonAssigned=[];
         procDepts.forEach(dept=>{
-          const deptAfter=afternoonPool.filter(e=>effectiveDept(e)===dept&&!afternoonAssigned.find(x=>x.name===e.name));
+          const deptAfter=afternoonPool.filter(e=>
+            effectiveDept(e)===dept&&
+            !afternoonAssigned.find(x=>x.name===e.name)&&
+            !preOTFromAfternoon.has(e.name)
+          );
           deptAfter.forEach(e=>{
             sched2[dept][di].afternoon.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
             afternoonAssigned.push(e);
           });
         });
+        // ลบคน pre-OT ออกจากกะบ่าย (กรณีที่อาจถูก assign ไปก่อนแล้ว)
+        if(preOTFromAfternoon.size>0){
+          procDepts.forEach(dept=>{
+            if(sched2[dept]&&sched2[dept][di])
+              sched2[dept][di].afternoon=sched2[dept][di].afternoon.filter(w=>!preOTFromAfternoon.has(w.name));
+          });
+        }
 
         // 4. คำนวณ OT ถ้าต้องผลิตเกิน 14:00 (กะเช้าหมด)
         // hoursNeeded คือชั่วโมงที่ต้องผลิต เริ่มจาก 6:00
@@ -2207,7 +2233,10 @@ const PRINT={
         ${depts.map(dept=>`<tr>
           <td style="font-weight:700;background:#f8f8f8">${dept}</td>
           ${Array.from({length:6},(_,di)=>SHS.map(sh=>{
-            const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+            const ws2raw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          // dedup: ถ้าชื่อซ้ำให้เอาคนแรก (ที่มี OT มาก่อน)
+          const seenW=new Set();
+          const ws2=ws2raw.filter(w=>{if(seenW.has(w.name))return false;seenW.add(w.name);return true;});
             return`<td style="font-size:9pt">${ws2.map(w=>w.name+(w.ot?' (OT)':'')).join('<br>')}</td>`;
           }).join('')).join('')}
         </tr>`).join('')}
@@ -2324,21 +2353,25 @@ const SCHED={
       html+=`<tr><td class="sn">${dept}</td>`;
       for(let di=0;di<6;di++){
         SHS.forEach(sh=>{
-          const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          const ws2raw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          // dedup: ถ้าชื่อซ้ำให้เอาคนแรก (ที่มี OT มาก่อน)
+          const seenW=new Set();
+          const ws2=ws2raw.filter(w=>{if(seenW.has(w.name))return false;seenW.add(w.name);return true;});
           html+=`<td style="min-width:52px;vertical-align:top;padding:3px">${ws2.map(w=>{
             const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
             const ne=w.name.replace(/'/g,"\'");
             const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
             const normalEndH={morning:14,afternoon:22,night:30}[sh]||14;
-            // OT ก่อนเวลา (กะดึก เข้า 18:00) หรือ OT ปกติ (ต่อจาก normal end)
-            const isPreOT=w.otBefore; // OT ก่อนกะ (18:00-22:00)
-            const otStartH=isPreOT?normalEndH-(w.otHrs||4):shStartH;
-            const otEndRaw=(isPreOT?normalEndH:normalEndH+(w.otHrs||4));
-            const preOTStartH=isPreOT?(shStartH-( w.otHrs||4)+24)%24:shStartH;
-            const displayStart=String(isPreOT?preOTStartH:shStartH).padStart(2,'0')+':00';
-            // pre-OT: แสดงเวลาตั้งแต่เริ่ม pre-OT จนถึง normal end ของกะ
-            const normalEndDisplay={morning:6,afternoon:22,night:22}[sh]||0;
-            const displayEnd=isPreOT?String(normalEndDisplay).padStart(2,'0')+':00':String(otEndRaw%24).padStart(2,'0')+':00';
+            const isPreOT=w.otBefore;
+            const otHrs=Math.round(w.otHrs||4);
+            // คนกะบ่ายที่มาทำกะเช้า (otBefore) → แสดงเหมือนกะเช้า OT ปกติ = 06:00-18:00
+            // คนกะดึก pre-OT (18:00-22:00) → แสดง 18:00-22:00
+            const effectiveSh=isPreOT&&sh==='morning'?'morning':sh;
+            const effStartH={morning:6,afternoon:14,night:22}[effectiveSh]||6;
+            const effEndH={morning:14,afternoon:22,night:30}[effectiveSh]||14;
+            const otEndCalc=effEndH+otHrs;
+            const displayStart=String(isPreOT&&sh==='night'?(effStartH-otHrs+24)%24:effStartH).padStart(2,'0')+':00';
+            const displayEnd=isPreOT&&sh==='night'?String(effStartH).padStart(2,'0')+':00':String(Math.round(otEndCalc)%24).padStart(2,'0')+':00';
             const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
             return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
               <span style="font-size:11px;font-weight:800">${w.name}</span>
@@ -2677,12 +2710,20 @@ const EMP={
       <div class="fg"><label class="fl">\u0e41\u0e1c\u0e19\u0e01\u0e2a\u0e33\u0e23\u0e2d\u0e07 2</label><select class="fs" id="ef-s2"><option value="">-- \u0e44\u0e21\u0e48\u0e21\u0e35 --</option>${depts.map(d=>`<option ${emp?.sub2===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">ทีม</label><select class="fs" id="ef-tm"><option value="" ${!emp?.team?'selected':''}>-- ไม่ระบุ --</option><option value="A" ${emp?.team==='A'?'selected':''}>ทีม A (เช้า)</option><option value="B" ${emp?.team==='B'?'selected':''}>ทีม B (บ่าย)</option><option value="C" ${emp?.team==='C'?'selected':''}>ทีม C (ดึก)</option></select></div>
       <div class="fg"><label class="fl">Lock \u0e01\u0e30</label><select class="fs" id="ef-lk"><option value="">-- \u0e2b\u0e21\u0e38\u0e19\u0e1b\u0e01\u0e15\u0e34 --</option><option value="morning" ${emp?.lockShift==='morning'?'selected':''}>\ud83d\udd12 \u0e01\u0e30\u0e40\u0e0a\u0e49\u0e32\u0e15\u0e25\u0e2d\u0e14</option><option value="afternoon" ${emp?.lockShift==='afternoon'?'selected':''}>\ud83d\udd12 \u0e01\u0e30\u0e1a\u0e48\u0e32\u0e22\u0e15\u0e25\u0e2d\u0e14</option><option value="night" ${emp?.lockShift==='night'?'selected':''}>\ud83d\udd12 \u0e01\u0e30\u0e14\u0e36\u0e01\u0e15\u0e25\u0e2d\u0e14</option></select></div>
-      <div class="fg"><label class="fl">\u0e23\u0e39\u0e1b\u0e42\u0e1b\u0e23\u0e44\u0e1f\u0e25\u0e4c</label><div style="display:flex;gap:10px;align-items:center">
-        <div id="ef-pv" style="width:48px;height:48px;border-radius:50%;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${emp?.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:'\ud83d\udcf7'}</div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-          <div style="font-size:9px;color:var(--text3)">ลายเซ็น</div>
-          <div id="ef-sv" onclick="document.getElementById('ef-si').click()" style="width:100px;height:44px;border-radius:6px;overflow:hidden;background:var(--bg3);border:1.5px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)">${emp?.signature?`<img src="${emp.signature}" style="width:100%;height:100%;object-fit:contain">`:'✍️ ลายเซ็น'}</div>
+      <div class="fg" style="grid-column:1/-1">
+        <label class="fl">รูปโปรไฟล์</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div id="ef-pv" style="width:56px;height:56px;border-radius:50%;overflow:hidden;background:var(--bg3);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;cursor:pointer" onclick="document.getElementById('ef-pi').click()">${emp?.photo?`<img src="${emp.photo}" style="width:100%;height:100%;object-fit:cover">`:'📷'}</div>
+          <input type="file" id="ef-pi" accept="image/*" style="display:none" onchange="EMP.onPhoto(this)">
+          <span style="font-size:10px;color:var(--text3)">กดเพื่อเปลี่ยนรูป</span>
+        </div>
+      </div>
+      <div class="fg" style="grid-column:1/-1">
+        <label class="fl">ลายเซ็น (สำหรับ OT)</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div id="ef-sv" onclick="document.getElementById('ef-si').click()" style="width:140px;height:52px;border-radius:8px;overflow:hidden;background:var(--bg3);border:2px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text3)">${emp?.signature?`<img src="${emp.signature}" style="width:100%;height:100%;object-fit:contain">`:'✍️ อัพโหลดลายเซ็น'}</div>
           <input type="file" id="ef-si" accept="image/*" style="display:none" onchange="EMP.onSign(this)">
+          <span style="font-size:10px;color:var(--text3)">รูปลายเซ็นสำหรับพิมพ์ใบยินยอม OT</span>
         </div>
         <button onclick="document.getElementById('ef-pi').click()" style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif">\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e23\u0e39\u0e1b</button>
         <input type="file" id="ef-pi" accept="image/*" style="display:none" onchange="EMP.onPhoto(this)">
