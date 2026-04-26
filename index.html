@@ -1900,7 +1900,7 @@ const PLAN={
       allSched2[wk2]=sched2;
       D.saveSched(allSched2);
       FB.set(S.sys+'/sched/'+wKey(S.wkStart),sched2);
-      markUnsaved();SCHED.render();doneLoad(true);
+      markUnsaved();SCHED.render();DASH.render();doneLoad(true);
       return;
     }
 
@@ -2002,7 +2002,7 @@ const PLAN={
     allSched[wk]=sched;
     D.saveSched(allSched);
     FB.set(S.sys+'/sched/'+wk,sched);
-    markUnsaved();SCHED.render();
+    markUnsaved();SCHED.render();DASH.render();
 
     // ตรวจว่า LINE ไหนขาดคน
     const short=[];
