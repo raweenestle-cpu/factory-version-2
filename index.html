@@ -1793,132 +1793,128 @@ const PLAN={
       markUnsaved();SCHED.render();doneLoad(true);
       return;
     }
-    // Filling — autoLoad ปกติ
-    const wk=wKey(S.wkStart);const allSched=D.getSched();
-    if(!allSched[wk])allSched[wk]={};const sched=allSched[wk];
+
+    // ========== Filling autoLoad ==========
+    const wk=wKey(S.wkStart);
+    const allSched=D.getSched();
+    if(!allSched[wk])allSched[wk]={};
+    const sched=allSched[wk];
     Object.keys(sched).forEach(k=>delete sched[k]);
-    const depts=D.getDepts().filter(d=>d!==AL&&d!=='__IDLE__');
+
+    const fillDepts=D.getDepts('fill').filter(d=>d!==AL&&d!=='__IDLE__');
     const leaveData=D.getLeave();
-    const short=[];const used=new Set();const usedByDayShift={};
-    const AL2=AL;
-    // ตรวจว่ามีพนักงานที่กำหนด team แล้วไหม
-    const hasTeam=emps.some(e=>e.team);
-    if(!hasTeam){doneLoad(false,'ยังไม่ได้กำหนดทีม');alert2('⚠️ ยังไม่ได้กำหนดทีมให้พนักงาน\n\nกรุณาไปที่หน้า 🔄 ทีม แล้วกำหนดทีม A/B/C ให้พนักงานก่อนครับ','❌');return;}
-    function checkRest2(name,di,sh,sc){
-      if(sh==='morning'){
-        const prev=di>0?sc:null;
-        if(prev){
-          let nightEmps=[];
-          depts.forEach(d=>nightEmps=[...nightEmps,...(sc[d]?.[di-1]?.night||[])]);
-          if(nightEmps.find(w=>w.name===name))return false;
-        }
-      }
-      return true;
-    }
-    const teamCfg=D.getTeamCfg();
-    const teamShifts=TEAM.getCurShifts();
+    const teamShifts=TEAM.getCurShifts(); // {A:'morning',B:'afternoon',C:'night'}
     const shMap={morning:'morning',afternoon:'afternoon',night:'night'};
-    const allEmpsPool=D.getEmps(S.sys).length?D.getEmps(S.sys):emps;
-    function findSub(dept,di,sh,excludeNames){
+
+    // ตรวจว่ามี team ไหม
+    const hasTeam=emps.some(e=>e.team);
+    if(!hasTeam){doneLoad(false,'ยังไม่ได้กำหนดทีม');alert2('⚠️ กรุณาไปที่หน้า 🔄 ทีม แล้วกำหนดทีม A/B/C ให้พนักงานก่อนครับ','❌');return;}
+
+    // init sched structure
+    fillDepts.forEach(dept=>{
+      sched[dept]={};
+      for(let di=0;di<6;di++) sched[dept][di]={morning:[],afternoon:[],night:[]};
+    });
+    if(!sched[AL])sched[AL]={};
+    for(let di=0;di<6;di++) if(!sched[AL][di])sched[AL][di]={morning:[],afternoon:[],night:[]};
+
+    const maxOTDays=D.getMaxOT()||3;
+    const otLog=D.getOTLog(S.sys)||[];
+    const wkStr=wKey(S.wkStart);
+    const canOT=(name)=>{
+      const otDays=otLog.filter(l=>l.name===name&&l.wk===wkStr).length;
+      return otDays<maxOTDays;
+    };
+
+    for(let di=0;di<6;di++){
       const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
       const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-      // หาคนที่ยังไม่ได้เข้างานในวันนั้นเลย (ทุกกะ)
-      const alreadyWorking=new Set();
-      depts.forEach(d=>{
-        SHS.forEach(s=>(sched[d]?.[di]?.[s]||[]).forEach(w=>alreadyWorking.add(w.name)));
+
+      // คนลาวันนี้ → AL
+      emps.forEach(e=>{
+        if((leaveData[e.name]||[]).includes(dk)){
+          const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
+          if(!sched[AL][di][sh].find(w=>w.name===e.name))
+            sched[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
+        }
       });
-      const cands=allEmpsPool.filter(e=>{
-        if(excludeNames.has(e.name))return false;
-        if(alreadyWorking.has(e.name))return false;
-        if((e.sys||'fill')!==S.sys)return false;
-        const myLv=leaveData[e.name]||[];if(myLv.includes(dk))return false;
-        return e.sub1===dept||e.sub2===dept;
+
+      // usedEmps: 1 คน 1 กะ ต่อวัน
+      const usedEmps=new Set();
+
+      // แยกพนักงานตามกะ (กรอง AL และลา)
+      const byShift={morning:[],afternoon:[],night:[]};
+      emps.forEach(e=>{
+        if((leaveData[e.name]||[]).includes(dk))return;
+        const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
+        if(byShift[sh])byShift[sh].push(e);
       });
-      // เรียง: กะเดียวกันก่อน แล้วค่อยกะอื่น
-      const empSh=e=>e.lockShift||(e.team?({morning:'morning',afternoon:'afternoon',night:'night'}[teamShifts[e.team]]):null);
-      const sameShift=cands.filter(e=>empSh(e)===sh);
-      const otherShift=cands.filter(e=>empSh(e)!==sh);
-      return [...sameShift,...otherShift];
+
+      // assign แต่ละ LINE แต่ละกะ ตาม shiftPeople
+      SHS.forEach(sh=>{
+        fillDepts.forEach(dept=>{
+          // จำนวนคนที่ต้องการ LINE นี้ กะนี้
+          // ดูจาก _dayData ถ้ามี หรือ default 1 คน
+          let need=1;
+          if(this._dayData){
+            const dayInfo=this._dayData.find(d=>d.di===di);
+            if(dayInfo&&dayInfo.shiftPeople&&typeof dayInfo.shiftPeople[sh]==='number')
+              need=dayInfo.shiftPeople[sh];
+            else if(dayInfo&&dayInfo.units===0) need=0;
+          }
+          if(need<=0)return;
+
+          // 1. หาคนหลัก (mainDept === dept)
+          const mainPool=byShift[sh].filter(e=>
+            (e.mainDept||e.dept)===dept&&!usedEmps.has(e.name)
+          );
+
+          // 2. หามือสำรอง (sub1 หรือ sub2 === dept) ที่ยังไม่ถูกใช้
+          const subPool=byShift[sh].filter(e=>
+            (e.sub1===dept||e.sub2===dept)&&!usedEmps.has(e.name)&&
+            !(e.mainDept===dept||e.dept===dept)
+          );
+
+          // รวม pool: คนหลักก่อน มือสำรองตาม
+          const pool=[...mainPool,...subPool];
+          let assigned=0;
+          pool.forEach(e=>{
+            if(assigned>=need)return;
+            sched[dept][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,
+              isSub:!mainPool.find(m=>m.name===e.name)});
+            usedEmps.add(e.name);
+            assigned++;
+          });
+        });
+      });
     }
-    emps.forEach(e=>{
-      if(!e.team)return;
-      const sh=shMap[teamShifts[e.team]];if(!sh)return;
-      const actualSh=e.lockShift||sh;
-      const dept=e.mainDept||e.dept;if(!dept)return;
-      if(!depts.includes(dept)&&dept!==AL2)return;
-      if(!sched[dept])sched[dept]={};
-      const myLeave=leaveData[e.name]||[];
-      for(let di=0;di<6;di++){
-        const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
-        const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-        const dayShiftKey=di+'_'+actualSh;
-        if(!usedByDayShift[dayShiftKey])usedByDayShift[dayShiftKey]=new Set();
-        if(myLeave.includes(dk)){
-          if(!sched[AL2])sched[AL2]={};
-          if(!sched[AL2][di])sched[AL2][di]={morning:[],afternoon:[],night:[]};
-          if(!sched[AL2][di][actualSh])sched[AL2][di][actualSh]=[];
-          if(!sched[AL2][di][actualSh].find(w=>w.name===e.name))
-            sched[AL2][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
-          const subs=findSub(dept,di,actualSh,usedByDayShift[dayShiftKey]);
-          if(subs.length>0){
-            const sub=subs[0];
-            if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
-            if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
-            if(!sched[dept][di][actualSh].find(w=>w.name===sub.name)){
-              sched[dept][di][actualSh].push({name:sub.name,ot:false,otHrs:4,av:sub.av||0,isSub:true});
-              usedByDayShift[dayShiftKey].add(sub.name);
-            }
-          } else {
-            short.push(dept+' '+DAYS[di]+' '+SHTH[actualSh]+': '+e.name+'ลา — ขาดมือรอง 1 คน');
-          }
-          continue;
-        }
-        if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
-        if(!sched[dept][di][actualSh])sched[dept][di][actualSh]=[];
-        if(checkRest2(e.name,di,actualSh,sched)&&!usedByDayShift[dayShiftKey].has(e.name)){
-          if(!sched[dept][di][actualSh].find(w=>w.name===e.name)){
-            sched[dept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0});
-            usedByDayShift[dayShiftKey].add(e.name);
-          }
-        }
-      }
-      // assign sub1 และ sub2 ด้วย (Lead Man ดูแลหลาย LINE)
-      const subDepts=[e.sub1,e.sub2].filter(d=>d&&depts.includes(d));
-      subDepts.forEach(subDept=>{
-        const myLeave=leaveData[e.name]||[];
-        for(let di=0;di<6;di++){
-          const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
-          const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
-          if(myLeave.includes(dk))continue; // ลา → ไม่ assign sub
-          if(!sched[subDept])sched[subDept]={};
-          if(!sched[subDept][di])sched[subDept][di]={morning:[],afternoon:[],night:[]};
-          if(!sched[subDept][di][actualSh])sched[subDept][di][actualSh]=[];
-          if(!sched[subDept][di][actualSh].find(w=>w.name===e.name)){
-            sched[subDept][di][actualSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLead:true});
-          }
-        }
-      });
-      used.add(e.name);
-    });
-    // IDLE
-    const IDLE='__IDLE__';
-    // กรองเฉพาะคนที่ mainDept อยู่ใน sys นี้ แต่ไม่ได้ถูก assign
-    const idleEmps=emps.filter(e=>{
-      if(used.has(e.name))return false;
-      if((leaveData[e.name]||[]).length)return false;
-      const dept=e.mainDept||e.dept;
-      // ถ้า dept ไม่อยู่ใน depts ของ sys นี้ → ไม่ใช่คนของ sys นี้ → ไม่นับเป็น IDLE
-      if(dept&&!depts.includes(dept)&&dept!==AL2)return false;
-      return true;
-    });
-    if(idleEmps.length)toast('ℹ️ มีพนักงานว่าง '+idleEmps.length+' คน',4000);
-    allSched[wk]=sched;D.saveSched(allSched);
+
+    allSched[wk]=sched;
+    D.saveSched(allSched);
     FB.set(S.sys+'/sched/'+wk,sched);
-    markUnsaved();SCHED.render();doneLoad(true);
-    if(short.length){
-      alert2('\u26a0\ufe0f \u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e44\u0e21\u0e48\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d:\n'+short.join('\n'),'\ud83d\ude1f');
+    markUnsaved();SCHED.render();
+
+    // ตรวจว่า LINE ไหนขาดคน
+    const short=[];
+    fillDepts.forEach(dept=>{
+      for(let di=0;di<6;di++){
+        SHS.forEach(sh=>{
+          let need=1;
+          if(this._dayData){
+            const dayInfo=this._dayData.find(d=>d.di===di);
+            if(dayInfo&&dayInfo.shiftPeople&&typeof dayInfo.shiftPeople[sh]==='number')
+              need=dayInfo.shiftPeople[sh];
+            else if(dayInfo&&dayInfo.units===0) need=0;
+          }
+          const got=(sched[dept][di][sh]||[]).length;
+          if(got<need) short.push(dept+' วัน'+DAYS[di]+' กะ'+SHTH[sh]+' ขาด '+(need-got)+' คน');
+        });
+      }
+    });
+
+    doneLoad(true);
+    if(short.length) alert2('⚠️ พนักงานไม่เพียงพอ:\n'+short.slice(0,10).join('\n'),'😟');
     }
-  }
 };
 
 const SET={
