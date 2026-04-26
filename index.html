@@ -1483,51 +1483,72 @@ const PLAN={
     const body=document.getElementById('mix-sum-body');
     if(!body)return;
     const DAYTH=['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
-    const DAYSH=['จ','อ','พ','พฤ','ศ','ส'];
     const mixStockVal=LS.get('mix_stock',0)||0;
     body.innerHTML=`
-    <div style="overflow-x:auto;padding:8px 14px 14px">
-      <div style="background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.3);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="font-size:18px">📦</div>
-        <div>
-          <div style="font-size:11px;font-weight:900;color:var(--blue2)">สต๊อกยกมาจากสัปดาห์ที่แล้ว</div>
-          <div style="font-size:10px;color:var(--text3)">บวกเพิ่มสต๊อกวันจันทร์</div>
+    <div style="padding:12px 14px 16px">
+
+      <!-- Stock box ด้านบน -->
+      <div style="background:linear-gradient(135deg,rgba(37,99,235,.15),rgba(37,99,235,.05));border:1.5px solid rgba(37,99,235,.35);border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="font-size:28px">📦</div>
+        <div style="flex:1;min-width:160px">
+          <div style="font-size:13px;font-weight:900;color:var(--blue2)">สต๊อกยกมาจากสัปดาห์ที่แล้ว</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">บวกเพิ่มสต๊อกวันจันทร์ · วันเสาร์ผลิตขั้นต่ำ 30,000 ลิตร</div>
         </div>
-        <input type="number" min="0" value="${mixStockVal}"
-          style="width:110px;padding:6px 10px;background:var(--bg2);border:1.5px solid var(--blue);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;font-family:'Sarabun',sans-serif;text-align:right"
-          id="mix-stock-inp" onblur="PLAN.setMixStock(this.value)" onkeydown="if(event.key==='Enter'){PLAN.setMixStock(this.value);this.blur();}">
-        <span style="font-size:11px;color:var(--text3)">ลิตร</span>
-        <span style="font-size:11px;color:var(--amber);font-weight:700">⚠️ วันเสาร์ผลิตขั้นต่ำ 30,000 ลิตรเป็นสต๊อก</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" min="0" value="${mixStockVal}"
+            id="mix-stock-inp"
+            onblur="PLAN.setMixStock(this.value)"
+            onkeydown="if(event.key==='Enter'){PLAN.setMixStock(this.value);this.blur();}"
+            style="width:120px;padding:8px 12px;background:var(--bg2);border:2px solid var(--blue);border-radius:10px;color:var(--text);font-size:15px;font-weight:800;font-family:'Sarabun',sans-serif;text-align:right">
+          <div>
+            <div style="font-size:11px;color:var(--text3)">ลิตร</div>
+            <button onclick="PLAN.setMixStock(document.getElementById('mix-stock-inp')?.value)"
+              style="padding:4px 10px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer">✓ ยืนยัน</button>
+          </div>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;min-width:480px">
+
+      <!-- Day cards -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
         ${this._dayData.map(d=>{
           const noWork=d.units===0;
           const twoUnits=d.units===2;
-          const accent=noWork?'var(--bg3)':twoUnits?'rgba(245,158,11,.15)':'rgba(37,99,235,.15)';
-          const border=noWork?'var(--border)':twoUnits?'rgba(245,158,11,.4)':'rgba(37,99,235,.4)';
-          const unitColor=noWork?'var(--text3)':twoUnits?'var(--amber)':'var(--blue2)';
-          return`<div style="background:${accent};border:1px solid ${border};border-radius:10px;padding:10px 8px;text-align:center">
-            <div style="font-size:11px;font-weight:900;color:var(--text2);margin-bottom:6px">${DAYTH[d.di]}</div>
-            ${noWork
-              ?`<div style="font-size:18px;margin:4px 0">😴</div>
-                <div style="font-size:10px;color:var(--text3)">ไม่ผลิต</div>`
-              :`<div style="font-size:11px;font-weight:900;color:${unitColor};margin-bottom:4px">${twoUnits?'🔥 2 ชุด':'⚙️ 1 ชุด'}</div>
-                <div style="font-size:13px;font-weight:900;color:var(--text)">${d.hoursNeeded}<span style="font-size:10px;font-weight:400;color:var(--text3)"> ชม.</span></div>
-                <div style="font-size:11px;color:var(--green2);margin-top:2px">👷 ${d.totalP} คน</div>
-                <div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.4">
-                  ต้องการ<br>${(d.demandLiter||0).toLocaleString()} ล.
-                </div>
-                ${d.oreoP>0?`<div style="font-size:10px;color:var(--purple);margin-top:3px">🍪 +Oreo</div>`:''}
-              `
-            }
+          const bg=noWork?'var(--bg3)':twoUnits?'rgba(245,158,11,.12)':'rgba(37,99,235,.1)';
+          const border=noWork?'var(--border)':twoUnits?'rgba(245,158,11,.5)':'rgba(37,99,235,.4)';
+          const accent=noWork?'var(--text3)':twoUnits?'var(--amber)':'var(--blue2)';
+          const icon=noWork?'😴':twoUnits?'🔥':'⚙️';
+          const unitTxt=noWork?'ไม่ผลิต':twoUnits?'2 ชุด':'1 ชุด';
+          return`<div style="background:${bg};border:1.5px solid ${border};border-radius:14px;padding:14px 12px;text-align:center">
+            <div style="font-size:12px;font-weight:900;color:var(--text2);margin-bottom:6px;letter-spacing:.5px">${DAYTH[d.di]}</div>
+            <div style="font-size:26px;margin-bottom:6px">${icon}</div>
+            <div style="font-size:14px;font-weight:900;color:${accent};margin-bottom:8px">${unitTxt}</div>
+            ${noWork?'<div style="font-size:11px;color:var(--text3)">Stock พอแล้ว</div>':`
+            <div style="background:rgba(0,0,0,.15);border-radius:8px;padding:8px 6px;display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text3)">⏱ เวลา</span>
+                <span style="font-size:13px;font-weight:800;color:var(--text)">${d.hoursNeeded}<span style="font-size:10px;font-weight:400"> ชม.</span></span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text3)">👷 คน</span>
+                <span style="font-size:13px;font-weight:800;color:var(--green2)">${d.totalP} คน</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:11px;color:var(--text3)">💧 ต้องการ</span>
+                <span style="font-size:12px;font-weight:800;color:var(--text)">${(d.needed||0).toLocaleString()}</span>
+              </div>
+              <div style="font-size:9px;color:var(--text3)">ลิตร</div>
+            </div>
+            ${d.hasOreo?`<div style="margin-top:6px;font-size:11px;color:var(--purple);font-weight:700">🍪 มี Oreo</div>`:''}
+            `}
           </div>`;
         }).join('')}
       </div>
-      </div>
-      <div style="margin-top:10px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap">
-        <span>⚙️ 1 ชุด = Mixing ชุดที่ 2 (หลัก)</span>
-        <span>🔥 2 ชุด = เปิดทั้ง 2 ชุด</span>
-        <span>😴 ไม่ผลิต = Stock พอ</span>
+
+      <!-- Legend -->
+      <div style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <span style="font-size:11px;color:var(--text3)">⚙️ 1 ชุด = Mixing หลัก</span>
+        <span style="font-size:11px;color:var(--text3)">🔥 2 ชุด = เปิดทั้ง 2 ชุด</span>
+        <span style="font-size:11px;color:var(--text3)">😴 ไม่ผลิต = Stock พอ</span>
       </div>
     </div>`;
   },
