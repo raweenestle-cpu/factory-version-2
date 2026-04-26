@@ -1640,15 +1640,19 @@ const PLAN={
           if(byShift[sh])byShift[sh].push(e);
         });
 
+        // usedEmps: ป้องกัน 1 คน เข้าหลายกะ
+        const usedEmps=new Set();
+
         // 1. กะดึก → 9 คนก่อน
         const nightPool=[...byShift.night];
         const nightAssigned=[];
         procDepts.forEach(dept=>{
-          const deptNight=nightPool.filter(e=>effectiveDept(e)===dept&&!nightAssigned.find(x=>x.name===e.name));
+          const deptNight=nightPool.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptNight.forEach(e=>{
             if(nightAssigned.length<nightPpl){
               sched2[dept][di].night.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
               nightAssigned.push(e);
+              usedEmps.add(e.name);
             }
           });
         });
@@ -1657,53 +1661,44 @@ const PLAN={
         const morningPool=[...byShift.morning];
         const morningAssigned=[];
         procDepts.forEach(dept=>{
-          const deptMorn=morningPool.filter(e=>effectiveDept(e)===dept&&!morningAssigned.find(x=>x.name===e.name));
+          const deptMorn=morningPool.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptMorn.forEach(e=>{
             if(morningAssigned.length<needPpl){
               sched2[dept][di].morning.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
               morningAssigned.push(e);
+              usedEmps.add(e.name);
             }
           });
         });
 
+        // 2.5 ถ้าเปิด 2 ชุด และเช้าไม่พอ → ดึงกะบ่าย pre-OT มาเช้า
         const preOTFromAfternoon=new Set();
-        // 2.5 ถ้าเปิด 2 ชุด → ดึงคนกะบ่ายมา pre-OT 4 ชม. (10:00-14:00)
         if(units>=2&&morningAssigned.length<needPpl){
-          const afternoonPool2=[...byShift.afternoon];
           const shortfall=needPpl-morningAssigned.length;
           let preOTCount=0;
           procDepts.forEach(dept=>{
-            const deptAfPre=afternoonPool2.filter(e=>effectiveDept(e)===dept&&!morningAssigned.find(x=>x.name===e.name));
+            const deptAfPre=byShift.afternoon.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
             deptAfPre.forEach(e=>{
               if(preOTCount>=shortfall)return;
               sched2[dept][di].morning.push({name:e.name,ot:true,otHrs:4,otBefore:true,av:e.av||0});
               morningAssigned.push(e);
+              preOTFromAfternoon.add(e.name);
+              usedEmps.add(e.name);
               preOTCount++;
             });
           });
         }
 
-        // 3. กะบ่าย → ที่เหลือ (ไม่รวมคนที่ถูกดึง pre-OT)
-        const afternoonPool=[...byShift.afternoon];
+        // 3. กะบ่าย → ที่เหลือที่ยังไม่ได้ใช้
         const afternoonAssigned=[];
         procDepts.forEach(dept=>{
-          const deptAfter=afternoonPool.filter(e=>
-            effectiveDept(e)===dept&&
-            !afternoonAssigned.find(x=>x.name===e.name)&&
-            !preOTFromAfternoon.has(e.name)
-          );
+          const deptAfter=byShift.afternoon.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptAfter.forEach(e=>{
             sched2[dept][di].afternoon.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
             afternoonAssigned.push(e);
+            usedEmps.add(e.name);
           });
         });
-        // ลบคน pre-OT ออกจากกะบ่าย (กรณีที่อาจถูก assign ไปก่อนแล้ว)
-        if(preOTFromAfternoon.size>0){
-          procDepts.forEach(dept=>{
-            if(sched2[dept]&&sched2[dept][di])
-              sched2[dept][di].afternoon=sched2[dept][di].afternoon.filter(w=>!preOTFromAfternoon.has(w.name));
-          });
-        }
 
         // 4. คำนวณ OT ถ้าต้องผลิตเกิน 14:00 (กะเช้าหมด)
         // hoursNeeded คือชั่วโมงที่ต้องผลิต เริ่มจาก 6:00
