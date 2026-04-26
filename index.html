@@ -892,8 +892,15 @@ function alert2(msg,ic='ℹ️'){
 const D={
   getDepts(sys=S.sys){return LS.get('depts_'+sys,sys==='proc'?[...PDEPT]:[...FDEPT]);},
   saveDepts(d,sys=S.sys){LS.set('depts_'+sys,d);FB.set(sys+'/depts',d);if(typeof PROD!=='undefined')PROD.render();PLAN.render();SCHED.render();},
-  getEmps(sys=S.sys){const v=LS.get('emps_'+sys,[]);return Array.isArray(v)?v:Object.values(v||{});},
-  saveEmps(e,sys=S.sys){LS.set('emps_'+sys,e);FB.set(sys+'/emps',e);},
+  getEmps(sys=S.sys){const v=LS.get('emps_'+sys,[]);const arr=Array.isArray(v)?v:Object.values(v||{});return arr.filter(e=>e&&e.name);},
+  saveEmps(e,sys=S.sys){
+    // filter null ก่อน save
+    const clean=e.filter(x=>x&&x.name);
+    LS.set('emps_'+sys,clean);
+    // save เป็น object {name: data} ป้องกัน Firebase null บน array
+    const obj={};clean.forEach(emp=>{obj[emp.name.replace(/[.#$\[\]]/g,'_')]=emp;});
+    FB.set(sys+'/emps',obj);
+  },
   getTarget(sys=S.sys){return LS.get('target_'+sys,15);},
   saveTarget(v,sys=S.sys){LS.set('target_'+sys,v);FB.set(sys+'/target',v);},
   getMaxOT(){return LS.get('max_ot',3);},
@@ -1038,7 +1045,7 @@ const APP={
   syncFB(){
     const wk=wKey(S.wkStart);
     ['proc','fill'].forEach(sys=>{
-      FB.on(sys+'/emps',v=>{if(v){const arr=Array.isArray(v)?v:Object.values(v);if(arr.length){LS.set('emps_'+sys,arr);if(sys===S.sys)EMP.render();updEmpCnt();}}});
+      FB.on(sys+'/emps',v=>{if(v){const arr=(Array.isArray(v)?v:Object.values(v)).filter(e=>e&&e.name);if(arr.length){LS.set('emps_'+sys,arr);if(sys===S.sys)EMP.render();updEmpCnt();}}});
       FB.on(sys+'/depts',v=>{if(v&&v.length){LS.set('depts_'+sys,v);if(sys===S.sys){SCHED.render();SET.render();}PROD.render();PLAN.render();}});
       FB.on(sys+'/target',v=>{if(v!=null){LS.set('target_'+sys,v);DASH.render();}});
       FB.on(sys+'/products',v=>{if(v){LS.set('prods_'+sys,v);if(sys===S.sys){PLAN.render();SET.render();}}});
