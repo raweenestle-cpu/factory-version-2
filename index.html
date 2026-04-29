@@ -3125,63 +3125,142 @@ const LHIST={
 };
 
 const LEAVE={
-  tab:'pending',
-  setTab(t){this.tab=t;['pending','approved','all'].forEach(x=>document.getElementById('lv-tab-'+x)?.classList.toggle('active',x===t));this.render();},
+  tab:'req', selDates:new Set(), calMo:new Date().getMonth(), calYr:new Date().getFullYear(),
+  setTab(t){
+    this.tab=t;
+    ['req','pending','approved','all'].forEach(x=>{
+      const b=document.getElementById('lv-tab-'+x);
+      if(b)b.classList.toggle('active',x===t);
+    });
+    this.render();
+  },
   updBadge(){
     const myEmps=new Set(D.getEmps().map(e=>e.name));
     const cnt=D.getLeaveReq().filter(r=>(r.status==='pending'||r.status==='cancel_req')&&myEmps.has(r.name)).length;
     const badge=document.getElementById('leave-pending-badge');
     if(badge){badge.style.display=cnt>0?'block':'none';badge.textContent='รออนุมัติ '+cnt;}
   },
+  prevMo(){this.calMo--;if(this.calMo<0){this.calMo=11;this.calYr--;}this.render();},
+  nextMo(){this.calMo++;if(this.calMo>11){this.calMo=0;this.calYr++;}this.render();},
+  toggleDate(ds){
+    if(this.selDates.has(ds))this.selDates.delete(ds);
+    else this.selDates.add(ds);
+    this.render();
+  },
+  submitLeave(){
+    if(this.selDates.size===0){toast('❌ กรุณาเลือกวันที่ต้องการลา');return;}
+    const name=S.user?.name||S.user?.email||'';
+    if(!name){toast('❌ ไม่พบชื่อผู้ใช้');return;}
+    const reason=document.getElementById('lv-reason')?.value?.trim()||'ไม่ระบุ';
+    const req={
+      id:'lv_'+Date.now(),
+      name,
+      dates:[...this.selDates].sort(),
+      reason,
+      status:'pending',
+      sys:S.sys,
+      createdAt:new Date().toISOString()
+    };
+    const reqs=D.getLeaveReq();reqs.push(req);
+    D.saveLeaveReq(reqs);
+    this.selDates.clear();
+    this.render();this.updBadge();
+    toast('✅ ยื่นขอลาแล้ว รอ Admin อนุมัติ');
+  },
   render(){
     const el=document.getElementById('leave-list');if(!el)return;
-    this.updBadge();
-    const empNames=new Set(D.getEmps().map(e=>e.name));
-    const all=D.getLeaveReq().filter(r=>empNames.has(r.name));
-    const filtered=this.tab==='pending'?all.filter(r=>r.status==='pending'||r.status==='cancel_req')
-      :this.tab==='approved'?all.filter(r=>r.status==='approved'):all;
-    filtered.sort((a,b)=>a.date.localeCompare(b.date));
-    if(!filtered.length){el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3)">${this.tab==='pending'?'ไม่มีรออนุมัติ':this.tab==='approved'?'ไม่มี':'ไม่มีคำขอ'}</div>`;return;}
-    const byDate={};
-    filtered.forEach(r=>{if(!byDate[r.date])byDate[r.date]=[];byDate[r.date].push(r);});
-    el.innerHTML=Object.entries(byDate).map(([date,reqs])=>{
-      const d=new Date(date);const ds=d.getDate()+'/'+(d.getMonth()+1)+'/'+(d.getFullYear()+543);
-      return`<div style="margin-bottom:14px">
-        <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:6px;padding:6px 10px;background:var(--bg2);border-radius:8px">${DAYS[d.getDay()===0?5:d.getDay()-1]} ${ds}</div>
-        ${reqs.map(r=>{
-          const isPending=r.status==='pending';const isApproved=r.status==='approved';
-          const isRejected=r.status==='rejected';const isCancelReq=r.status==='cancel_req';
-          const col=isPending?'var(--amber)':isApproved?'var(--green)':isCancelReq?'var(--red2)':'var(--border)';
-          return`<div style="background:var(--card);border:1px solid ${col};border-radius:12px;padding:12px 14px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
-            <div style="width:36px;height:36px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;flex-shrink:0">${r.name.charAt(0)}</div>
-            <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:800">${r.name}</div><div style="font-size:11px;color:var(--text2)">${r.dept}</div></div>
-            <div style="font-size:11px;font-weight:800;padding:4px 8px;border-radius:8px;
-              background:${isPending?'rgba(245,158,11,.15)':isApproved?'rgba(22,163,74,.15)':'rgba(220,38,38,.1)'};
-              color:${isPending?'var(--amber)':isApproved?'var(--green2)':'var(--red2)'}">
-              ${isPending?'🟡 รอ':isApproved?'✅ อนุมัติ':isCancelReq?'🔴 ขอยกเลิก':'❌'}
-            </div>
-            ${S.user?.isAdmin&&isPending?`
-              <button onclick="LEAVE.approve('${r.id}')" style="padding:5px 8px;background:rgba(22,163,74,.2);border:1px solid var(--green);border-radius:7px;color:var(--green2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅</button>
-              <button onclick="LEAVE.reject('${r.id}')" style="padding:5px 8px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:7px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">❌</button>`:''}
-            ${S.user?.isAdmin&&isCancelReq?`
-              <button onclick="LEAVE.confirmCancel('${r.id}')" style="padding:5px 8px;background:rgba(220,38,38,.2);border:1px solid var(--red);border-radius:7px;color:var(--red2);font-size:11px;font-weight:800;font-family:'Sarabun',sans-serif">✅ ยกเลิก</button>`:''}
-            ${S.user?.isAdmin&&(isApproved||isRejected)?`
-              <button onclick="LEAVE.del('${r.id}')" style="width:26px;height:26px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-size:11px">✕</button>`:''}
-          </div>`;
-        }).join('')}
+    const reqs=D.getLeaveReq();
+    const myEmps=new Set(D.getEmps().map(e=>e.name));
+    const isAdmin=S.user?.isAdmin;
+
+    if(this.tab==='req'){
+      // ปฏิทิน
+      const yr=this.calYr,mo=this.calMo;
+      const moNames=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+      const firstDay=new Date(yr,mo,1).getDay();
+      const daysInMo=new Date(yr,mo+1,0).getDate();
+      const today=new Date();
+      const todayStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+      // วันที่ approved แล้ว
+      const userName=S.user?.name||S.user?.email||'';
+      const approvedDates=new Set(reqs.filter(r=>r.name===userName&&r.status==='approved').flatMap(r=>r.dates));
+      const pendingDates=new Set(reqs.filter(r=>r.name===userName&&r.status==='pending').flatMap(r=>r.dates));
+      let cal=`
+      <div style="padding:4px 0 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <button onclick="LEAVE.prevMo()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">◀</button>
+          <div style="font-size:15px;font-weight:900;color:var(--text)">${moNames[mo]} ${yr}</div>
+          <button onclick="LEAVE.nextMo()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">▶</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center">
+          ${['อา','จ','อ','พ','พฤ','ศ','ส'].map(d=>`<div style="font-size:10px;font-weight:800;color:var(--text3);padding:4px 0">${d}</div>`).join('')}
+          ${Array(firstDay).fill('<div></div>').join('')}
+          ${Array.from({length:daysInMo},(_,i)=>{
+            const day=i+1;
+            const ds=yr+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+            const isPast=ds<todayStr;
+            const isApproved=approvedDates.has(ds);
+            const isPending=pendingDates.has(ds);
+            const isSel=this.selDates.has(ds);
+            const isToday=ds===todayStr;
+            let bg='var(--bg3)',color='var(--text)',border='transparent',fw='600';
+            if(isApproved){bg='rgba(16,163,74,.25)';color='var(--green2)';border='var(--green2)';}
+            else if(isPending){bg='rgba(245,158,11,.2)';color='var(--amber)';border='var(--amber)';}
+            else if(isSel){bg='var(--blue)';color='#fff';border='var(--blue)';fw='800';}
+            else if(isToday){border='var(--blue2)';}
+            const click=(!isPast&&!isApproved&&!isPending)?`onclick="LEAVE.toggleDate('${ds}')"`:'';
+            const opacity=isPast?'.4':'1';
+            return`<div ${click} style="padding:8px 2px;border-radius:8px;background:${bg};color:${color};border:1.5px solid ${border};font-size:13px;font-weight:${fw};cursor:${(!isPast&&!isApproved&&!isPending)?'pointer':'default'};opacity:${opacity}">${day}</div>`;
+          }).join('')}
+        </div>
+        <!-- Legend -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:11px">
+          <span style="color:var(--blue2)">■ เลือกแล้ว</span>
+          <span style="color:var(--amber)">■ รออนุมัติ</span>
+          <span style="color:var(--green2)">■ อนุมัติแล้ว</span>
+        </div>
+        ${this.selDates.size>0?`
+        <div style="margin-top:12px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:8px">วันที่เลือก: ${this.selDates.size} วัน</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px">${[...this.selDates].sort().join(', ')}</div>
+          <input id="lv-reason" type="text" placeholder="เหตุผล (ระบุหรือไม่ก็ได้)" style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;box-sizing:border-box;margin-bottom:8px">
+          <button onclick="LEAVE.submitLeave()" style="width:100%;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">📩 ยื่นขอลา</button>
+        </div>`:''}
+      </div>`;
+      el.innerHTML=cal;return;
+    }
+
+    // Tab อื่นๆ
+    let list=reqs;
+    if(this.tab==='pending') list=reqs.filter(r=>(r.status==='pending'||r.status==='cancel_req')&&(isAdmin?myEmps.has(r.name):r.name===(S.user?.name||'')));
+    else if(this.tab==='approved') list=reqs.filter(r=>r.status==='approved'&&(isAdmin?myEmps.has(r.name):r.name===(S.user?.name||'')));
+    else list=reqs.filter(r=>isAdmin?myEmps.has(r.name):r.name===(S.user?.name||''));
+    if(!list.length){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3);font-size:13px">ไม่มีรายการ</div>';return;}
+    el.innerHTML=list.map(r=>{
+      const stMap={pending:'⏳ รออนุมัติ',approved:'✅ อนุมัติแล้ว',rejected:'❌ ไม่อนุมัติ',cancel_req:'🔄 ขอยกเลิก'};
+      const stCol={pending:'var(--amber)',approved:'var(--green2)',rejected:'var(--red2)',cancel_req:'var(--blue2)'};
+      return`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:800">${r.name}</div>
+          <div style="font-size:11px;font-weight:800;color:${stCol[r.status]||'var(--text3)'}">${stMap[r.status]||r.status}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">📅 ${r.dates?.join(', ')||'-'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">📝 ${r.reason||'ไม่ระบุ'}</div>
+        ${isAdmin&&r.status==='pending'?`
+        <div style="display:flex;gap:6px">
+          <button onclick="LEAVE.approve('${r.id}')" style="flex:1;padding:7px;background:var(--green);border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">✅ อนุมัติ</button>
+          <button onclick="LEAVE.reject('${r.id}')" style="flex:1;padding:7px;background:var(--red2);border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">❌ ไม่อนุมัติ</button>
+        </div>`:''}
+        ${!isAdmin&&r.status==='approved'?`<button onclick="LEAVE.confirmCancel('${r.id}')" style="width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text3);font-size:11px;font-family:'Sarabun',sans-serif;cursor:pointer">ขอยกเลิก</button>`:''}
       </div>`;
     }).join('');
+    this.updBadge();
   },
-  approve(id){const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(!r)return;r.status='approved';r.approvedAt=new Date().toISOString();r.approvedBy=S.user?.name||'Admin';D.saveLeaveReq(reqs);LEAVE.archivePast();this.render();toast('✅ อนุมัติ '+r.name);},
-  reject(id){const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(!r)return;r.status='rejected';D.saveLeaveReq(reqs);this.render();toast('❌ ปฏิเสธ');},
-  confirmCancel(id){const reqs=D.getLeaveReq();const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;const r=reqs[idx];reqs.splice(idx,1);D.saveLeaveReq(reqs);this.render();toast('✅ ยกเลิก '+r.name);setTimeout(()=>{PLAN.autoLoad();},800);},
-  del(id){const reqs=D.getLeaveReq();const idx=reqs.findIndex(x=>x.id===id);if(idx<0)return;reqs.splice(idx,1);D.saveLeaveReq(reqs);this.render();toast('🗑️ ลบแล้ว');},
-  archivePast(){
-    const today=new Date();today.setHours(0,0,0,0);
-    const reqs=D.getLeaveReq();const hist=D.getLeaveHist();const remaining=[];
-    reqs.forEach(r=>{const d=new Date(r.date);if(r.status==='approved'&&d<today)hist.push({...r,archivedAt:new Date().toISOString()});else remaining.push(r);});
-    if(hist.length>D.getLeaveHist().length){D.saveLeaveHist(hist);D.saveLeaveReq(remaining);}
-  }
+  approve(id){const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(r){r.status='approved';D.saveLeaveReq(reqs);this.render();this.updBadge();toast('✅ อนุมัติแล้ว');}},
+  reject(id){const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(r){r.status='rejected';D.saveLeaveReq(reqs);this.render();this.updBadge();toast('❌ ไม่อนุมัติ');}},
+  confirmCancel(id){confirm2('ยืนยันขอยกเลิกวันลานี้?',()=>{const reqs=D.getLeaveReq();const r=reqs.find(x=>x.id===id);if(r){r.status='cancel_req';D.saveLeaveReq(reqs);this.render();this.updBadge();toast('🔄 ส่งคำขอยกเลิกแล้ว');}});},
+  del(id){confirm2('ลบรายการนี้?',()=>{const reqs=D.getLeaveReq().filter(r=>r.id!==id);D.saveLeaveReq(reqs);this.render();this.updBadge();toast('🗑️ ลบแล้ว');});},
+  archivePast(){const today=new Date().toISOString().slice(0,10);const reqs=D.getLeaveReq().filter(r=>r.dates?.some(d=>d>=today));D.saveLeaveReq(reqs);this.render();}
 };
 
 const TEAM={
@@ -3356,4 +3435,20 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 </body>
-</html>
+</html>  id="pg-leave">
+    <!-- Header -->
+    <div style="padding:12px 14px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:15px;font-weight:900;flex:1">🏖️ การขอลา</h2>
+      <div id="leave-pending-badge" style="display:none;background:var(--red2);color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:10px">รออนุมัติ 0</div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0">
+      <button class="ot-stab active" id="lv-tab-req" onclick="LEAVE.setTab('req')" style="flex:1;padding:10px;font-size:12px;font-weight:700;border:none;background:transparent;color:var(--text2);font-family:'Sarabun',sans-serif;cursor:pointer">📅 ขอลา</button>
+      <button class="ot-stab" id="lv-tab-pending" onclick="LEAVE.setTab('pending')" style="flex:1;padding:10px;font-size:12px;font-weight:700;border:none;background:transparent;color:var(--text2);font-family:'Sarabun',sans-serif;cursor:pointer">⏳ รออนุมัติ</button>
+      <button class="ot-stab" id="lv-tab-approved" onclick="LEAVE.setTab('approved')" style="flex:1;padding:10px;font-size:12px;font-weight:700;border:none;background:transparent;color:var(--text2);font-family:'Sarabun',sans-serif;cursor:pointer">✅ อนุมัติแล้ว</button>
+      <button class="ot-stab" id="lv-tab-all" onclick="LEAVE.setTab('all')" style="flex:1;padding:10px;font-size:12px;font-weight:700;border:none;background:transparent;color:var(--text2);font-family:'Sarabun',sans-serif;cursor:pointer">📋 ทั้งหมด</button>
+    </div>
+
+    <!-- Content -->
+    <div id="leave-list" style="flex:1;overflow-y:auto;padding:12px 14px"></div>
