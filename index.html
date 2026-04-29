@@ -1632,7 +1632,13 @@ const PLAN={
       const ms=document.getElementById('mixing-summary');
       if(ms)ms.style.display='none';
       this._dayData=null;
-      this.render();SCHED.render();DASH.render();
+      // re-read plan จาก LS ใหม่
+      this.plan={};
+      // render ทุกส่วนทันที
+      this.render();
+      // รีเซ็ต table cells ทั้งหมด
+      document.querySelectorAll('.plan-cell,.vol-cell,.prod-cell').forEach(el=>{if(el.tagName==='INPUT')el.value='';else el.textContent='';});
+      SCHED.render();DASH.render();
       toast('✅ ล้างแผนแล้ว พร้อมรับข้อมูลสัปดาห์ใหม่');
     });
   },
