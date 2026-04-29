@@ -1627,6 +1627,8 @@ const PLAN={
       LS.set('plan_'+S.sys,{});FB.set(S.sys+'/plan',{});
       LS.set('fill_volume',{});FB.set('fill/volume',{});
       LS.set('mix_stock',0);FB.set('config/mix_stock',0);
+      // ล้างชื่อผลิตภัณฑ์ทุก LINE ด้วย
+      LS.set('prods_'+S.sys,{});FB.set(S.sys+'/products',{});
       const ms=document.getElementById('mixing-summary');
       if(ms)ms.style.display='none';
       this._dayData=null;
