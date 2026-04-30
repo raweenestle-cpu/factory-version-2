@@ -2562,7 +2562,7 @@ const PRINT={
 
     const buildTable=(depts2,sched2,di)=>{
       let head=`<thead><tr>
-        <th style="border:${bd};padding:1px 3px;background:#e8eeff;color:#000;font-weight:700;text-align:left;width:18%">แผนก</th>
+        <th style="border:${bd};padding:1px 3px;background:#e8eeff;color:#000;font-weight:700;text-align:left;white-space:nowrap">แผนก</th>
         <th style="border:${bd};padding:1px 3px;background:#dbeafe;color:#1e40af;font-weight:700;text-align:center">กะเช้า 06:00-14:00</th>
         <th style="border:${bd};padding:1px 3px;background:#fef3c7;color:#92400e;font-weight:700;text-align:center">กะบ่าย 14:00-22:00</th>
         <th style="border:${bd};padding:1px 3px;background:#f1f5f9;color:#475569;font-weight:700;text-align:center">กะดึก 22:00-06:00</th>
@@ -2575,7 +2575,7 @@ const PRINT={
         SHS.forEach(sh=>{
           const ws2=sched2[dept]?.[di]?.[sh]||sched2[dept]?.[String(di)]?.[sh]||[];
           const names=ws2.map(w=>{
-            if(!w.ot)return`<div>${w.name}</div>`;
+            if(!w.ot)return`<div style="white-space:nowrap">${w.name}</div>`;
             const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
             const otHrs=Math.round(w.otHrs||4);
             let tS,tE;
@@ -2583,7 +2583,7 @@ const PRINT={
             else if(sh==='night'){tS=String((22-otHrs+24)%24).padStart(2,'0')+':00';tE='06:00';}
             else if(w.otBefore&&sh==='morning'){tS='06:00';tE='18:00';}
             else{const eH={morning:14,afternoon:22,night:30}[sh]||14;tS=String(shStartH).padStart(2,'0')+':00';tE=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
-            return`<div><b>${w.name}</b> <span style="color:#b45309">OT ${tS}–${tE} ✍️</span></div>`;
+            return`<div style="white-space:nowrap"><b>${w.name}</b> <span style="color:#b45309">OT ${tS}–${tE} ✍️</span></div>`;
           }).join('');
           rows+=`<td style="border:${bd};padding:1px 3px;vertical-align:top">${names||'<span style="color:#ccc">-</span>'}</td>`;
         });
