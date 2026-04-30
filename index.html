@@ -2553,60 +2553,78 @@ const PRINT={
     if(prev)prev.innerHTML=html;
   },
   buildSchedHTML(sys,selDays=null){
-    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
-    const depts=D.getDepts(sys).filter(d=>d!==AL);const ws=S.wkStart;
+    const wk=wKey(S.wkStart);const ws=S.wkStart;
     const DAYTH_FULL=['วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
     const MONTH_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     const bd='1px solid #8090b0';
+    const daysToShow=selDays||[0,1,2,3,4,5];
+    const isFill=sys==='fill';
+
+    const buildTable=(depts2,sched2,di)=>{
+      let head=`<thead><tr>
+        <th style="border:${bd};padding:1px 3px;background:#e8eeff;color:#000;font-weight:700;text-align:left;width:18%">แผนก</th>
+        <th style="border:${bd};padding:1px 3px;background:#dbeafe;color:#1e40af;font-weight:700;text-align:center">กะเช้า 06:00-14:00</th>
+        <th style="border:${bd};padding:1px 3px;background:#fef3c7;color:#92400e;font-weight:700;text-align:center">กะบ่าย 14:00-22:00</th>
+        <th style="border:${bd};padding:1px 3px;background:#f1f5f9;color:#475569;font-weight:700;text-align:center">กะดึก 22:00-06:00</th>
+      </tr></thead>`;
+      let rows='<tbody>';
+      depts2.forEach((dept,ri)=>{
+        const bg=ri%2===0?'#fff':'#f8faff';
+        rows+=`<tr style="background:${bg}">`;
+        rows+=`<td style="border:${bd};padding:1px 3px;font-weight:700">${dept}</td>`;
+        SHS.forEach(sh=>{
+          const ws2=sched2[dept]?.[di]?.[sh]||sched2[dept]?.[String(di)]?.[sh]||[];
+          const names=ws2.map(w=>{
+            if(!w.ot)return`<div>${w.name}</div>`;
+            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+            const otHrs=Math.round(w.otHrs||4);
+            let tS,tE;
+            if(w.sr){const sp=w.sr.split('-');tS=String(sp[0]).padStart(2,'0')+':00';tE=String(sp[1]).padStart(2,'0')+':00';}
+            else if(sh==='night'){tS=String((22-otHrs+24)%24).padStart(2,'0')+':00';tE='06:00';}
+            else if(w.otBefore&&sh==='morning'){tS='06:00';tE='18:00';}
+            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;tS=String(shStartH).padStart(2,'0')+':00';tE=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
+            return`<div><b>${w.name}</b> <span style="color:#b45309">OT ${tS}–${tE} ✍️</span></div>`;
+          }).join('');
+          rows+=`<td style="border:${bd};padding:1px 3px;vertical-align:top">${names||'<span style="color:#ccc">-</span>'}</td>`;
+        });
+        rows+='</tr>';
+      });
+      rows+='</tbody>';
+      return`<table style="width:100%;border-collapse:collapse;margin-bottom:2px;table-layout:auto">${head}${rows}</table>`;
+    };
+
+    const procSched=D.getSched('proc')[wk]||{};
+    const fillSched=D.getSched('fill')[wk]||{};
+    const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+    const fillDepts=D.getDepts('fill').filter(d=>d!==AL);
 
     let body='';
-    const daysToShow=selDays||[0,1,2,3,4,5];
     daysToShow.forEach(di=>{
-      const dayLabel=DAYS[di];const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const ds2=DAYTH_FULL[di]+' '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
-      body+=`<div class="${sys==='fill'?'day-page':'day-block'}"><div class="day-header">${ds2}</div>`;
-      body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
-      body+=`<thead><tr>
-        <th style="border:${bd};padding:3px 6px;background:#e8eeff!important;color:#000!important;font-size:9pt;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
-        <th style="border:${bd};padding:3px 6px;background:#dbeafe!important;color:#1e40af!important;font-size:9pt;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
-        <th style="border:${bd};padding:3px 6px;background:#fef3c7!important;color:#92400e!important;font-size:9pt;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
-        <th style="border:${bd};padding:3px 6px;background:#f1f5f9!important;color:#475569!important;font-size:9pt;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
-      </tr></thead><tbody>`;
-      depts.forEach((dept,ri)=>{
-        const bg=ri%2===0?'#fff':'#f8faff';
-        body+=`<tr style="background:${bg}">`;
-        body+=`<td style="border:${bd};padding:5px 8px;color:#000;font-weight:700">${dept}</td>`;
-        SHS.forEach(sh=>{
-          const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-          const names=ws2.map(w=>{
-            if(!w.ot) return`<div style="font-size:10pt;padding:2px 0"><span style="font-weight:700">${w.name}</span></div>`;
-            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
-            const isPreOT=w.otBefore;
-            const otHrs=Math.round(w.otHrs||4);
-            let tStart,tEnd;
-            if(w.sr){const sp=w.sr.split('-');tStart=String(sp[0]).padStart(2,'0')+':00';tEnd=String(sp[1]).padStart(2,'0')+':00';}
-            else if(sh==='night'&&w.ot){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
-            else if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
-            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
-                 tStart=String(shStartH).padStart(2,'0')+':00';
-                 tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
-            return`<div style="font-size:9pt;padding:1px 0;display:flex;align-items:center;gap:3px">
-              <span style="font-weight:700">${w.name}</span>
-              <span style="font-size:7pt;color:#b45309;font-weight:800">OT</span>
-              <span style="font-size:7pt;color:#b45309">${tStart}-${tEnd}</span>
-              <span style="font-size:8pt">✍️</span>
-            </div>`;
-          }).join('');
-          body+=`<td style="border:${bd};padding:2px 4px;color:#000;vertical-align:top;font-size:9pt">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
-        });
-        body+='</tr>';
-      });
-      body+='</tbody></table></div>';
+      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+      const ds2=DAYTH_FULL[di]+'ที่ '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
+
+      if(isFill){
+        // Filling: วันละหน้า มี Process + Filling รวมกัน
+        body+=`<div class="day-page">`;
+        body+=`<div class="day-header">${ds2}</div>`;
+        body+=`<div style="font-size:6pt;font-weight:900;color:#1e3a5f;padding:1px 4px;background:#dbeafe;margin-bottom:1px">🔧 Process</div>`;
+        body+=buildTable(procDepts,procSched,di);
+        body+=`<div style="font-size:6pt;font-weight:900;color:#1e3a5f;padding:1px 4px;background:#fef3c7;margin:3px 0 1px">🏭 Filling</div>`;
+        body+=buildTable(fillDepts,fillSched,di);
+        body+='</div>';
+      } else {
+        // Process: รวมทุกวันในหน้าเดียว
+        body+=`<div class="day-block">`;
+        body+=`<div class="day-header">${ds2}</div>`;
+        body+=buildTable(procDepts,procSched,di);
+        body+='</div>';
+      }
     });
 
-    return `<div style="font-family:'Sarabun',sans-serif;color:#000">
-      <div style="font-size:16pt;font-weight:900;color:#1e3a5f;margin-bottom:3px">ตารางกะ — ${sys==='proc'?'Process':'Filling'}</div>
-      <div style="font-size:10pt;color:#666;margin-bottom:10px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)}</div>
+    const sysName=isFill?'Filling (+ Process)':'Process';
+    return`<div style="font-family:Sarabun,sans-serif;color:#000">
+      <div style="font-size:10pt;font-weight:900;color:#1e3a5f;margin-bottom:2px">ตารางกะ — ${sysName}</div>
+      <div style="font-size:7pt;color:#666;margin-bottom:4px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)}</div>
       ${body}
     </div>`;
   },
@@ -2618,7 +2636,6 @@ const PRINT={
   confirmSched(){
     const sysSel=document.getElementById('prs-sys')?.value||'current';
     const sys=sysSel==='current'?S.sys:sysSel;
-    // อ่าน checkbox วัน
     const selDays=[];
     for(let i=0;i<6;i++){const cb=document.getElementById('prs-day-'+i);if(cb&&cb.checked)selDays.push(i);}
     const html=this.buildSchedHTML(sys,selDays.length===6?null:selDays);
@@ -2629,32 +2646,18 @@ const PRINT={
     doc.write('<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;800;900&display=swap" rel="stylesheet">');
     doc.write('<style>');
     doc.write('*{margin:0;padding:0;box-sizing:border-box;}');
-    doc.write('body{font-family:Sarabun,sans-serif;background:#fff;color:#000;padding:8mm;}');
-    doc.write('table{width:100%;border-collapse:collapse;table-layout:auto;}');
-    doc.write('th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
-    doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:top;}');
-    doc.write('tr:nth-child(even) td{background:#f8faff;}');
-    doc.write('.day-header{font-size:9pt;font-weight:900;color:#1e3a5f;margin:4px 0 2px;padding:3px 8px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
-    doc.write('.day-block{margin-bottom:4px;}');
-    doc.write('thead{display:table-header-group;}');
-    doc.write('.day-page{page-break-before:always;break-before:always;margin-bottom:4px;}');
-    doc.write('.day-page:first-child{page-break-before:auto;break-before:auto;}');
-    doc.write('table{margin-bottom:2px;}');
-    doc.write('@page{size:A4 landscape;margin:4mm;}');
-    doc.write('html,body{width:289mm;margin:0;padding:0;}');
-    doc.write('body{font-family:Sarabun,sans-serif;font-size:6.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
-    doc.write('*{box-sizing:border-box;}');
-    doc.write('.day-block{margin-bottom:2px;}');
-    doc.write('.day-header{font-size:6.5pt;font-weight:900;color:#1e3a5f;margin:2px 0 1px;padding:2px 5px;background:#e8eeff;border-left:3px solid #2563eb;}');
+    doc.write('html,body{width:289mm;font-family:Sarabun,sans-serif;font-size:6.5pt;color:#000;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('.day-header{font-size:7pt;font-weight:900;color:#1e3a5f;margin:3px 0 1px;padding:2px 6px;background:#e8eeff;border-left:3px solid #2563eb;}');
+    doc.write('.day-block{margin-bottom:3px;}');
+    doc.write('.day-page{margin-bottom:3px;page-break-before:always;break-before:always;}');
+    doc.write('.day-page:first-of-type{page-break-before:auto;break-before:auto;}');
     doc.write('table{width:100%;border-collapse:collapse;margin-bottom:1px;table-layout:auto;}');
     doc.write('thead{display:table-header-group;}');
-    doc.write('th,td{border:1px solid #8090b0;padding:1px 3px;font-size:6.5pt;vertical-align:top;}');
-    doc.write('th{background:#e8eeff;color:#000;font-weight:700;}');
+    doc.write('th{border:1px solid #8090b0;padding:1px 3px;font-size:6.5pt;font-weight:700;background:#e8eeff;color:#000;text-align:center;}');
+    doc.write('td{border:1px solid #8090b0;padding:1px 3px;font-size:6.5pt;color:#000;vertical-align:top;}');
     doc.write('tr:nth-child(even) td{background:#f8faff;}');
-    doc.write('th{font-size:7pt;padding:2px 4px;}');
-    doc.write('td{font-size:7pt;padding:2px 4px;}');
-    doc.write('@page{size:A4 landscape;margin:8mm;}');
-    doc.write('@media print{body{padding:0;}}');
+    doc.write('@page{size:A4 landscape;margin:4mm;}');
+    doc.write('@media print{html,body{padding:0;}}');
     doc.write('</style></head><body>');
     doc.write(html);
     doc.write('</body></html>');
