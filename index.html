@@ -1118,6 +1118,8 @@ const APP={
       ()=>LEAVE.render(),()=>LEAVE.updBadge(),()=>LEAVE.archivePast()
     ];
     renders.forEach(fn=>{try{fn();}catch(e){console.log('render error:',e.message);}});
+    // re-render หลัง Firebase sync เสร็จ
+    setTimeout(function(){try{SCHED.render();DASH.render();EMP.render();}catch(e){}},2000);
   },
   syncFB(){
     const wk=wKey(S.wkStart);
@@ -1127,13 +1129,21 @@ const APP={
       FB.on(sys+'/target',v=>{if(v!=null){LS.set('target_'+sys,v);DASH.render();}});
       FB.on(sys+'/products',v=>{if(v){LS.set('prods_'+sys,v);if(sys===S.sys){PLAN.render();SET.render();}}});
       FB.on(sys+'/plan',v=>{if(v){LS.set('plan_'+sys,v);if(sys===S.sys)PLAN.render();}});
-      FB.on(sys+'/sched',v=>{if(v){LS.set('sched_'+sys,v);if(sys===S.sys)SCHED.render();}});
+      FB.on(sys+'/sched',v=>{
+        if(v){
+          // merge กับข้อมูลที่มีอยู่แล้วใน LS
+          const existing=LS.get('sched_'+sys,{});
+          const merged=Object.assign({},existing,v);
+          LS.set('sched_'+sys,merged);
+          if(sys===S.sys){SCHED.render();DASH.render();}
+        }
+      });
       FB.on(sys+'/otlog',v=>{if(v){LS.set('otlog_'+sys,v);DASH.render();}});
-      FB.on(sys+'/sched/'+wk,v=>{if(!v)return;const all=LS.get('sched_'+sys,{});all[wk]=v;LS.set('sched_'+sys,all);if(sys===S.sys)SCHED.render();});
     });
     FB.on('signs',v=>{if(v)LS.set('signs',v);});
     FB.on('product_master',v=>{if(v){LS.set('product_master',v);PROD.render();}});
-    FB.on('fill/volume',v=>{if(v)LS.set('fill_volume',v);});
+    FB.on('fill/volume',v=>{if(v)LS.set('vol_fill',v);});
+    FB.on('proc/volume',v=>{if(v)LS.set('vol_proc',v);});
     FB.on('config/mixing_cfg',v=>{if(v)LS.set('mixing_cfg',v);});
     FB.on('config/mix_stock',v=>{if(v!=null)LS.set('mix_stock',v);});
     FB.on('config/prod_display',v=>{if(v)LS.set('prod_display',v);});
@@ -3691,4 +3701,5 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 
     <!-- Content -->
-    <div id="leave-list" style="flex:1;overflow-y:auto;padding:12px 14px"></div>
+    <div id="leave-list" style="flex:1;overflow-y:auto;padding:12px 14px"></div>    setTimeout(function(){try{SCHED.render();DASH.render();PLAN.render();EMP.render();}catch(e){}},2000);
+
