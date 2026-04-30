@@ -2404,48 +2404,41 @@ const PRINT={
   },
   sched(){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
-    const depts=D.getDepts();const ws=S.wkStart;
-    // รวบรวมพนักงานทุกคนในสัปดาห์นี้
-    let rows=[];
+    const depts=D.getDepts().filter(d=>d!==AL);const ws=S.wkStart;
+    const bd='1px solid #8090b0';
+    const th=(txt,w)=>`<th style="border:${bd};padding:5px 6px;color:#000;background:#e8eeff;text-align:center${w?';width:'+w:''}">${txt}</th>`;
+    const td=(txt,opt)=>`<td style="border:${bd};padding:5px 6px;color:#000;vertical-align:top${opt?';'+opt:''}">${txt}</td>`;
+
+    let html='';
     DAYS.forEach((dayLabel,di)=>{
       const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const dateStr=`${dayLabel} ${d2.getDate()}/${d2.getMonth()+1}`;
-      SHS.forEach(sh=>{
-        depts.forEach(dept=>{
+      const dateStr=dayLabel+' '+d2.getDate()+'/'+(d2.getMonth()+1);
+      // header วัน
+      html+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:12px 0 4px;padding:4px 8px;background:#e8eeff;border-left:4px solid #2563eb">${dateStr}</div>`;
+      html+='<table style="width:100%;border-collapse:collapse;margin-bottom:8px">';
+      html+='<thead><tr>'+th('แผนก','90pt')+th('กะเช้า 06:00-14:00')+th('กะบ่าย 14:00-22:00')+th('กะดึก 22:00-06:00')+'</tr></thead>';
+      html+='<tbody>';
+      depts.forEach((dept,ri)=>{
+        const bg=ri%2===0?'#fff':'#f5f7ff';
+        html+=`<tr style="background:${bg}">`;
+        html+=td(`<b>${dept}</b>`);
+        SHS.forEach(sh=>{
           const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-          ws2.forEach(w=>{
-            rows.push({dateStr,di,sh,dept,name:w.name,ot:w.ot,otHrs:w.otHrs||4,otBefore:w.otBefore,isLeave:w.isLeave});
-          });
+          const names=ws2.map(w=>{
+            const otTxt=w.ot?` <span style="color:#b45309;font-size:9pt">[OT]</span>`:'';
+            return`<div style="font-size:10pt">${w.name}${otTxt}</div>`;
+          }).join('');
+          html+=td(names||'<span style="color:#999;font-size:9pt">-</span>');
         });
-        // AL
-        const alWs=sched[AL]?.[di]?.[sh]||sched[AL]?.[String(di)]?.[sh]||[];
-        alWs.forEach(w=>{rows.push({dateStr,di,sh,dept:AL,name:w.name,ot:false,isLeave:true});});
+        html+='</tr>';
       });
+      html+='</tbody></table>';
     });
-    let tbl=`<table style="width:100%;border-collapse:collapse">
-      <thead><tr style="background:#e8eeff">
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:28pt">#</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">ชื่อ</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">วัน</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">กะ</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">แผนก</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">OT</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:80pt">หมายเหตุ</th>
-      </tr></thead><tbody>
-      ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f5f7ff'}">
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${i+1}</td>
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;font-weight:700">${r.name}</td>
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${r.dateStr}</td>
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${SHTH[r.sh]}</td>
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000">${r.dept}</td>
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700;color:${r.ot?'#b45309':'#000'}">${r.ot?(r.otHrs+'ชม.'):(r.isLeave?'ลา':'-')}</td>
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000"></td>
-      </tr>`).join('')}
-      </tbody></table>`;
-    document.getElementById('print-area').innerHTML=`
-      <div class="pr-title">ตารางกะ — ${S.sys==='proc'?'Process':'Filling'}</div>
-      <div style="font-size:11pt;color:#666;margin-bottom:8px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)}</div>
-      ${tbl}`;
+
+    document.getElementById('print-area').innerHTML=
+      '<div class="pr-title">ตารางกะ — '+(S.sys==='proc'?'Process':'Filling')+'</div>'
+      +'<div style="font-size:11pt;color:#666;margin-bottom:8px">สัปดาห์ที่ '+wNum(ws)+': '+dStr(ws)+'</div>'
+      +html;
     window.print();
   }
 };
@@ -2483,85 +2476,45 @@ const SCHED={
     const wk=wKey(S.wkStart);const ws=S.wkStart;
     const all=D.getSched();const sched=all[wk]||{};
     const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
-    const di=this.curDi;
-    const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-    const dateStr=DAYS[di]+' '+d2.getDate()+'/'+(d2.getMonth()+1);
-
-    const dayNav=document.getElementById('sched-day-nav');
-    if(dayNav) dayNav.innerHTML=
-      '<button onclick="SCHED.prevDay()" style="padding:6px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer">◀</button>'
-      +'<div style="font-size:14px;font-weight:900;color:var(--text);min-width:110px;text-align:center">'+dateStr+'</div>'
-      +'<button onclick="SCHED.nextDay()" style="padding:6px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer">▶</button>';
-
-    const tb=document.getElementById('sched-tb');if(!tb)return;
-    const head=document.getElementById('sched-head');
-    const shBg={morning:'rgba(37,99,235,.1)',afternoon:'rgba(245,158,11,.1)',night:'rgba(100,116,139,.1)'};
-    const shBd={morning:'rgba(37,99,235,.3)',afternoon:'rgba(245,158,11,.3)',night:'rgba(100,116,139,.3)'};
-    const shCol={morning:'var(--blue2)',afternoon:'var(--amber)',night:'var(--text2)'};
-    const shTime={morning:'06:00-14:00',afternoon:'14:00-22:00',night:'22:00-06:00'};
-
+    const tb=document.getElementById('stb');if(!tb)return;
+    const head=document.getElementById('sth');
     if(head){
-      let hh='<tr><th class="sc" style="min-width:80px;text-align:left;padding:6px 8px">แผนก</th>';
-      SHS.forEach(sh=>{
-        hh+='<th style="background:'+shBg[sh]+';border:1px solid '+shBd[sh]+';padding:6px 8px;text-align:center;min-width:110px">'
-          +'<div style="font-size:11px;font-weight:900;color:'+shCol[sh]+'">'+SHTH[sh]+'</div>'
-          +'<div style="font-size:9px;color:var(--text3)">'+shTime[sh]+'</div>'
-          +'</th>';
-      });
-      hh+='</tr>';
-      head.innerHTML=hh;
+      head.innerHTML='<tr><th class="sc">แผนก</th>'
+        +DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th colspan="3" style="text-align:center;border-bottom:1px solid var(--border)">${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;}).join('')
+        +'</tr><tr><th></th>'
+        +DAYS.map(()=>SHS.map(sh=>`<th style="font-size:9px;font-weight:700;padding:4px 2px;color:${sh==='morning'?'var(--blue2)':sh==='afternoon'?'var(--amber)':'var(--text3)'}">${SHTH[sh]}</th>`).join('')).join('')
+        +'</tr>';
     }
-
     let html='';
-    depts.forEach(function(dept){
-      html+='<tr>';
-      html+='<td style="font-weight:800;font-size:11px;padding:6px 8px;border-right:1px solid var(--border);vertical-align:top;background:var(--bg2)">'+dept+'</td>';
-      SHS.forEach(function(sh){
-        const wsRaw=(sched[dept]&&(sched[dept][di]||sched[dept][String(di)])&&((sched[dept][di]||sched[dept][String(di)])[sh]))||[];
-        const seen=new Set();
-        const ws2=wsRaw.filter(function(w){if(seen.has(w.name))return false;seen.add(w.name);return true;});
-        let cell='<div style="display:flex;flex-wrap:wrap;gap:3px;min-height:28px">';
-        ws2.forEach(function(w){
-          const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
-          // เวลา OT
-          const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
-          const otHrs=Math.round(w.otHrs||4);
-          let timeStr='';
-          if(w.ot){
-            let ds,de;
-            if(w.otBefore&&sh==='morning'){ds='06:00';de='18:00';}
-            else if(w.otBefore&&sh==='night'){ds=String((22-otHrs+24)%24).padStart(2,'0')+':00';de='06:00';}
-            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
-                 ds=String(shStartH).padStart(2,'0')+':00';
-                 de=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
-            timeStr=ds+'-'+de;
-          }
-          const tagBg=w.ot?'rgba(245,158,11,.15)':'var(--bg3)';
-          const tagBd=w.ot?'rgba(245,158,11,.5)':'var(--border)';
-          cell+='<div class="worker-tag" data-name="'+w.name+'" data-dept="'+dept+'" data-di="'+di+'" data-sh="'+sh+'" style="display:inline-flex;align-items:center;gap:3px;background:'+tagBg+';border:1px solid '+tagBd+';border-radius:20px;padding:3px 7px;cursor:pointer">'
-            +'<div style="width:20px;height:20px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff;flex-shrink:0">'+w.name.charAt(0)+'</div>'
-            +'<span style="font-size:10px;font-weight:700">'+w.name+'</span>'
-            +(w.ot?'<span style="font-size:9px;color:var(--amber);font-weight:800">OT</span>':'')
-            +(sg?'<span style="font-size:9px">✅</span>':(w.ot?'<span style="font-size:9px">✍️</span>':''))
-            +(w.ot&&timeStr?'<span style="font-size:8px;color:var(--amber)">'+timeStr+'</span>':'')
-            +'</div>';
+    depts.forEach(dept=>{
+      html+=`<tr><td class="sc">${dept}</td>`;
+      DAYS.forEach((d,di)=>{
+        SHS.forEach(sh=>{
+          const ws2raw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          const seenW=new Set();
+          const ws2=ws2raw.filter(w=>{if(seenW.has(w.name))return false;seenW.add(w.name);return true;});
+          html+=`<td style="min-width:52px;vertical-align:top;padding:3px">${ws2.map(w=>{
+            const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
+            const ne=w.name.replace(/'/g,"\'");
+            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+            const isPreOT=w.otBefore;
+            const otHrs=Math.round(w.otHrs||4);
+            let displayStart,displayEnd;
+            if(isPreOT&&sh==='morning'){displayStart='06:00';displayEnd='18:00';}
+            else if(isPreOT&&sh==='night'){displayStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';displayEnd='06:00';}
+            else{const effEndH={morning:14,afternoon:22,night:30}[sh]||14;displayStart=String(shStartH).padStart(2,'0')+':00';displayEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';}
+            const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
+            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
+              <span style="font-size:11px;font-weight:800">${w.name}</span>
+              ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span><span style="font-size:11px">✍️</span>`:''}
+              ${sg?'✅':''}
+            </span>`;
+          }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
         });
-        if(S.user&&S.user.isAdmin) cell+='<button class="aw-btn" data-dept="'+dept+'" data-di="'+di+'" data-sh="'+sh+'" style="align-self:center">+</button>';
-        cell+='</div>';
-        html+='<td style="vertical-align:top;padding:4px;background:'+shBg[sh]+';border:1px solid '+shBd[sh]+'">'+cell+'</td>';
       });
       html+='</tr>';
     });
     tb.innerHTML=html;
-
-    // event delegation แทน onclick inline
-    tb.querySelectorAll('.worker-tag').forEach(function(el){
-      el.onclick=function(){SCHED.openW(el.dataset.name,el.dataset.dept,parseInt(el.dataset.di),el.dataset.sh);};
-    });
-    tb.querySelectorAll('.aw-btn').forEach(function(el){
-      el.onclick=function(){SCHED.openAdd(el.dataset.dept,parseInt(el.dataset.di),el.dataset.sh);};
-    });
-
     this.renderAL(sched,wk);
   },
   renderAL(sched,wk){
