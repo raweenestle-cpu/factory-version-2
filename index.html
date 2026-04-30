@@ -2306,7 +2306,7 @@ const PRINT={
               const otHrs=Math.round(w.otHrs||4);
               let tStart,tEnd;
               if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
-              else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
+              else if(sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
               else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
                    tStart=String(shStartH).padStart(2,'0')+':00';
                    tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
@@ -2393,10 +2393,17 @@ const PRINT={
             const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
             const isPreOT=w.otBefore;const otHrs=Math.round(w.otHrs||4);
             let tStart,tEnd;
-            if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
-            else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
-            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
-                 tStart=String(shStartH).padStart(2,'0')+':00';
+            if(sh==='night'&&w.ot){
+              tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';
+            } else if(isPreOT&&sh==='morning'){
+              tStart='06:00';tEnd='18:00';
+            } else {
+              const eH={morning:14,afternoon:22,night:30}[sh]||14;
+              tStart=String(shStartH).padStart(2,'0')+':00';
+              tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';
+            }
+            // dummy to match
+            if(false){const eH2=0;tStart=String(shStartH).padStart(2,'0')+':00';
                  tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
             const sigHtml=emp?.signature?`<img src="${emp.signature}" style="max-height:35pt;max-width:80pt;object-fit:contain">`:sg?`<span style="font-family:cursive;font-size:12pt">${sg}</span>`:'';
             rows.push({rowNum,name:w.name,dept,dayTh,sh,otHrs,tStart,tEnd,sigHtml});
@@ -2472,10 +2479,17 @@ const PRINT={
             const isPreOT=w.otBefore;
             const otHrs=Math.round(w.otHrs||4);
             let tStart,tEnd;
-            if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
-            else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
-            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
-                 tStart=String(shStartH).padStart(2,'0')+':00';
+            if(sh==='night'&&w.ot){
+              tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';
+            } else if(isPreOT&&sh==='morning'){
+              tStart='06:00';tEnd='18:00';
+            } else {
+              const eH={morning:14,afternoon:22,night:30}[sh]||14;
+              tStart=String(shStartH).padStart(2,'0')+':00';
+              tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';
+            }
+            // dummy to match
+            if(false){const eH2=0;tStart=String(shStartH).padStart(2,'0')+':00';
                  tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
             return`<div style="font-size:9pt;padding:1px 0;white-space:nowrap">
               <span style="font-weight:700">${w.name}</span>
