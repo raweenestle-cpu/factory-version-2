@@ -2560,13 +2560,13 @@ const PRINT={
     const daysToShow=selDays||[0,1,2,3,4,5];
     const isFill=sys==='fill';
 
-    const buildTable=(depts2,sched2,di)=>{
-      let head=`<thead><tr>
+    const buildTable=(depts2,sched2,di,showHeader=true)=>{
+      const head=showHeader?`<thead><tr>
         <th style="border:${bd};padding:1px 3px;background:#e8eeff;color:#000;font-weight:700;text-align:left;white-space:nowrap">แผนก</th>
         <th style="border:${bd};padding:1px 3px;background:#dbeafe;color:#1e40af;font-weight:700;text-align:center">กะเช้า 06:00-14:00</th>
         <th style="border:${bd};padding:1px 3px;background:#fef3c7;color:#92400e;font-weight:700;text-align:center">กะบ่าย 14:00-22:00</th>
         <th style="border:${bd};padding:1px 3px;background:#f1f5f9;color:#475569;font-weight:700;text-align:center">กะดึก 22:00-06:00</th>
-      </tr></thead>`;
+      </tr></thead>`:'';
       let rows='<tbody>';
       depts2.forEach((dept,ri)=>{
         const bg=ri%2===0?'#fff':'#f8faff';
@@ -2609,8 +2609,8 @@ const PRINT={
         body+=`<div class="day-header">${ds2}</div>`;
         body+=`<div style="font-size:6pt;font-weight:900;color:#1e3a5f;padding:1px 4px;background:#dbeafe;margin-bottom:1px">🔧 Process</div>`;
         body+=buildTable(procDepts,procSched,di);
-        body+=`<div style="font-size:6pt;font-weight:900;color:#1e3a5f;padding:1px 4px;background:#fef3c7;margin:3px 0 1px">🏭 Filling</div>`;
-        body+=buildTable(fillDepts,fillSched,di);
+        body+=`<div style="font-size:6pt;font-weight:800;color:#92400e;padding:1px 4px;background:#fef3c7;margin:3px 0 1px">🏭 Filling</div>`;
+        body+=buildTable(fillDepts,fillSched,di,false);
         body+='</div>';
       } else {
         // Process: รวมทุกวันในหน้าเดียว
