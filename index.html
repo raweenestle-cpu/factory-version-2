@@ -2317,50 +2317,44 @@ const PRINT={
   },
   buildSchedHTML(sys){
     const wk=wKey(S.wkStart);const sched=D.getSched(sys)[wk]||{};
-    const depts=D.getDepts(sys);const ws=S.wkStart;
+    const depts=D.getDepts(sys).filter(d=>d!==AL);const ws=S.wkStart;
     const now=new Date();const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
-    // รวบรวมแถวแนวตั้ง: 1 แถว = 1 คน 1 กะ 1 วัน
-    let rows=[];
+    const bd='1px solid #8090b0';
+
+    let body='';
     DAYS.forEach((dayLabel,di)=>{
       const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const ds2=`${dayLabel} ${d2.getDate()}/${d2.getMonth()+1}`;
-      SHS.forEach(sh=>{
-        depts.forEach(dept=>{
-          (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
-            rows.push({ds2,sh,dept,name:w.name,ot:w.ot,otHrs:w.otHrs||4,otBefore:w.otBefore,isLeave:w.isLeave});
-          });
+      const ds2=dayLabel+' '+d2.getDate()+'/'+(d2.getMonth()+1);
+      body+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:4px 8px;background:#e8eeff;border-left:4px solid #2563eb">${ds2}</div>`;
+      body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:6px">`;
+      body+=`<thead><tr>
+        <th style="border:${bd};padding:5px 6px;background:#e8eeff;color:#000;text-align:left;width:80pt">แผนก</th>
+        <th style="border:${bd};padding:5px 6px;background:#dbeafe;color:#1e40af;text-align:center">กะเช้า 06:00-14:00</th>
+        <th style="border:${bd};padding:5px 6px;background:#fef3c7;color:#92400e;text-align:center">กะบ่าย 14:00-22:00</th>
+        <th style="border:${bd};padding:5px 6px;background:#f1f5f9;color:#475569;text-align:center">กะดึก 22:00-06:00</th>
+      </tr></thead><tbody>`;
+      depts.forEach((dept,ri)=>{
+        const bg=ri%2===0?'#fff':'#f8faff';
+        body+=`<tr style="background:${bg}">`;
+        body+=`<td style="border:${bd};padding:5px 6px;color:#000;font-weight:700">${dept}</td>`;
+        SHS.forEach(sh=>{
+          const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          const names=ws2.map(w=>{
+            const otTxt=w.ot?`<span style="font-size:8pt;color:#b45309;font-weight:800"> [OT]</span>`:'';
+            return`<div style="font-size:10pt;padding:1px 0">${w.name}${otTxt}</div>`;
+          }).join('');
+          body+=`<td style="border:${bd};padding:5px 6px;color:#000;vertical-align:top">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
         });
-        (sched[AL]?.[di]?.[sh]||sched[AL]?.[String(di)]?.[sh]||[]).forEach(w=>{
-          rows.push({ds2,sh,dept:AL,name:w.name,ot:false,isLeave:true});
-        });
+        body+='</tr>';
       });
+      body+='</tbody></table>';
     });
-    return `<div class="pr-header">
-      <div class="pr-title">📅 ตารางกะ — ${sys==='proc'?'Process':'Filling'}</div>
-      <div class="pr-sub">สัปดาห์ที่ ${wNum(ws)} · พิมพ์: ${dateStr}</div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;font-size:10pt">
-      <thead><tr style="background:#e8eeff">
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:24pt">#</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">ชื่อ</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">วัน</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">กะ</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">แผนก</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">OT</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:80pt">ลายเซ็น</th>
-      </tr></thead>
-      <tbody>
-        ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f5f7ff'}">
-          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${i+1}</td>
-          <td style="border:1px solid #8090b0;padding:8px;color:#000;font-weight:700">${r.name}</td>
-          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${r.ds2}</td>
-          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${SHTH[r.sh]}</td>
-          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000">${r.dept}</td>
-          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700;color:${r.ot?'#b45309':'#000'}">${r.ot?(r.otHrs+'ชม.'):(r.isLeave?'ลา':'-')}</td>
-          <td style="border:1px solid #8090b0;padding:8px;height:44pt"></td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
+
+    return `<div style="font-family:'Sarabun',sans-serif;color:#000">
+      <div style="font-size:16pt;font-weight:900;color:#1e3a5f;margin-bottom:3px">ตารางกะ — ${sys==='proc'?'Process':'Filling'}</div>
+      <div style="font-size:10pt;color:#666;margin-bottom:10px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)}</div>
+      ${body}
+    </div>`;
   },
   confirmSched(){
     const sysSel=document.getElementById('prs-sys')?.value||'current';
