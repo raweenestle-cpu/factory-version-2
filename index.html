@@ -739,6 +739,18 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
       <button class="md-close" onclick="closeMo('mo-print-sched')">✕</button>
     </div>
     <div class="md-body">
+      <!-- checkbox เลือกวัน -->
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:800;color:var(--text2);margin-bottom:8px">เลือกวันที่จะพิมพ์</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="PRINT.toggleAllDays()" id="prs-all-btn" style="padding:5px 10px;background:var(--blue);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer">เลือกทั้งหมด</button>
+          ${['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'].map((d,i)=>`
+            <label style="display:flex;align-items:center;gap:4px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;color:var(--text2)">
+              <input type="checkbox" id="prs-day-${i}" checked onchange="PRINT.updateSchedPreview()" style="cursor:pointer">
+              ${d}
+            </label>`).join('')}
+        </div>
+      </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <div style="flex:1">
           <label class="fl">ระบบ</label>
@@ -2533,11 +2545,13 @@ const PRINT={
   updateSchedPreview(){
     const sysSel=document.getElementById('prs-sys')?.value||'current';
     const sys=sysSel==='current'?S.sys:sysSel;
-    const html=this.buildSchedHTML(sys);
+    const selDays=[];
+    for(let i=0;i<6;i++){const cb=document.getElementById('prs-day-'+i);if(cb&&cb.checked)selDays.push(i);}
+    const html=this.buildSchedHTML(sys,selDays.length===6?null:selDays);
     const prev=document.getElementById('pr-sched-preview');
     if(prev)prev.innerHTML=html;
   },
-  buildSchedHTML(sys){
+  buildSchedHTML(sys,selDays=null){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const depts=D.getDepts(sys).filter(d=>d!==AL);const ws=S.wkStart;
     const DAYTH_FULL=['วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
@@ -2545,10 +2559,11 @@ const PRINT={
     const bd='1px solid #8090b0';
 
     let body='';
-    DAYS.forEach((dayLabel,di)=>{
-      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+    const daysToShow=selDays||[0,1,2,3,4,5];
+    daysToShow.forEach(di=>{
+      const dayLabel=DAYS[di];const d2=new Date(ws);d2.setDate(ws.getDate()+di);
       const ds2=DAYTH_FULL[di]+' '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
-      body+=`<div class="day-block"><div class="day-header">${ds2}</div>`;
+      body+=`<div class="${sys==='fill'?'day-page':'day-block'}"><div class="day-header">${ds2}</div>`;
       body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
       body+=`<thead><tr>
         <th style="border:${bd};padding:3px 6px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
@@ -2594,10 +2609,18 @@ const PRINT={
       ${body}
     </div>`;
   },
+  toggleAllDays(){
+    const allChecked=[0,1,2,3,4,5].every(i=>document.getElementById('prs-day-'+i)?.checked);
+    for(let i=0;i<6;i++){const cb=document.getElementById('prs-day-'+i);if(cb)cb.checked=!allChecked;}
+    this.updateSchedPreview();
+  },
   confirmSched(){
     const sysSel=document.getElementById('prs-sys')?.value||'current';
     const sys=sysSel==='current'?S.sys:sysSel;
-    const html=this.buildSchedHTML(sys);
+    // อ่าน checkbox วัน
+    const selDays=[];
+    for(let i=0;i<6;i++){const cb=document.getElementById('prs-day-'+i);if(cb&&cb.checked)selDays.push(i);}
+    const html=this.buildSchedHTML(sys,selDays.length===6?null:selDays);
     const pw=window.open('','_blank');
     const doc=pw.document;
     doc.open();
@@ -2612,6 +2635,8 @@ const PRINT={
     doc.write('tr:nth-child(even) td{background:#f8faff;}');
     doc.write('.day-header{font-size:9pt;font-weight:900;color:#1e3a5f;margin:4px 0 2px;padding:3px 8px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
     doc.write('.day-block{page-break-inside:avoid;break-inside:avoid;margin-bottom:2px;}');
+    doc.write('.day-page{page-break-before:always;break-before:always;margin-bottom:2px;}');
+    doc.write('.day-page:first-child{page-break-before:auto;break-before:auto;}');
     doc.write('table{margin-bottom:2px;}');
     doc.write('th{font-size:7pt;padding:2px 4px;}');
     doc.write('td{font-size:7pt;padding:2px 4px;}');
@@ -2664,8 +2689,9 @@ const PRINT={
     const td=(txt,opt)=>`<td style="border:${bd};padding:5px 6px;color:#000;vertical-align:top${opt?';'+opt:''}">${txt}</td>`;
 
     let html='';
-    DAYS.forEach((dayLabel,di)=>{
-      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+    const daysToShow=selDays||[0,1,2,3,4,5];
+    daysToShow.forEach(di=>{
+      const dayLabel=DAYS[di];const d2=new Date(ws);d2.setDate(ws.getDate()+di);
       const dateStr=dayLabel+' '+d2.getDate()+'/'+(d2.getMonth()+1);
       // header วัน
       html+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:12px 0 4px;padding:4px 8px;background:#e8eeff;border-left:4px solid #2563eb">${dateStr}</div>`;
@@ -3064,7 +3090,7 @@ const OT={
         if(!wk.match(/\d{4}-\d{2}-\d{2}/))return;
         const wp=wk.split('-');const ws=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
         for(let di=0;di<6;di++){
-          const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+          const dayLabel=DAYS[di];const d2=new Date(ws);d2.setDate(ws.getDate()+di);
           if(this.per==='mo'&&(d2.getMonth()!==this.mo||d2.getFullYear()!==this.yr2))continue;
           if(this.per==='yr'&&d2.getFullYear()!==this.yr2)continue;
           depts.forEach(d=>SHS.forEach(sh=>{const w=(wd[d]?.[di]?.[sh]||wd[d]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);if(w){const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}}));
@@ -3112,7 +3138,7 @@ const OT={
       if(!wk.match(/\d{4}-\d{2}-\d{2}/))return;
       const wp=wk.split('-');const ws=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
       for(let di=0;di<6;di++){
-        const d2=new Date(ws);d2.setDate(ws.getDate()+di);if(d2.getFullYear()!==yr)continue;
+        const dayLabel=DAYS[di];const d2=new Date(ws);d2.setDate(ws.getDate()+di);if(d2.getFullYear()!==yr)continue;
         const ds=dStr(d2);
         SHS.forEach(sh=>depts.forEach(dept=>{
           const w=(sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).find(x=>x.ot);if(!w)return;
