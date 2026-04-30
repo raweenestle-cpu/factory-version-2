@@ -2547,14 +2547,14 @@ const PRINT={
     let body='';
     DAYS.forEach((dayLabel,di)=>{
       const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const ds2=DAYTH_FULL[di]+'ที่ '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
+      const ds2=DAYTH_FULL[di]+' '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
       body+=`<div class="day-block"><div class="day-header">${ds2}</div>`;
       body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
       body+=`<thead><tr>
-        <th style="border:${bd};padding:5px 8px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
-        <th style="border:${bd};padding:5px 8px;background:#dbeafe!important;color:#1e40af!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
-        <th style="border:${bd};padding:5px 8px;background:#fef3c7!important;color:#92400e!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
-        <th style="border:${bd};padding:5px 8px;background:#f1f5f9!important;color:#475569!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
+        <th style="border:${bd};padding:3px 6px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
+        <th style="border:${bd};padding:3px 6px;background:#dbeafe!important;color:#1e40af!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
+        <th style="border:${bd};padding:3px 6px;background:#fef3c7!important;color:#92400e!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
+        <th style="border:${bd};padding:3px 6px;background:#f1f5f9!important;color:#475569!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
       </tr></thead><tbody>`;
       depts.forEach((dept,ri)=>{
         const bg=ri%2===0?'#fff':'#f8faff';
@@ -2574,14 +2574,14 @@ const PRINT={
             else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
                  tStart=String(shStartH).padStart(2,'0')+':00';
                  tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
-            return`<div style="font-size:10pt;padding:2px 0;display:flex;align-items:center;gap:4px">
+            return`<div style="font-size:8pt;padding:1px 0;display:flex;align-items:center;gap:3px">
               <span style="font-weight:700">${w.name}</span>
-              <span style="font-size:8pt;color:#b45309;font-weight:800">OT</span>
-              <span style="font-size:8pt;color:#b45309">${tStart}-${tEnd}</span>
-              <span style="font-size:10pt">✍️</span>
+              <span style="font-size:7pt;color:#b45309;font-weight:800">OT</span>
+              <span style="font-size:7pt;color:#b45309">${tStart}-${tEnd}</span>
+              <span style="font-size:8pt">✍️</span>
             </div>`;
           }).join('');
-          body+=`<td style="border:${bd};padding:5px 8px;color:#000;vertical-align:top">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
+          body+=`<td style="border:${bd};padding:2px 4px;color:#000;vertical-align:top;font-size:8pt">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
         });
         body+='</tr>';
       });
@@ -2610,11 +2610,11 @@ const PRINT={
     doc.write('th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
     doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:top;}');
     doc.write('tr:nth-child(even) td{background:#f8faff;}');
-    doc.write('.day-header{font-size:10pt;font-weight:900;color:#1e3a5f;margin:6px 0 3px;padding:4px 8px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
-    doc.write('.day-block{page-break-inside:avoid;break-inside:avoid;}');
-    doc.write('table{margin-bottom:4px;}');
-    doc.write('th{font-size:8pt;padding:3px 6px;}');
-    doc.write('td{font-size:8pt;padding:3px 6px;}');
+    doc.write('.day-header{font-size:9pt;font-weight:900;color:#1e3a5f;margin:4px 0 2px;padding:3px 8px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('.day-block{page-break-inside:avoid;break-inside:avoid;margin-bottom:2px;}');
+    doc.write('table{margin-bottom:2px;}');
+    doc.write('th{font-size:7pt;padding:2px 4px;}');
+    doc.write('td{font-size:7pt;padding:2px 4px;}');
     doc.write('@page{size:A4 landscape;margin:8mm;}');
     doc.write('@media print{body{padding:0;}}');
     doc.write('</style></head><body>');
