@@ -1804,34 +1804,37 @@ const PLAN={
             // 1. หาจาก byShift ของกะนั้นก่อน
             const oreoMain=byShift[sh].filter(e=>(e.mainDept||e.dept)==='Oreo Coating'&&!usedEmps.has(e.name)&&!oreoUsed.has(e.name));
             const oreoSub=byShift[sh].filter(e=>(e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating')&&!usedEmps.has(e.name)&&!oreoUsed.has(e.name)&&(e.mainDept||e.dept)!=='Oreo Coating');
-            let oreo=[...oreoMain,...oreoSub][0];
-            // 2. ถ้าหาไม่ได้ → ดึงคนอื่นที่เกี่ยวกับ Oreo มา OT
-            if(!oreo){
-              const otCandidate=oreoAllEmps.filter(e=>{
-                if(oreoUsed.has(e.name))return false;
-                // คน Oreo mainDept หรือ sub ที่ถูกใช้กะอื่นแล้ว → OT ได้
-                return (e.mainDept||e.dept)==='Oreo Coating'||(e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating');
-              })[0];
-              if(otCandidate){
-                // หาว่าคนนี้อยู่กะไหนแล้ว
-                let assignedSh=null;
-                nonOreoDepts.forEach(d=>{SHS.forEach(s=>{if(sched2[d]?.[di]?.[s]?.find(w=>w.name===otCandidate.name))assignedSh=s;});});
-                if(!assignedSh){
-                  // ยังไม่ถูก assign → ใช้ได้เลย
-                  oreo=otCandidate;
-                } else {
-                  // ถูก assign กะอื่นแล้ว → OT แต่ต้องไม่ชนกะ (otBefore)
-                  sched2['Oreo Coating'][di][sh].push({name:otCandidate.name,ot:true,otHrs:4,otBefore:sh==='night',av:otCandidate.av||0,isSub:true});
-                  oreoUsed.add(otCandidate.name);
-                  return;
-                }
-              }
-            }
-            if(oreo){
+            // ถ้าหาจาก byShift ของกะนั้นได้ → assign ปกติ ไม่มี OT
+            if([...oreoMain,...oreoSub][0]){
+              const oreo=[...oreoMain,...oreoSub][0];
               sched2['Oreo Coating'][di][sh].push({name:oreo.name,ot:false,otHrs:4,av:oreo.av||0,
                 isSub:!oreoMain.find(m=>m.name===oreo.name)});
               usedEmps.add(oreo.name);
               oreoUsed.add(oreo.name);
+            } else {
+              // หาจาก pool ทั้งหมดที่ยังว่าง (ไม่ใช้ usedEmps เพราะยอมให้ทำงาน 2 กะได้ถ้าจำเป็น)
+              const fallback=oreoAllEmps.filter(e=>{
+                if(oreoUsed.has(e.name))return false;
+                return (e.mainDept||e.dept)==='Oreo Coating'||(e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating');
+              })[0];
+              if(fallback){
+                // ตรวจว่า fallback อยู่กะไหนแล้ว
+                const alreadyNight=sched2['Oreo Coating'][di]['night']?.find(w=>w.name===fallback.name);
+                const alreadyMorn=sched2['Oreo Coating'][di]['morning']?.find(w=>w.name===fallback.name);
+                const alreadyAftn=sched2['Oreo Coating'][di]['afternoon']?.find(w=>w.name===fallback.name);
+                if(!alreadyNight&&!alreadyMorn&&!alreadyAftn){
+                  // ยังไม่อยู่กะ Oreo ไหนเลย
+                  // ถ้าถูก assign dept อื่นกะเดียวกัน → ย้ายมา Oreo (ลบออกจาก dept เดิม)
+                  nonOreoDepts.forEach(function(d){
+                    if(sched2[d]&&sched2[d][di]&&sched2[d][di][sh]){
+                      sched2[d][di][sh]=sched2[d][di][sh].filter(function(w){return w.name!==fallback.name;});
+                    }
+                  });
+                  sched2['Oreo Coating'][di][sh].push({name:fallback.name,ot:false,otHrs:4,av:fallback.av||0,isSub:true});
+                  oreoUsed.add(fallback.name);
+                  usedEmps.add(fallback.name); // ป้องกันถูก assign ซ้ำอีก
+                }
+              }
             }
           });
         }
@@ -2502,12 +2505,24 @@ const SCHED={
             const otHrs=Math.round(w.otHrs||4);
             // คนกะบ่ายที่มาทำกะเช้า (otBefore) → แสดงเหมือนกะเช้า OT ปกติ = 06:00-18:00
             // คนกะดึก pre-OT (18:00-22:00) → แสดง 18:00-22:00
-            const effectiveSh=isPreOT&&sh==='morning'?'morning':sh;
-            const effStartH={morning:6,afternoon:14,night:22}[effectiveSh]||6;
-            const effEndH={morning:14,afternoon:22,night:30}[effectiveSh]||14;
-            const otEndCalc=effEndH+otHrs;
-            const displayStart=String(isPreOT&&sh==='night'?(effStartH-otHrs+24)%24:effStartH).padStart(2,'0')+':00';
-            const displayEnd=isPreOT&&sh==='night'?String(effStartH).padStart(2,'0')+':00':String(Math.round(otEndCalc)%24).padStart(2,'0')+':00';
+            // morning pre-OT (กะบ่ายมาเช้า): 06:00-18:00
+            // night pre-OT (เข้าก่อนกะดึก): 18:00-06:00
+            // afternoon OT: 14:00-02:00
+            // morning OT: 06:00-18:00
+            let displayStart,displayEnd;
+            if(isPreOT&&sh==='morning'){
+              // กะบ่ายมาเช้า → ทำงาน 06:00-18:00
+              displayStart='06:00';displayEnd='18:00';
+            } else if(isPreOT&&sh==='night'){
+              // กะดึก pre-OT 4 ชม. → เข้า 18:00 ออก 06:00
+              displayStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';
+              displayEnd='06:00';
+            } else {
+              // OT ปกติ (ต่อจากกะ)
+              const effEndH={morning:14,afternoon:22,night:30}[sh]||14;
+              displayStart=String(shStartH).padStart(2,'0')+':00';
+              displayEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';
+            }
             const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
             return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
               <span style="font-size:11px;font-weight:800">${w.name}</span>
