@@ -378,10 +378,33 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
 }
 .pr-sign-box-label, #print-area .pr-sign-box-label{font-size:9pt;color:#666;margin-top:4px}
 #print-area table{width:100%;border-collapse:collapse;margin-bottom:10px}
-#print-area th{background:#1e3a5f!important;color:#fff!important;padding:6px 8px;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#print-area th.pr-th-dark{background:#1e3a5f!important;color:#fff!important;padding:6px 8px;font-size:10pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 #print-area td{border:1px solid #ccc;padding:5px 8px;font-size:10pt}
 .pr-title, #print-area .pr-title{font-size:15pt;font-weight:900;margin-bottom:4px}
 #print-area .signature{font-family:'Brush Script MT',cursive;font-size:11pt;color:#1e3a5f}
+
+/* OT & Sched print tables — ป้องกัน global override */
+#print-area .ot-tbl th,
+#print-area .ot-tbl td,
+#print-area .sched-tbl th,
+#print-area .sched-tbl td {
+  border:1px solid #8090b0!important;
+  padding:5px 8px!important;
+  font-size:9pt!important;
+  color:#000!important;
+  background:transparent;
+}
+#print-area .ot-tbl thead tr,
+#print-area .sched-tbl thead tr {
+  background:#e8eeff!important;
+  -webkit-print-color-adjust:exact;
+  print-color-adjust:exact;
+}
+#print-area .ot-tbl th,
+#print-area .sched-tbl th {
+  background:#e8eeff!important;
+  font-weight:700!important;
+}
 </style>
 </head>
 <body>
@@ -2278,14 +2301,14 @@ const PRINT={
         <col style="width:8%">
         <col style="width:22%">
       </colgroup>
-      <thead><tr style="background:#e8eeff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">#</th>
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:left">ชื่อ-สกุล</th>
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">วันที่</th>
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">กะ</th>
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">เวลา OT</th>
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">ชม.</th>
-        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">ลายเซ็นยินยอม</th>
+      <thead><tr style="background:#e8eeff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:center">#</th>
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:left">ชื่อ-สกุล</th>
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:center">วันที่</th>
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:center">กะ</th>
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:center">เวลา OT</th>
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:center">ชม.</th>
+        <th style="border:${bd};padding:4px 5px;color:#000!important;background:#e8eeff!important;text-align:center">ลายเซ็นยินยอม</th>
       </tr></thead>
       <tbody>
       ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f8faff'}">
@@ -2317,12 +2340,30 @@ const PRINT={
     </div>`;
   },
   confirmOT(){
-    const mode=document.getElementById('pr-mode')?.value||'week';
-    const sys=document.getElementById('pr-sys')?.value||'both';
-    const html=this.buildOTHTML(mode,sys);
-    document.getElementById('print-area').innerHTML=html;
+    const sysSel=document.getElementById('pr-sys')?.value||'proc';
+    const prev=document.getElementById('pr-ot-preview');
+    const html=prev?prev.innerHTML:'';
+    if(!html){toast('❌ ไม่มีข้อมูล');return;}
+    const pw=window.open('','_blank');
+    const doc=pw.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">');
+    doc.write('<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;800;900&display=swap" rel="stylesheet">');
+    doc.write('<style>');
+    doc.write('*{margin:0;padding:0;box-sizing:border-box;}');
+    doc.write('body{font-family:Sarabun,sans-serif;background:#fff;color:#000;padding:8mm;}');
+    doc.write('table{width:100%;border-collapse:collapse;table-layout:auto;}');
+    doc.write('th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:middle;}');
+    doc.write('tr:nth-child(even) td{background:#f8faff;}');
+    doc.write('@page{size:A4;margin:8mm;}');
+    doc.write('@media print{body{padding:0;}}');
+    doc.write('</style></head><body>');
+    doc.write(html);
+    doc.write('</body></html>');
+    doc.close();
+    setTimeout(()=>pw.print(),600);
     closeMo('mo-print-ot');
-    setTimeout(()=>window.print(),300);
   },
   openSched(){
     this.updateSchedPreview();
@@ -2348,9 +2389,9 @@ const PRINT={
       const MONTH_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
       const ds2=DAYTH_FULL[di]+'ที่ '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
       body+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:5px 10px;background:#e8eeff;border-left:4px solid #2563eb">${ds2}</div>`;
-      body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
+      body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
       body+=`<thead><tr>
-        <th style="border:${bd};padding:5px 8px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
+        <th style="border:${bd};padding:5px 8px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
         <th style="border:${bd};padding:5px 8px;background:#dbeafe!important;color:#1e40af!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
         <th style="border:${bd};padding:5px 8px;background:#fef3c7!important;color:#92400e!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
         <th style="border:${bd};padding:5px 8px;background:#f1f5f9!important;color:#475569!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
@@ -2397,11 +2438,27 @@ const PRINT={
     const sysSel=document.getElementById('prs-sys')?.value||'current';
     const sys=sysSel==='current'?S.sys:sysSel;
     const html=this.buildSchedHTML(sys);
-    const pa=document.getElementById('print-area');
-    pa.innerHTML=html;
-    pa.setAttribute('data-mode','sched');
+    const pw=window.open('','_blank');
+    const doc=pw.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">');
+    doc.write('<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;800;900&display=swap" rel="stylesheet">');
+    doc.write('<style>');
+    doc.write('*{margin:0;padding:0;box-sizing:border-box;}');
+    doc.write('body{font-family:Sarabun,sans-serif;background:#fff;color:#000;padding:8mm;}');
+    doc.write('table{width:100%;border-collapse:collapse;table-layout:auto;}');
+    doc.write('th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:top;}');
+    doc.write('tr:nth-child(even) td{background:#f8faff;}');
+    doc.write('.day-header{font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:5px 10px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('@page{size:A4 landscape;margin:8mm;}');
+    doc.write('@media print{body{padding:0;}}');
+    doc.write('</style></head><body>');
+    doc.write(html);
+    doc.write('</body></html>');
+    doc.close();
+    setTimeout(()=>pw.print(),600);
     closeMo('mo-print-sched');
-    setTimeout(()=>window.print(),300);
   },
   ot(){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};const depts=D.getDepts();const tgt=D.getTarget();
