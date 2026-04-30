@@ -2220,7 +2220,6 @@ const PRINT={
   },
   buildOTHTML(mode,sys){
     const now=new Date();
-    const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
     const s2=sys||S.sys;
     const depts=D.getDepts(s2).filter(d=>d!==AL);
     const wKeys=[];
@@ -2230,14 +2229,16 @@ const PRINT={
     } else {
       const all=D.getSched(s2);Object.keys(all).forEach(k=>{if(k.match(/\d{4}-\d{2}-\d{2}/))wKeys.push(k);});
     }
-    let rows=[];
-    let rowNum=0;
+    const DAYTH=['จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+    const MONTH_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const bd='1px solid #8090b0';
+    let rows=[];let rowNum=0;
     wKeys.forEach(wk4=>{
       const sched=D.getSched(s2)[wk4]||{};
-      const wp=wk4.split('-');const ws4=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+      const wsDate=new Date(S.wkStart);
       for(let di=0;di<6;di++){
-        const d2=new Date(ws4);d2.setDate(ws4.getDate()+di);
-        const ds2=dStr(d2);const dayN=DAYS[di];
+        const d2=new Date(wsDate);d2.setDate(wsDate.getDate()+di);
+        const dayTh=DAYTH[di]+' '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
         SHS.forEach(sh=>{
           depts.forEach(dept=>{
             (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
@@ -2246,55 +2247,74 @@ const PRINT={
               const sgKey=wk4+'_'+w.name+'_'+dept+'_'+di+'_'+sh;
               const sg=D.getSign(sgKey);
               const emp=D.getEmps(s2).find(e=>e.name===w.name);
-              // คำนวณเวลา
               const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
               const isPreOT=w.otBefore;
               const otHrs=Math.round(w.otHrs||4);
               let tStart,tEnd;
               if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
               else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
-              else{const effEndH={morning:14,afternoon:22,night:30}[sh]||14;tStart=String(shStartH).padStart(2,'0')+':00';tEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';}
-              rows.push({rowNum,name:w.name,dept,dayN,ds2,sh,otHrs,tStart,tEnd,sg,sigImg:emp?.signature||null});
+              else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
+                   tStart=String(shStartH).padStart(2,'0')+':00';
+                   tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
+              rows.push({rowNum,name:w.name,dept,dayTh,sh,otHrs,tStart,tEnd,sg,sigImg:emp?.signature||null});
             });
           });
         });
       }
     });
-    if(!rows.length){
-      document.getElementById('pr-ot-preview').innerHTML='<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล OT</div>';
-      return;
-    }
-    const tbl=`<table style="width:100%;border-collapse:collapse">
-      <thead><tr style="background:#e8eeff">
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:24pt">#</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">ชื่อ</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">แผนก</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">วัน</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">กะ</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">เวลา</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">OT</th>
-        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:90pt">ลายเซ็น</th>
-      </tr></thead><tbody>
-      ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f5f7ff'}">
-        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${r.rowNum}</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000;font-weight:700">${r.name}</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000">${r.dept}</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center">${r.dayN} ${r.ds2}</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center">${SHTH[r.sh]}</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center;font-weight:700">${r.tStart}–${r.tEnd}</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center;font-weight:700;color:#b45309">${r.otHrs} ชม.</td>
-        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center;height:50pt">
-          ${r.sigImg?`<img src="${r.sigImg}" style="max-height:40pt;max-width:80pt;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${r.sg}</span>`:''}
+
+    const prev=document.getElementById('pr-ot-preview');
+    if(!prev)return;
+    if(!rows.length){prev.innerHTML='<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล OT</div>';return;}
+
+    const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+    const tbl=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt">
+      <colgroup>
+        <col style="width:5%">
+        <col style="width:22%">
+        <col style="width:17%">
+        <col style="width:12%">
+        <col style="width:14%">
+        <col style="width:8%">
+        <col style="width:22%">
+      </colgroup>
+      <thead><tr style="background:#e8eeff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">#</th>
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:left">ชื่อ-สกุล</th>
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">วันที่</th>
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">กะ</th>
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">เวลา OT</th>
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">ชม.</th>
+        <th style="border:${bd};padding:4px 5px;color:#000;text-align:center">ลายเซ็นยินยอม</th>
+      </tr></thead>
+      <tbody>
+      ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f8faff'}">
+        <td style="border:${bd};padding:5px;color:#000;text-align:center">${r.rowNum}</td>
+        <td style="border:${bd};padding:5px;color:#000;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</td>
+        <td style="border:${bd};padding:5px;color:#000;text-align:center;font-size:8pt">${r.dayTh}</td>
+        <td style="border:${bd};padding:5px;color:#000;text-align:center">${SHTH[r.sh]}</td>
+        <td style="border:${bd};padding:5px;color:#b45309;text-align:center;font-weight:800;white-space:nowrap">${r.tStart}–${r.tEnd}</td>
+        <td style="border:${bd};padding:5px;color:#b45309;text-align:center;font-weight:900">${r.otHrs}</td>
+        <td style="border:${bd};padding:5px;text-align:center;height:45pt">
+          ${r.sigImg?`<img src="${r.sigImg}" style="max-height:38pt;max-width:80pt;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:12pt;color:#1e3a5f">${r.sg}</span>`:''}
         </td>
       </tr>`).join('')}
-      </tbody></table>`;
-    const prev=document.getElementById('pr-ot-preview');
-    if(prev)prev.innerHTML=`
-      <div style="font-family:'Sarabun',sans-serif;font-size:10pt;color:#000">
-        <div style="font-size:14pt;font-weight:900;margin-bottom:4px">ใบยินยอมทำงานล่วงเวลา (OT)</div>
-        <div style="font-size:10pt;color:#666;margin-bottom:12px">${dateStr} — ${s2==='proc'?'Process':'Filling'}</div>
-        ${tbl}
-      </div>`;
+      </tbody>
+    </table>`;
+
+    prev.innerHTML=`<div style="font-family:'Sarabun',sans-serif;color:#000">
+      <div style="font-size:13pt;font-weight:900;color:#1e3a5f;margin-bottom:2px">ใบยินยอมทำงานล่วงเวลา (OT)</div>
+      <div style="font-size:9pt;color:#666;margin-bottom:8px">${dateStr} — ${s2==='proc'?'Process':'Filling'}</div>
+      ${tbl}
+      <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:10pt">
+        <div style="border:1px solid #aaa;border-radius:4px;padding:8px 12px;min-height:60px;text-align:center">
+          <div style="font-size:8pt;color:#666;margin-top:40px">ผู้จัดทำ / ผู้จัดกะ</div>
+        </div>
+        <div style="border:1px solid #aaa;border-radius:4px;padding:8px 12px;min-height:60px;text-align:center">
+          <div style="font-size:8pt;color:#666;margin-top:40px">ผู้อนุมัติ</div>
+        </div>
+      </div>
+    </div>`;
   },
   confirmOT(){
     const mode=document.getElementById('pr-mode')?.value||'week';
@@ -2324,14 +2344,16 @@ const PRINT={
     let body='';
     DAYS.forEach((dayLabel,di)=>{
       const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const ds2=dayLabel+' '+d2.getDate()+'/'+(d2.getMonth()+1);
-      body+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:4px 8px;background:#e8eeff;border-left:4px solid #2563eb">${ds2}</div>`;
-      body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:6px">`;
+      const DAYTH_FULL=['วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
+      const MONTH_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+      const ds2=DAYTH_FULL[di]+'ที่ '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
+      body+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:5px 10px;background:#e8eeff;border-left:4px solid #2563eb">${ds2}</div>`;
+      body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
       body+=`<thead><tr>
-        <th style="border:${bd};padding:5px 6px;background:#e8eeff;color:#000;text-align:left;width:80pt">แผนก</th>
-        <th style="border:${bd};padding:5px 6px;background:#dbeafe;color:#1e40af;text-align:center">กะเช้า 06:00-14:00</th>
-        <th style="border:${bd};padding:5px 6px;background:#fef3c7;color:#92400e;text-align:center">กะบ่าย 14:00-22:00</th>
-        <th style="border:${bd};padding:5px 6px;background:#f1f5f9;color:#475569;text-align:center">กะดึก 22:00-06:00</th>
+        <th style="border:${bd};padding:5px 8px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
+        <th style="border:${bd};padding:5px 8px;background:#dbeafe!important;color:#1e40af!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
+        <th style="border:${bd};padding:5px 8px;background:#fef3c7!important;color:#92400e!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
+        <th style="border:${bd};padding:5px 8px;background:#f1f5f9!important;color:#475569!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
       </tr></thead><tbody>`;
       depts.forEach((dept,ri)=>{
         const bg=ri%2===0?'#fff':'#f8faff';
@@ -2339,9 +2361,24 @@ const PRINT={
         body+=`<td style="border:${bd};padding:5px 6px;color:#000;font-weight:700">${dept}</td>`;
         SHS.forEach(sh=>{
           const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          // แสดงทุกคน คนที่มี OT ระบุเวลาเพิ่ม
           const names=ws2.map(w=>{
-            const otTxt=w.ot?`<span style="font-size:8pt;color:#b45309;font-weight:800"> [OT]</span>`:'';
-            return`<div style="font-size:10pt;padding:1px 0">${w.name}${otTxt}</div>`;
+            if(!w.ot) return`<div style="font-size:9pt;padding:1px 0;white-space:nowrap"><span style="font-weight:700">${w.name}</span></div>`;
+            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+            const isPreOT=w.otBefore;
+            const otHrs=Math.round(w.otHrs||4);
+            let tStart,tEnd;
+            if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
+            else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
+            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
+                 tStart=String(shStartH).padStart(2,'0')+':00';
+                 tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
+            return`<div style="font-size:9pt;padding:1px 0;white-space:nowrap">
+              <span style="font-weight:700">${w.name}</span>
+              <span style="font-size:7pt;color:#b45309;font-weight:800"> OT</span>
+              <span style="font-size:7pt;color:#b45309"> ${tStart}-${tEnd}</span>
+              <span style="font-size:9pt"> ✍️</span>
+            </div>`;
           }).join('');
           body+=`<td style="border:${bd};padding:5px 6px;color:#000;vertical-align:top">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
         });
@@ -2360,7 +2397,9 @@ const PRINT={
     const sysSel=document.getElementById('prs-sys')?.value||'current';
     const sys=sysSel==='current'?S.sys:sysSel;
     const html=this.buildSchedHTML(sys);
-    document.getElementById('print-area').innerHTML=html;
+    const pa=document.getElementById('print-area');
+    pa.innerHTML=html;
+    pa.setAttribute('data-mode','sched');
     closeMo('mo-print-sched');
     setTimeout(()=>window.print(),300);
   },
