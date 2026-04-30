@@ -1795,16 +1795,43 @@ const PLAN={
           });
         });
 
-        // Oreo assign แยก (ไม่นับใน needPpl)
-        const oreoPool={morning:[...byShift.morning],afternoon:[...byShift.afternoon],night:[...byShift.night]};
+        // Oreo assign แยก (ไม่นับใน needPpl) — ต้องมีครบ 3 กะถ้ามีแผน Oreo
+        // pool ทั้งหมด (ไม่จำกัดแค่ byShift เพื่อดึง OT ได้)
+        const oreoAllEmps=avail; // คนที่ไม่ลาวันนี้
         if(hasOreoToday&&sched2['Oreo Coating']){
+          const oreoUsed=new Set(); // ป้องกัน 1 คนอยู่หลายกะ Oreo
           SHS.forEach(sh=>{
-            const oreoMain=oreoPool[sh].filter(e=>(e.mainDept||e.dept)==='Oreo Coating'&&!usedEmps.has(e.name));
-            const oreoSub=oreoPool[sh].filter(e=>(e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating')&&!usedEmps.has(e.name)&&(e.mainDept||e.dept)!=='Oreo Coating');
-            const oreo=[...oreoMain,...oreoSub][0];
+            // 1. หาจาก byShift ของกะนั้นก่อน
+            const oreoMain=byShift[sh].filter(e=>(e.mainDept||e.dept)==='Oreo Coating'&&!usedEmps.has(e.name)&&!oreoUsed.has(e.name));
+            const oreoSub=byShift[sh].filter(e=>(e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating')&&!usedEmps.has(e.name)&&!oreoUsed.has(e.name)&&(e.mainDept||e.dept)!=='Oreo Coating');
+            let oreo=[...oreoMain,...oreoSub][0];
+            // 2. ถ้าหาไม่ได้ → ดึงคนอื่นที่เกี่ยวกับ Oreo มา OT
+            if(!oreo){
+              const otCandidate=oreoAllEmps.filter(e=>{
+                if(oreoUsed.has(e.name))return false;
+                // คน Oreo mainDept หรือ sub ที่ถูกใช้กะอื่นแล้ว → OT ได้
+                return (e.mainDept||e.dept)==='Oreo Coating'||(e.sub1==='Oreo Coating'||e.sub2==='Oreo Coating');
+              })[0];
+              if(otCandidate){
+                // หาว่าคนนี้อยู่กะไหนแล้ว
+                let assignedSh=null;
+                nonOreoDepts.forEach(d=>{SHS.forEach(s=>{if(sched2[d]?.[di]?.[s]?.find(w=>w.name===otCandidate.name))assignedSh=s;});});
+                if(!assignedSh){
+                  // ยังไม่ถูก assign → ใช้ได้เลย
+                  oreo=otCandidate;
+                } else {
+                  // ถูก assign กะอื่นแล้ว → OT แต่ต้องไม่ชนกะ (otBefore)
+                  sched2['Oreo Coating'][di][sh].push({name:otCandidate.name,ot:true,otHrs:4,otBefore:sh==='night',av:otCandidate.av||0,isSub:true});
+                  oreoUsed.add(otCandidate.name);
+                  return;
+                }
+              }
+            }
             if(oreo){
-              sched2['Oreo Coating'][di][sh].push({name:oreo.name,ot:false,otHrs:4,av:oreo.av||0});
+              sched2['Oreo Coating'][di][sh].push({name:oreo.name,ot:false,otHrs:4,av:oreo.av||0,
+                isSub:!oreoMain.find(m=>m.name===oreo.name)});
               usedEmps.add(oreo.name);
+              oreoUsed.add(oreo.name);
             }
           });
         }
