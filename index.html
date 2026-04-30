@@ -2567,10 +2567,10 @@ const PRINT={
       body+=`<div class="${sys==='fill'?'day-page':'day-block'}"><div class="day-header">${ds2}</div>`;
       body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
       body+=`<thead><tr>
-        <th style="border:${bd};padding:3px 6px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
-        <th style="border:${bd};padding:3px 6px;background:#dbeafe!important;color:#1e40af!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
-        <th style="border:${bd};padding:3px 6px;background:#fef3c7!important;color:#92400e!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
-        <th style="border:${bd};padding:3px 6px;background:#f1f5f9!important;color:#475569!important;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
+        <th style="border:${bd};padding:3px 6px;background:#e8eeff!important;color:#000!important;font-size:9pt;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
+        <th style="border:${bd};padding:3px 6px;background:#dbeafe!important;color:#1e40af!important;font-size:9pt;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะเช้า 06:00-14:00</th>
+        <th style="border:${bd};padding:3px 6px;background:#fef3c7!important;color:#92400e!important;font-size:9pt;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะบ่าย 14:00-22:00</th>
+        <th style="border:${bd};padding:3px 6px;background:#f1f5f9!important;color:#475569!important;font-size:9pt;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact">กะดึก 22:00-06:00</th>
       </tr></thead><tbody>`;
       depts.forEach((dept,ri)=>{
         const bg=ri%2===0?'#fff':'#f8faff';
@@ -2590,14 +2590,14 @@ const PRINT={
             else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
                  tStart=String(shStartH).padStart(2,'0')+':00';
                  tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
-            return`<div style="font-size:8pt;padding:1px 0;display:flex;align-items:center;gap:3px">
+            return`<div style="font-size:9pt;padding:1px 0;display:flex;align-items:center;gap:3px">
               <span style="font-weight:700">${w.name}</span>
               <span style="font-size:7pt;color:#b45309;font-weight:800">OT</span>
               <span style="font-size:7pt;color:#b45309">${tStart}-${tEnd}</span>
               <span style="font-size:8pt">✍️</span>
             </div>`;
           }).join('');
-          body+=`<td style="border:${bd};padding:2px 4px;color:#000;vertical-align:top;font-size:8pt">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
+          body+=`<td style="border:${bd};padding:2px 4px;color:#000;vertical-align:top;font-size:9pt">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
         });
         body+='</tr>';
       });
@@ -2635,8 +2635,9 @@ const PRINT={
     doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:top;}');
     doc.write('tr:nth-child(even) td{background:#f8faff;}');
     doc.write('.day-header{font-size:9pt;font-weight:900;color:#1e3a5f;margin:4px 0 2px;padding:3px 8px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
-    doc.write('.day-block{page-break-inside:avoid;break-inside:avoid;margin-bottom:2px;}');
-    doc.write('.day-page{page-break-before:always;break-before:always;margin-bottom:2px;}');
+    doc.write('.day-block{margin-bottom:4px;}');
+    doc.write('thead{display:table-header-group;}');
+    doc.write('.day-page{page-break-before:always;break-before:always;margin-bottom:4px;}');
     doc.write('.day-page:first-child{page-break-before:auto;break-before:auto;}');
     doc.write('table{margin-bottom:2px;}');
     doc.write('th{font-size:7pt;padding:2px 4px;}');
