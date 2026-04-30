@@ -2538,16 +2538,15 @@ const PRINT={
     if(prev)prev.innerHTML=html;
   },
   buildSchedHTML(sys){
-    const wk=wKey(S.wkStart);const sched=D.getSched(sys)[wk]||{};
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const depts=D.getDepts(sys).filter(d=>d!==AL);const ws=S.wkStart;
-    const now=new Date();const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+    const DAYTH_FULL=['วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
+    const MONTH_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     const bd='1px solid #8090b0';
 
     let body='';
     DAYS.forEach((dayLabel,di)=>{
       const d2=new Date(ws);d2.setDate(ws.getDate()+di);
-      const DAYTH_FULL=['วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
-      const MONTH_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
       const ds2=DAYTH_FULL[di]+'ที่ '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
       body+=`<div class="day-block"><div class="day-header">${ds2}</div>`;
       body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
@@ -2560,40 +2559,33 @@ const PRINT={
       depts.forEach((dept,ri)=>{
         const bg=ri%2===0?'#fff':'#f8faff';
         body+=`<tr style="background:${bg}">`;
-        body+=`<td style="border:${bd};padding:5px 6px;color:#000;font-weight:700">${dept}</td>`;
+        body+=`<td style="border:${bd};padding:5px 8px;color:#000;font-weight:700">${dept}</td>`;
         SHS.forEach(sh=>{
           const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-          // แสดงทุกคน คนที่มี OT ระบุเวลาเพิ่ม
           const names=ws2.map(w=>{
-            if(!w.ot) return`<div style="font-size:9pt;padding:1px 0;white-space:nowrap"><span style="font-weight:700">${w.name}</span></div>`;
+            if(!w.ot) return`<div style="font-size:10pt;padding:2px 0"><span style="font-weight:700">${w.name}</span></div>`;
             const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
             const isPreOT=w.otBefore;
             const otHrs=Math.round(w.otHrs||4);
             let tStart,tEnd;
-            if(sh==='night'&&w.ot){
-              tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';
-            } else if(isPreOT&&sh==='morning'){
-              tStart='06:00';tEnd='18:00';
-            } else {
-              const eH={morning:14,afternoon:22,night:30}[sh]||14;
-              tStart=String(shStartH).padStart(2,'0')+':00';
-              tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';
-            }
-            // dummy to match
-            if(false){const eH2=0;tStart=String(shStartH).padStart(2,'0')+':00';
+            if(w.sr){const sp=w.sr.split('-');tStart=String(sp[0]).padStart(2,'0')+':00';tEnd=String(sp[1]).padStart(2,'0')+':00';}
+            else if(sh==='night'&&w.ot){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
+            else if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
+            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
+                 tStart=String(shStartH).padStart(2,'0')+':00';
                  tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
-            return`<div style="font-size:9pt;padding:1px 0;white-space:nowrap">
+            return`<div style="font-size:10pt;padding:2px 0;display:flex;align-items:center;gap:4px">
               <span style="font-weight:700">${w.name}</span>
-              <span style="font-size:7pt;color:#b45309;font-weight:800"> OT</span>
-              <span style="font-size:7pt;color:#b45309"> ${tStart}-${tEnd}</span>
-              <span style="font-size:9pt"> ✍️</span>
+              <span style="font-size:8pt;color:#b45309;font-weight:800">OT</span>
+              <span style="font-size:8pt;color:#b45309">${tStart}-${tEnd}</span>
+              <span style="font-size:10pt">✍️</span>
             </div>`;
           }).join('');
-          body+=`<td style="border:${bd};padding:5px 6px;color:#000;vertical-align:top">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
+          body+=`<td style="border:${bd};padding:5px 8px;color:#000;vertical-align:top">${names||'<span style="color:#bbb;font-size:9pt">-</span>'}</td>`;
         });
         body+='</tr>';
       });
-      body+='</tbody></table>';
+      body+='</tbody></table></div>';
     });
 
     return `<div style="font-family:'Sarabun',sans-serif;color:#000">
