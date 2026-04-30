@@ -1846,59 +1846,32 @@ const PLAN={
         // กะเช้า cover 6:00-14:00 = 8 ชม.
         // ถ้า hoursNeeded > 8 → ต้องมีคนต่อ
 
-        // ===== OT: เกิดเฉพาะเมื่อ hoursNeeded > 24 ชม. =====
-        // 3 กะครอบ 24 ชม. ปกติ → ไม่ต้อง OT
-        // ถ้า > 24 ชม. → ต้องการ OT เพิ่ม
-        if(hoursNeeded>24){
-          const endTime=6+hoursNeeded; // เช่น 14ชม.→20:00, 16ชม.→22:00
-          const maxOTDays=D.getMaxOT()||3;
-          const otLog=D.getOTLog(S.sys)||[];
-          const wk2str=wKey(S.wkStart);
-          const canOT=(name)=>{
-            const otDays=otLog.filter(l=>l.name===name&&l.wk===wk2str).length;
-            return otDays<maxOTDays;
-          };
-
-          // กะบ่ายทำงานถึง 22:00 ปกติ → ถ้า endTime ≤ 22 กะบ่ายครอบได้เลย ไม่ต้อง OT
-          // ถ้า endTime > 22 → ต้องการคนถึง endTime → ดึง night pre-OT (18:00-22:00)
-          // กะเช้า OT เฉพาะเมื่อ 2 ชุด และบ่ายไม่พอ
-
-          // ---- เช้า OT (เฉพาะ 2 ชุด บ่ายไม่พอ) ----
-          const morningOTNames=new Set();
-          if(units>=2){
-            const coveredByAftn=afternoonAssigned.filter(e=>effectiveDept(e)!=='Oreo Coating').length;
-            const needOt1=Math.max(0,needPpl-coveredByAftn);
-            const ot1Hours=Math.min(4,18-14);
-            let ot1Count=0;
-            if(needOt1>0){
-              morningAssigned.forEach(e=>{
-                if(ot1Count>=needOt1)return;
-                if(!canOT(e.name))return;
-                const dept=effectiveDept(e);
-                if(!dept||!nonOreoDepts.includes(dept))return;
-                const w=sched2[dept][di].morning.find(x=>x.name===e.name);
-                if(w&&!w.ot){w.ot=true;w.otHrs=ot1Hours;ot1Count++;morningOTNames.add(e.name);}
-              });
-            }
-          }
-
-          // ---- กะดึก pre-OT (18:00-endTime) ถ้า endTime > 22 ----
-          if(endTime>22){
-            const ot2Hours=Math.min(endTime-22,4);
-            const coveredByAftn=afternoonAssigned.filter(e=>effectiveDept(e)!=='Oreo Coating').length;
-            const needOt2=Math.max(0,needPpl-coveredByAftn);
-            let ot2Count=0;
-            if(needOt2>0){
-              nightAssigned.forEach(e=>{
-                if(ot2Count>=needOt2)return;
-                if(morningOTNames.has(e.name))return;
-                if(!canOT(e.name))return;
-                const dept=effectiveDept(e);
-                if(!dept||!nonOreoDepts.includes(dept))return;
-                const w=sched2[dept][di].night.find(x=>x.name===e.name);
-                if(w&&!w.ot){w.ot=true;w.otBefore=true;w.otHrs=ot2Hours;ot2Count++;}
-              });
-            }
+        // ===== ช่วง 18:00-22:00: ดึงกะดึก pre-OT มาเสริมกะบ่าย =====
+        // กะบ่ายทำถึง 22:00 แต่อาจไม่พอ needPpl คน
+        // ดึงกะดึก pre-OT = needPpl - บ่ายที่มีอยู่ คน (save OT ให้มากที่สุด)
+        {
+          const aftnCount=afternoonAssigned.filter(e=>effectiveDept(e)!=='Oreo Coating').length;
+          const needExtra=Math.max(0,needPpl-aftnCount);
+          if(needExtra>0){
+            const maxOTDays=D.getMaxOT()||3;
+            const otLog=D.getOTLog(S.sys)||[];
+            const wk2str=wKey(S.wkStart);
+            const canOT=(name)=>{
+              const otDays=otLog.filter(l=>l.name===name&&l.wk===wk2str).length;
+              return otDays<maxOTDays;
+            };
+            let preOTCount=0;
+            nightAssigned.forEach(e=>{
+              if(preOTCount>=needExtra)return;
+              if(!canOT(e.name))return;
+              const dept=effectiveDept(e);
+              if(!dept||!nonOreoDepts.includes(dept))return;
+              const w=sched2[dept][di].night.find(x=>x.name===e.name);
+              if(w&&!w.ot){
+                w.ot=true;w.otBefore=true;w.otHrs=4;
+                preOTCount++;
+              }
+            });
           }
         }
       });
