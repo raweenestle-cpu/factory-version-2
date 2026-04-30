@@ -1249,6 +1249,7 @@ const DASH={
   },
   renderChart(type){
     try{
+    const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const yr=S.yr;
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
@@ -1266,12 +1267,102 @@ const DASH={
     if(pe){pe.textContent=latest!=null?latest+'%':'-';pe.className='dc-val '+(latest==null?'ot-none':latest>tgt?'ot-over':'ot-ok');}
     const ce=document.getElementById(cids[type]);if(!ce)return;
     const mx=Math.max(...data.filter(v=>v!=null),tgt,1);
-    ce.innerHTML=data.map(v=>v==null?'<div class="mini-bar empty" style="height:20%"></div>':`<div class="mini-bar ${v>tgt?'over':'ok'}" style="height:${Math.max(v/mx*100,4)}%"></div>`).join('');
-    const tl=document.createElement('div');tl.className='tgt-line';tl.style.bottom=Math.min(tgt/mx*100,100)+'%';
-    const old=ce.querySelector('.tgt-line');if(old)old.remove();
-    ce.style.position='relative';ce.appendChild(tl);
-  
-    }catch(e){console.log("renderChart error",e.message);}
+    const now=new Date();const curMo=now.getFullYear()===yr?now.getMonth():-1;
+
+    // กราฟแท่งสวยงาม พร้อม label เดือน
+    ce.style.cssText='display:flex;align-items:flex-end;gap:2px;height:100%;padding-bottom:18px;position:relative;overflow:visible;cursor:pointer';
+    ce.onclick=()=>this.openChart(type);
+    ce.innerHTML=data.map((v,mi)=>{
+      const isCur=mi===curMo;
+      const col=v==null?'var(--border)':v>tgt?'var(--red2)':'var(--green2)';
+      const h=v==null?4:Math.max(v/mx*90,4);
+      const label=MONTHS[mi];
+      return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;position:relative;min-width:0">
+        ${v!=null?`<div style="font-size:7px;font-weight:800;color:${col};margin-bottom:1px;white-space:nowrap">${v}%</div>`:'<div style="font-size:7px;color:transparent">0</div>'}
+        <div style="width:100%;height:${h}%;background:${col};border-radius:2px 2px 0 0;min-height:3px;${isCur?'box-shadow:0 0 4px '+col:''};transition:height .3s"></div>
+        <div style="position:absolute;bottom:-16px;font-size:6.5px;color:${isCur?'var(--blue2)':'var(--text3)'};font-weight:${isCur?'900':'600'};white-space:nowrap;transform:translateX(-50%);left:50%">${label}</div>
+      </div>`;
+    }).join('');
+    // target line
+    const tl=document.createElement('div');
+    tl.style.cssText=`position:absolute;left:0;right:0;bottom:calc(${Math.min(tgt/mx*90,90)}% + 18px);border-top:1.5px dashed var(--amber);pointer-events:none;z-index:2`;
+    tl.innerHTML=`<span style="position:absolute;right:0;top:-14px;font-size:7px;font-weight:900;color:var(--amber);background:var(--bg2);padding:1px 3px;border-radius:3px">Target ${tgt}%</span>`;
+    ce.appendChild(tl);
+    }catch(e){console.log('renderChart error',e.message);}
+  },
+  openChart(type){
+    const MONTHS_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const yr=S.yr;
+    let data=[];
+    if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
+    else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
+    else{
+      const p=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
+      const f=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
+      data=Array.from({length:12},(_,mi)=>{const vs=[p[mi],f[mi]].filter(v=>v!=null);return vs.length?Math.round(vs.reduce((a,b)=>a+b,0)/vs.length):null;});
+    }
+    const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
+    const mx=Math.max(...data.filter(v=>v!=null),tgt,1);
+    const title={proc:'Process OT%',fill:'Filling OT%',total:'รวม OT%'}[type];
+    const now=new Date();const curMo=now.getFullYear()===yr?now.getMonth():-1;
+
+    const bars=data.map((v,mi)=>{
+      const isCur=mi===curMo;
+      const col=v==null?'rgba(100,116,139,.3)':v>tgt?'#EF4444':'#22C55E';
+      const bgCol=v==null?'rgba(100,116,139,.1)':v>tgt?'rgba(239,68,68,.08)':'rgba(34,197,94,.08)';
+      const h=v==null?2:Math.max(v/mx*100,2);
+      return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:${bgCol};border-radius:8px;padding:8px 4px 10px;${isCur?'outline:2px solid var(--blue2);':''}">
+        <div style="font-size:14px;font-weight:900;color:${v==null?'var(--text3)':col};margin-bottom:4px">${v!=null?v+'%':'-'}</div>
+        <div style="flex:1;width:100%;display:flex;align-items:flex-end;min-height:120px">
+          <div style="width:100%;height:${h}%;background:${col};border-radius:4px 4px 0 0;min-height:4px;-webkit-print-color-adjust:exact"></div>
+        </div>
+        <div style="font-size:13px;font-weight:${isCur?'900':'700'};color:${isCur?'var(--blue2)':'var(--text2)'};text-align:center;margin-top:6px">${MONTHS[mi]}</div>
+        ${isCur?`<div style="font-size:9px;color:var(--blue2);font-weight:800">◀ ปัจจุบัน</div>`:''}
+      </div>`;
+    }).join('');
+
+    const mo=document.getElementById('mo-w');
+    if(!mo)return;
+    mo.innerHTML=`<div class="md" style="width:100vw;max-width:100vw;height:100vh;max-height:100vh;margin:0;border-radius:0;display:flex;flex-direction:column">
+      <div class="md-handle"></div>
+      <div class="md-hdr">
+        <div class="md-title">📊 ${title} ปี ${yr+543}</div>
+        <button class="md-close" onclick="closeMo('mo-w')">✕</button>
+      </div>
+      <div class="md-body" style="padding:20px 24px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+          <div style="font-size:12px;color:var(--text2)">เส้นประสีเหลือง = Target ${tgt}%</div>
+          <div style="display:flex;gap:10px">
+            <span style="font-size:11px;color:var(--green2)">■ ต่ำกว่า target</span>
+            <span style="font-size:11px;color:var(--red2)">■ เกิน target</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex:1;min-height:300px;position:relative;padding-bottom:4px">
+          ${bars}
+          <!-- target line -->
+          <div style="position:absolute;left:0;right:0;bottom:calc(${Math.min(tgt/mx*100,100)}%);border-top:2px dashed var(--amber);pointer-events:none;z-index:2">
+            <span style="position:absolute;right:4px;top:-18px;font-size:11px;font-weight:900;color:var(--amber);background:var(--bg2);padding:2px 8px;border-radius:6px;border:1px solid rgba(245,158,11,.4)">🎯 Target ${tgt}%</span>
+          </div>
+        </div>
+        <!-- summary -->
+        <div style="margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--blue2)">${data.filter(v=>v!=null).length}</div>
+            <div style="font-size:10px;color:var(--text3)">เดือนที่มีข้อมูล</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--red2)">${data.filter(v=>v!=null&&v>tgt).length}</div>
+            <div style="font-size:10px;color:var(--text3)">เดือนที่เกิน target</div>
+          </div>
+          <div style="background:var(--bg3);border-radius:10px;padding:10px;text-align:center">
+            <div style="font-size:18px;font-weight:900;color:var(--green2)">${data.filter(v=>v!=null&&v<=tgt).length}</div>
+            <div style="font-size:10px;color:var(--text3)">เดือนที่ผ่าน target</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    openMo('mo-w');
   },
   renderPareto(){
     const per=document.getElementById('pp-period')?.value||'month';
@@ -2458,7 +2549,7 @@ const PRINT={
       const DAYTH_FULL=['วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
       const MONTH_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
       const ds2=DAYTH_FULL[di]+'ที่ '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
-      body+=`<div style="font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:5px 10px;background:#e8eeff;border-left:4px solid #2563eb">${ds2}</div>`;
+      body+=`<div class="day-block"><div class="day-header">${ds2}</div>`;
       body+=`<table class="sched-tbl" style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:auto;font-size:9pt">`;
       body+=`<thead><tr>
         <th style="border:${bd};padding:5px 8px;background:#e8eeff!important;color:#000!important;text-align:left;width:18%;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact">แผนก</th>
@@ -2527,7 +2618,11 @@ const PRINT={
     doc.write('th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
     doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:top;}');
     doc.write('tr:nth-child(even) td{background:#f8faff;}');
-    doc.write('.day-header{font-size:11pt;font-weight:900;color:#1e3a5f;margin:10px 0 4px;padding:5px 10px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('.day-header{font-size:10pt;font-weight:900;color:#1e3a5f;margin:6px 0 3px;padding:4px 8px;background:#e8eeff;border-left:4px solid #2563eb;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
+    doc.write('.day-block{page-break-inside:avoid;break-inside:avoid;}');
+    doc.write('table{margin-bottom:4px;}');
+    doc.write('th{font-size:8pt;padding:3px 6px;}');
+    doc.write('td{font-size:8pt;padding:3px 6px;}');
     doc.write('@page{size:A4 landscape;margin:8mm;}');
     doc.write('@media print{body{padding:0;}}');
     doc.write('</style></head><body>');
