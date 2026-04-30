@@ -920,12 +920,14 @@ function getProdLabel(prodName){
 }
 function markUnsaved(){
   _unsaved=true;
+  const ub=document.getElementById('unsave-banner');if(ub)ub.style.display='flex';
   const btn=document.getElementById('sched-save-btn');
   if(btn){btn.classList.add('btn-unsaved');btn.textContent='💾 บันทึก !';}
   document.getElementById('unsaved-dot')?.style.setProperty('display','block');
 }
 function markSaved(){
   _unsaved=false;
+  const ub=document.getElementById('unsave-banner');if(ub)ub.style.display='none';
   const btn=document.getElementById('sched-save-btn');
   if(btn){btn.classList.remove('btn-unsaved');btn.innerHTML='💾 บันทึก<span id="unsaved-dot" style="display:none;position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:#EF4444;border-radius:50%;border:2px solid var(--bg2)"></span>';}
   document.getElementById('unsaved-dot')?.style.setProperty('display','none');
@@ -1272,7 +1274,12 @@ const DASH={
       return d.getFullYear()===now.getFullYear();
     });
     const cnt={};
-    flt.forEach(l=>(l.reasons||[]).forEach(r=>{cnt[r.reason]=(cnt[r.reason]||0)+r.hours;}));
+    flt.forEach(l=>{
+      // format ใหม่: {reason, hrs, ...}
+      if(l.reason){cnt[l.reason]=(cnt[l.reason]||0)+(l.hrs||4);}
+      // format เก่า: {reasons:[{reason,hours},...]}
+      else if(l.reasons){l.reasons.forEach(r=>{cnt[r.reason]=(cnt[r.reason]||0)+(r.hours||r.hrs||4);});}
+    });
     const items=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
     const body=document.getElementById('pb');if(!body)return;
     if(!items.length){body.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">ยังไม่มีข้อมูล OT เกิน</div>';return;}
