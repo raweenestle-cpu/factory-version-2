@@ -2740,7 +2740,7 @@ const SCHED={
 '+name+' \u0e17\u0e33 OT \u0e04\u0e23\u0e1a '+max+' \u0e27\u0e31\u0e19\u0e41\u0e25\u0e49\u0e27','\u274c');return;}
     }
     w.ot=!w.ot;if(!w.ot)w.otHrs=4;
-    all[wk]=sched;D.saveSched(all);this.render();toast(w.ot?'\u2705 \u0e40\u0e1b\u0e34\u0e14 OT':'\u2705 \u0e1b\u0e34\u0e14 OT');
+    all[wk]=sched;markUnsaved();D.saveSched(all);this.render();toast(w.ot?'\u2705 \u0e40\u0e1b\u0e34\u0e14 OT':'\u2705 \u0e1b\u0e34\u0e14 OT');
   },
   setH(name,dept,di,sh,h){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
@@ -2777,7 +2777,7 @@ const SCHED={
     if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const arr=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-    const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;D.saveSched(all);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e1a '+name);}
+    const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;markUnsaved();markUnsaved();D.saveSched(all);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e1a '+name);}
   },
   openAdd(dept,di,sh){
     if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
@@ -2808,14 +2808,14 @@ const SCHED={
   },
   addW(name,dept,di,sh){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
-    if(!checkRest(name,di,sh,sched)){alert2('\ud83d\ude34 \u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a 12 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07!\
+    if(!checkRest(name,di,sh,sched)){alert2('😴 พัก\u0e04\u0e23\u0e1a 12 \u0e0a\u0e31\u0e48\u0e27\u0e42\u0e21\u0e07!\
 \
 '+name+' \u0e22\u0e31\u0e07\u0e1e\u0e31\u0e01\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e01\u0e30\u0e19\u0e35\u0e49','\u274c');return;}
     const emp=D.getEmps().find(e=>e.name===name);if(!emp)return;
     if(!sched[dept])sched[dept]={};if(!sched[dept][di])sched[dept][di]={morning:[],afternoon:[],night:[]};
     if(!sched[dept][di][sh])sched[dept][di][sh]=[];
     if(!sched[dept][di][sh].find(w=>w.name===name))sched[dept][di][sh].push({name,ot:false,otHrs:4,av:emp.av||0});
-    all[wk]=sched;D.saveSched(all);closeMo('mo-w');this.render();toast('\u2705 \u0e40\u0e1e\u0e34\u0e48\u0e21 '+name);
+    all[wk]=sched;markUnsaved();D.saveSched(all);closeMo('mo-w');this.render();toast('\u2705 \u0e40\u0e1e\u0e34\u0e48\u0e21 '+name);
   },
   openAL(name){
     const mo=document.getElementById('mo-w');
