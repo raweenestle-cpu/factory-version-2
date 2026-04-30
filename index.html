@@ -314,7 +314,21 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
   .dash-card.full{grid-column:1/-1}
   .emp-list{grid-template-columns:1fr 1fr 1fr}
 }::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-@media print{#pg-login,#app .topbar,#app .bottomnav,.mo,.toast{display:none!important}#print-area{display:block!important}@page{size:A4 landscape;margin:8mm}body{background:#fff!important;color:#000!important}}
+@media print{
+  /* ซ่อน UI ทั้งหมดของ app */
+  #pg-login,#app,#app .topbar,#app .bottomnav,.mo,.toast,
+  .bottomnav,.topbar,#sidebar,.page,.sched-btns,.plan-tb,
+  .dash-header,.dash-cards,.pareto-card{display:none!important}
+  /* แสดงเฉพาะ print-area */
+  #print-area{display:block!important;}
+  body{background:#fff!important;color:#000!important;font-family:'Sarabun',sans-serif!important;}
+  /* reset CSS app สำหรับ table ใน print-area */
+  #print-area table{width:100%!important;border-collapse:collapse!important;table-layout:auto!important;margin-bottom:8px!important;}
+  #print-area th{background:#e8eeff!important;color:#000!important;border:1px solid #8090b0!important;padding:5px 8px!important;font-size:9pt!important;font-weight:700!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  #print-area td{background:transparent!important;color:#000!important;border:1px solid #8090b0!important;padding:5px 8px!important;font-size:9pt!important;}
+  #print-area tr:nth-child(even) td{background:#f8faff!important;}
+  @page{size:A4 landscape;margin:8mm;}
+}
 #print-area{display:none;font-family:'Sarabun',sans-serif;font-size:12pt;color:#000;background:#fff}
 /* Print Styles — ใช้ได้ทั้ง preview และ print */
 .pr-header,.pr-header, #print-area .pr-header{
@@ -2341,25 +2355,57 @@ const PRINT={
   },
   confirmOT(){
     const sysSel=document.getElementById('pr-sys')?.value||'proc';
-    const prev=document.getElementById('pr-ot-preview');
-    const html=prev?prev.innerHTML:'';
-    if(!html){toast('❌ ไม่มีข้อมูล');return;}
+    const sys=sysSel==='both'?S.sys:sysSel;
+    // สร้าง HTML ใหม่โดยตรง ไม่ copy จาก preview
+    const wk=wKey(S.wkStart);
+    const sched=D.getSched(sys)[wk]||{};
+    const depts=D.getDepts(sys).filter(d=>d!==AL);
+    const DAYTH=['จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+    const MONTH_TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    let rows=[];let rowNum=0;
+    for(let di=0;di<6;di++){
+      const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+      const dayTh=DAYTH[di]+' '+d2.getDate()+' '+MONTH_TH[d2.getMonth()]+' '+(d2.getFullYear()+543);
+      SHS.forEach(sh=>{
+        depts.forEach(dept=>{
+          (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
+            if(!w.ot)return;
+            rowNum++;
+            const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
+            const emp=D.getEmps(sys).find(e=>e.name===w.name);
+            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+            const isPreOT=w.otBefore;const otHrs=Math.round(w.otHrs||4);
+            let tStart,tEnd;
+            if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
+            else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
+            else{const eH={morning:14,afternoon:22,night:30}[sh]||14;
+                 tStart=String(shStartH).padStart(2,'0')+':00';
+                 tEnd=String(Math.round(eH+otHrs)%24).padStart(2,'0')+':00';}
+            const sigHtml=emp?.signature?`<img src="${emp.signature}" style="max-height:35pt;max-width:80pt;object-fit:contain">`:sg?`<span style="font-family:cursive;font-size:12pt">${sg}</span>`:'';
+            rows.push({rowNum,name:w.name,dept,dayTh,sh,otHrs,tStart,tEnd,sigHtml});
+          });
+        });
+      });
+    }
+    if(!rows.length){toast('❌ ไม่มีข้อมูล OT');return;}
+    const now=new Date();
+    const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+    const SHTH2={morning:'เช้า',afternoon:'บ่าย',night:'ดึก'};
+    const tbl='<table><thead><tr><th>#</th><th>ชื่อ-สกุล</th><th>วันที่</th><th>กะ</th><th>เวลา OT</th><th>ชม.</th><th>ลายเซ็นยินยอม</th></tr></thead><tbody>'
+      +rows.map((r,i)=>'<tr><td>'+r.rowNum+'</td><td>'+r.name+'</td><td>'+r.dayTh+'</td><td>'+SHTH2[r.sh]+'</td><td>'+r.tStart+'–'+r.tEnd+'</td><td>'+r.otHrs+'</td><td style="height:45pt;text-align:center">'+r.sigHtml+'</td></tr>').join('')
+      +'</tbody></table>';
+    const footer='<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="border:1px solid #aaa;border-radius:4px;padding:8px;min-height:60px;text-align:center"><div style="margin-top:40px;font-size:8pt;color:#666">ผู้จัดทำ / ผู้จัดกะ</div></div><div style="border:1px solid #aaa;border-radius:4px;padding:8px;min-height:60px;text-align:center"><div style="margin-top:40px;font-size:8pt;color:#666">ผู้อนุมัติ</div></div></div>';
     const pw=window.open('','_blank');
     const doc=pw.document;
     doc.open();
     doc.write('<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">');
     doc.write('<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700;800;900&display=swap" rel="stylesheet">');
-    doc.write('<style>');
-    doc.write('*{margin:0;padding:0;box-sizing:border-box;}');
-    doc.write('body{font-family:Sarabun,sans-serif;background:#fff;color:#000;padding:8mm;}');
-    doc.write('table{width:100%;border-collapse:collapse;table-layout:auto;}');
-    doc.write('th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}');
-    doc.write('td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:middle;}');
-    doc.write('tr:nth-child(even) td{background:#f8faff;}');
-    doc.write('@page{size:A4;margin:8mm;}');
-    doc.write('@media print{body{padding:0;}}');
-    doc.write('</style></head><body>');
-    doc.write(html);
+    doc.write('<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Sarabun,sans-serif;background:#fff;color:#000;padding:8mm;}table{width:100%;border-collapse:collapse;table-layout:auto;}th{border:1px solid #8090b0;padding:5px 8px;background:#e8eeff;color:#000;font-weight:700;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}td{border:1px solid #8090b0;padding:5px 8px;font-size:9pt;color:#000;vertical-align:middle;}tr:nth-child(even) td{background:#f8faff;}@page{size:A4;margin:8mm;}@media print{body{padding:0;}}</style>');
+    doc.write('</head><body>');
+    doc.write("<div style=\"font-size:13pt;font-weight:900;color:#1e3a5f;margin-bottom:2px\">ใบยินยอมทำงานล่วงเวลา (OT)</div>");
+    doc.write("<div style=\"font-size:9pt;color:#666;margin-bottom:8px\">" + dateStr + " — " + (sys==='proc'?'Process':'Filling') + "</div>");
+    doc.write(tbl);
+    doc.write(footer);
     doc.write('</body></html>');
     doc.close();
     setTimeout(()=>pw.print(),600);
