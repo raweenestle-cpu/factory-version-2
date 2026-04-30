@@ -2487,39 +2487,32 @@ const SCHED={
     const d2=new Date(ws);d2.setDate(ws.getDate()+di);
     const dateStr=DAYS[di]+' '+d2.getDate()+'/'+(d2.getMonth()+1);
 
-    // อัพเดท day nav
     const dayNav=document.getElementById('sched-day-nav');
     if(dayNav){
-      dayNav.innerHTML=`
-        <button onclick="SCHED.prevDay()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">◀</button>
-        <div style="font-size:14px;font-weight:900;color:var(--text);min-width:100px;text-align:center">${dateStr}</div>
-        <button onclick="SCHED.nextDay()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">▶</button>`;
+      dayNav.innerHTML='<button onclick="SCHED.prevDay()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">◀</button>'
+        +'<div style="font-size:14px;font-weight:900;color:var(--text);min-width:100px;text-align:center">'+dateStr+'</div>'
+        +'<button onclick="SCHED.nextDay()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">▶</button>';
     }
 
     const tb=document.getElementById('sched-tb');if(!tb)return;
     const head=document.getElementById('sched-head');
-
-    // header: แผนก | เช้า | บ่าย | ดึก
-    const shColors={morning:'rgba(37,99,235,.15)',afternoon:'rgba(245,158,11,.12)',night:'rgba(100,116,139,.15)'};
-    const shBorder={morning:'rgba(37,99,235,.4)',afternoon:'rgba(245,158,11,.4)',night:'rgba(100,116,139,.4)'};
-    const shTimeNormal={morning:'06:00–14:00',afternoon:'14:00–22:00',night:'22:00–06:00'};
-    const shTimeOT={morning:'OT:06:00–18:00',afternoon:'OT:14:00–02:00',night:'OT:18:00–06:00'};
+    const shColors={morning:'rgba(37,99,235,.1)',afternoon:'rgba(245,158,11,.1)',night:'rgba(100,116,139,.1)'};
+    const shBorder={morning:'rgba(37,99,235,.3)',afternoon:'rgba(245,158,11,.3)',night:'rgba(100,116,139,.3)'};
 
     if(head){
-      head.innerHTML=`<tr>
-        <th class="sc" style="min-width:90px;text-align:left;padding:6px 8px">แผนก</th>
-        ${SHS.map(sh=>`<th style="background:${shColors[sh]};border:1px solid ${shBorder[sh]};padding:6px 8px;text-align:center;min-width:100px">
-          <div style="font-size:12px;font-weight:900;color:${sh==='morning'?'var(--blue2)':sh==='afternoon'?'var(--amber)':'var(--text2)'}">${SHTH[sh]}</div>
-          <div style="font-size:9px;color:var(--text3)">${shTimeNormal[sh]}</div>
-          <div style="font-size:9px;color:var(--amber)">${shTimeOT[sh]}</div>
-        </th>`).join('')}
-      </tr>`;
+      let hh='<tr><th class="sc" style="min-width:90px;text-align:left;padding:6px 8px">แผนก</th>';
+      SHS.forEach(sh=>{
+        const shLabel={morning:'กะเช้า 06:00-14:00',afternoon:'กะบ่าย 14:00-22:00',night:'กะดึก 22:00-06:00'}[sh];
+        const shCol={morning:'var(--blue2)',afternoon:'var(--amber)',night:'var(--text2)'}[sh];
+        hh+=`<th style="background:${shColors[sh]};border:1px solid ${shBorder[sh]};padding:6px 8px;text-align:center;min-width:110px"><span style="font-size:11px;font-weight:900;color:${shCol}">${shLabel}</span></th>`;
+      });
+      hh+='</tr>';
+      head.innerHTML=hh;
     }
 
-    // rows: แผนก × กะ
     let html='';
     depts.forEach(dept=>{
-      html+=`<tr>`;
+      html+='<tr>';
       html+=`<td style="font-weight:800;font-size:12px;padding:6px 8px;border-right:1px solid var(--border);vertical-align:middle;background:var(--bg2)">${dept}</td>`;
       SHS.forEach(sh=>{
         const wsRaw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
@@ -2537,20 +2530,24 @@ const SCHED={
             let ds,de;
             if(isPreOT&&sh==='morning'){ds='06:00';de='18:00';}
             else if(isPreOT&&sh==='night'){ds=String((22-otHrs+24)%24).padStart(2,'0')+':00';de='06:00';}
-            else{const effEndH={morning:14,afternoon:22,night:30}[sh]||14;
-                 ds=String(shStartH).padStart(2,'0')+':00';
-                 de=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';}
+            else{
+              const effEndH={morning:14,afternoon:22,night:30}[sh]||14;
+              ds=String(shStartH).padStart(2,'0')+':00';
+              de=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';
+            }
             timeStr=ds+'-'+de;
           }
-          cell+=`<div class="worker-tag ${w.ot?'ot-tag':''} ${sg?'sg-tag':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')" style="display:inline-flex;align-items:center;gap:4px;background:${w.ot?'rgba(245,158,11,.15)':'var(--bg3)'};border:1px solid ${w.ot?'rgba(245,158,11,.5)':'var(--border)'};border-radius:20px;padding:4px 8px;margin:2px;cursor:pointer">
-            <div style="width:22px;height:22px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0">${w.name.charAt(0)}</div>
-            <span style="font-size:11px;font-weight:700">${w.name}</span>
-            ${w.ot?`<span style="font-size:9px;color:var(--amber);font-weight:800">OT</span>`:''}
-            ${sg?'<span style="font-size:10px">✅</span>':w.ot?`<span style="font-size:10px" title="${timeStr}">✍️</span>`:''}
-          </div>`;
+          const wcOnclick='SCHED.openW(\''+ne+'\'\,\''+dept+'\'\,'+di+'\,\''+sh+'\')';
+          cell+='<div class="worker-tag" onclick="'+wcOnclick+'" style="display:inline-flex;align-items:center;gap:4px;background:'+(w.ot?'rgba(245,158,11,.15)':'var(--bg3)')+';border:1px solid '+(w.ot?'rgba(245,158,11,.5)':'var(--border)')+';border-radius:20px;padding:4px 8px;margin:2px;cursor:pointer">';
+          cell+='<div style="width:22px;height:22px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0">'+w.name.charAt(0)+'</div>';
+          cell+='<span style="font-size:11px;font-weight:700">'+w.name+'</span>';
+          if(w.ot) cell+='<span style="font-size:9px;color:var(--amber);font-weight:800">OT</span>';
+          if(sg) cell+='<span style="font-size:10px">✅</span>';
+          else if(w.ot) cell+='<span style="font-size:10px" title="'+timeStr+'">✍️</span>';
+          cell+='</div>';
         });
-        if(S.user?.isAdmin) cell+=`<div style="display:block;margin-top:2px"><button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button></div>`;
-        html+=`<td style="vertical-align:top;padding:6px;background:${shColors[sh]};border:1px solid ${shBorder[sh]}">${cell}</td>`;
+        if(S.user?.isAdmin) cell+='<div style="display:block;margin-top:2px"><button class="aw-btn" onclick="SCHED.openAdd(\''+dept+'\','+di+',\''+sh+'\')">+</button></div>';
+        html+='<td style="vertical-align:top;padding:6px;background:'+shColors[sh]+';border:1px solid '+shBorder[sh]+'">'+cell+'</td>';
       });
       html+='</tr>';
     });
