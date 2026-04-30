@@ -2319,37 +2319,48 @@ const PRINT={
     const wk=wKey(S.wkStart);const sched=D.getSched(sys)[wk]||{};
     const depts=D.getDepts(sys);const ws=S.wkStart;
     const now=new Date();const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+    // รวบรวมแถวแนวตั้ง: 1 แถว = 1 คน 1 กะ 1 วัน
+    let rows=[];
+    DAYS.forEach((dayLabel,di)=>{
+      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+      const ds2=`${dayLabel} ${d2.getDate()}/${d2.getMonth()+1}`;
+      SHS.forEach(sh=>{
+        depts.forEach(dept=>{
+          (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
+            rows.push({ds2,sh,dept,name:w.name,ot:w.ot,otHrs:w.otHrs||4,otBefore:w.otBefore,isLeave:w.isLeave});
+          });
+        });
+        (sched[AL]?.[di]?.[sh]||sched[AL]?.[String(di)]?.[sh]||[]).forEach(w=>{
+          rows.push({ds2,sh,dept:AL,name:w.name,ot:false,isLeave:true});
+        });
+      });
+    });
     return `<div class="pr-header">
       <div class="pr-title">📅 ตารางกะ — ${sys==='proc'?'Process':'Filling'}</div>
       <div class="pr-sub">สัปดาห์ที่ ${wNum(ws)} · พิมพ์: ${dateStr}</div>
     </div>
-    <table class="pr-tbl" style="font-size:10pt">
-      <thead><tr>
-        <th style="width:100px">แผนก</th>
-        ${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th colspan="3" style="text-align:center">${d} ${d2.getDate()}/${d2.getMonth()+1}</th>`;}).join('')}
-      </tr>
-      <tr>
-        <th></th>
-        ${DAYS.map(()=>SHS.map(sh=>`<th style="font-size:9pt;text-align:center">${SHTH[sh].replace('กะ','')}</th>`).join('')).join('')}
+    <table style="width:100%;border-collapse:collapse;font-size:10pt">
+      <thead><tr style="background:#e8eeff">
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:24pt">#</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">ชื่อ</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">วัน</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">กะ</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">แผนก</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">OT</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:80pt">ลายเซ็น</th>
       </tr></thead>
       <tbody>
-        ${depts.map(dept=>`<tr>
-          <td style="font-weight:700;background:#f8f8f8">${dept}</td>
-          ${Array.from({length:6},(_,di)=>SHS.map(sh=>{
-            const ws2raw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-          // dedup: ถ้าชื่อซ้ำให้เอาคนแรก (ที่มี OT มาก่อน)
-          const seenW=new Set();
-          const ws2=ws2raw.filter(w=>{if(seenW.has(w.name))return false;seenW.add(w.name);return true;});
-            return`<td style="font-size:9pt">${ws2.map(w=>w.name+(w.ot?' (OT)':'')).join('<br>')}</td>`;
-          }).join('')).join('')}
+        ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f5f7ff'}">
+          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${i+1}</td>
+          <td style="border:1px solid #8090b0;padding:8px;color:#000;font-weight:700">${r.name}</td>
+          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${r.ds2}</td>
+          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${SHTH[r.sh]}</td>
+          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000">${r.dept}</td>
+          <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700;color:${r.ot?'#b45309':'#000'}">${r.ot?(r.otHrs+'ชม.'):(r.isLeave?'ลา':'-')}</td>
+          <td style="border:1px solid #8090b0;padding:8px;height:44pt"></td>
         </tr>`).join('')}
       </tbody>
-    </table>
-    <div class="pr-footer">
-      <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
-      <div>วันที่: ${dateStr}</div>
-      <div>ผู้อนุมัติ: ________________________</div>
-    </div>`;
+    </table>`;
   },
   confirmSched(){
     const sysSel=document.getElementById('prs-sys')?.value||'current';
@@ -2465,70 +2476,82 @@ function resetSessionTimer() {
 
 
 const SCHED={
+  curDi:0,
+  prevDay(){this.curDi=Math.max(0,this.curDi-1);this.render();},
+  nextDay(){this.curDi=Math.min(5,this.curDi+1);this.render();},
   render(){
-    const depts=D.getDepts().filter(d=>d!==AL);
-    const wk=wKey(S.wkStart);
-    const allSched=D.getSched();
-    const sched=allSched[wk]||{};
-    const ws=S.wkStart;
-    const wn=wNum(ws);
-    document.getElementById('swl').textContent='สัปดาห์ที่ '+wn;
-    // Header: แผนก | จ(เช้า บ่าย ดึก) | อ(...) | ...
-    const th=document.getElementById('sth');
-    if(th)th.innerHTML=`<tr>
-      <th class="sc" rowspan="2">แผนก</th>
-      ${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th colspan="3" style="text-align:center;border-bottom:1px solid var(--border)">${d}<br><span style="font-size:9px;font-weight:400">${d2.getDate()}/${d2.getMonth()+1}</span></th>`;}).join('')}
-    </tr>
-    <tr>
-      ${DAYS.map(()=>SHS.map(sh=>`<th style="font-size:9px;font-weight:700;text-align:center;padding:3px 2px;color:var(--text2)">${sh==='morning'?'เช้า':sh==='afternoon'?'บ่าย':'ดึก'}</th>`).join('')).join('')}
-    </tr>`;
-    // Body: แต่ละแถว = แผนก, คอลัมน์ = วัน × 3 กะ
-    const tb=document.getElementById('stb');if(!tb)return;
+    const wk=wKey(S.wkStart);const ws=S.wkStart;
+    const all=D.getSched();const sched=all[wk]||{};
+    const depts=D.getDepts().filter(d=>d!==AL&&!LOCK_D.includes(d));
+    const di=this.curDi;
+    const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+    const dateStr=DAYS[di]+' '+d2.getDate()+'/'+(d2.getMonth()+1);
+
+    // อัพเดท day nav
+    const dayNav=document.getElementById('sched-day-nav');
+    if(dayNav){
+      dayNav.innerHTML=`
+        <button onclick="SCHED.prevDay()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">◀</button>
+        <div style="font-size:14px;font-weight:900;color:var(--text);min-width:100px;text-align:center">${dateStr}</div>
+        <button onclick="SCHED.nextDay()" style="padding:6px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;cursor:pointer">▶</button>`;
+    }
+
+    const tb=document.getElementById('sched-tb');if(!tb)return;
+    const head=document.getElementById('sched-head');
+
+    // header: แผนก | เช้า | บ่าย | ดึก
+    const shColors={morning:'rgba(37,99,235,.15)',afternoon:'rgba(245,158,11,.12)',night:'rgba(100,116,139,.15)'};
+    const shBorder={morning:'rgba(37,99,235,.4)',afternoon:'rgba(245,158,11,.4)',night:'rgba(100,116,139,.4)'};
+    const shTimeNormal={morning:'06:00–14:00',afternoon:'14:00–22:00',night:'22:00–06:00'};
+    const shTimeOT={morning:'OT:06:00–18:00',afternoon:'OT:14:00–02:00',night:'OT:18:00–06:00'};
+
+    if(head){
+      head.innerHTML=`<tr>
+        <th class="sc" style="min-width:90px;text-align:left;padding:6px 8px">แผนก</th>
+        ${SHS.map(sh=>`<th style="background:${shColors[sh]};border:1px solid ${shBorder[sh]};padding:6px 8px;text-align:center;min-width:100px">
+          <div style="font-size:12px;font-weight:900;color:${sh==='morning'?'var(--blue2)':sh==='afternoon'?'var(--amber)':'var(--text2)'}">${SHTH[sh]}</div>
+          <div style="font-size:9px;color:var(--text3)">${shTimeNormal[sh]}</div>
+          <div style="font-size:9px;color:var(--amber)">${shTimeOT[sh]}</div>
+        </th>`).join('')}
+      </tr>`;
+    }
+
+    // rows: แผนก × กะ
     let html='';
     depts.forEach(dept=>{
-      html+=`<tr><td class="sn">${dept}</td>`;
-      for(let di=0;di<6;di++){
-        SHS.forEach(sh=>{
-          const ws2raw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-          // dedup: ถ้าชื่อซ้ำให้เอาคนแรก (ที่มี OT มาก่อน)
-          const seenW=new Set();
-          const ws2=ws2raw.filter(w=>{if(seenW.has(w.name))return false;seenW.add(w.name);return true;});
-          html+=`<td style="min-width:52px;vertical-align:top;padding:3px">${ws2.map(w=>{
-            const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
-            const ne=w.name.replace(/'/g,"\'");
-            const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
-            const normalEndH={morning:14,afternoon:22,night:30}[sh]||14;
-            const isPreOT=w.otBefore;
-            const otHrs=Math.round(w.otHrs||4);
-            // คนกะบ่ายที่มาทำกะเช้า (otBefore) → แสดงเหมือนกะเช้า OT ปกติ = 06:00-18:00
-            // คนกะดึก pre-OT (18:00-22:00) → แสดง 18:00-22:00
-            // morning pre-OT (กะบ่ายมาเช้า): 06:00-18:00
-            // night pre-OT (เข้าก่อนกะดึก): 18:00-06:00
-            // afternoon OT: 14:00-02:00
-            // morning OT: 06:00-18:00
-            let displayStart,displayEnd;
-            if(isPreOT&&sh==='morning'){
-              // กะบ่ายมาเช้า → ทำงาน 06:00-18:00
-              displayStart='06:00';displayEnd='18:00';
-            } else if(isPreOT&&sh==='night'){
-              // กะดึก pre-OT 4 ชม. → เข้า 18:00 ออก 06:00
-              displayStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';
-              displayEnd='06:00';
-            } else {
-              // OT ปกติ (ต่อจากกะ)
-              const effEndH={morning:14,afternoon:22,night:30}[sh]||14;
-              displayStart=String(shStartH).padStart(2,'0')+':00';
-              displayEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';
-            }
-            const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
-            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
-              <span style="font-size:11px;font-weight:800">${w.name}</span>
-              ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span><span style="font-size:11px" title="เซ็นยินยอม OT">✍️</span>`:''}
-              ${sg?'✅':''}
-            </span>`;
-          }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
+      html+=`<tr>`;
+      html+=`<td style="font-weight:800;font-size:12px;padding:6px 8px;border-right:1px solid var(--border);vertical-align:middle;background:var(--bg2)">${dept}</td>`;
+      SHS.forEach(sh=>{
+        const wsRaw=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+        const seen=new Set();
+        const ws2=wsRaw.filter(w=>{if(seen.has(w.name))return false;seen.add(w.name);return true;});
+        let cell='';
+        ws2.forEach(w=>{
+          const sg=D.getSign(wk+'_'+w.name+'_'+dept+'_'+di+'_'+sh);
+          const ne=w.name.replace(/'/g,"\'");
+          const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+          const isPreOT=w.otBefore;
+          const otHrs=Math.round(w.otHrs||4);
+          let timeStr='';
+          if(w.ot){
+            let ds,de;
+            if(isPreOT&&sh==='morning'){ds='06:00';de='18:00';}
+            else if(isPreOT&&sh==='night'){ds=String((22-otHrs+24)%24).padStart(2,'0')+':00';de='06:00';}
+            else{const effEndH={morning:14,afternoon:22,night:30}[sh]||14;
+                 ds=String(shStartH).padStart(2,'0')+':00';
+                 de=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';}
+            timeStr=ds+'-'+de;
+          }
+          cell+=`<div class="worker-tag ${w.ot?'ot-tag':''} ${sg?'sg-tag':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')" style="display:inline-flex;align-items:center;gap:4px;background:${w.ot?'rgba(245,158,11,.15)':'var(--bg3)'};border:1px solid ${w.ot?'rgba(245,158,11,.5)':'var(--border)'};border-radius:20px;padding:4px 8px;margin:2px;cursor:pointer">
+            <div style="width:22px;height:22px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0">${w.name.charAt(0)}</div>
+            <span style="font-size:11px;font-weight:700">${w.name}</span>
+            ${w.ot?`<span style="font-size:9px;color:var(--amber);font-weight:800">OT</span>`:''}
+            ${sg?'<span style="font-size:10px">✅</span>':w.ot?`<span style="font-size:10px" title="${timeStr}">✍️</span>`:''}
+          </div>`;
         });
-      }
+        if(S.user?.isAdmin) cell+=`<div style="display:block;margin-top:2px"><button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button></div>`;
+        html+=`<td style="vertical-align:top;padding:6px;background:${shColors[sh]};border:1px solid ${shBorder[sh]}">${cell}</td>`;
+      });
       html+='</tr>';
     });
     tb.innerHTML=html;
