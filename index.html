@@ -2066,6 +2066,22 @@ const PLAN={
 };
 
 const SET={
+  addAdmin(){
+    const sel=document.getElementById('admin-add-sel');
+    if(!sel||!sel.value)return;
+    const [name,sys]=sel.value.split('|');
+    const emps=D.getEmps(sys);
+    const emp=emps.find(e=>e.name===name);
+    if(emp){emp.isAdmin=true;D.saveEmps(emps,sys);this.render();toast('✅ เพิ่ม Admin: '+name);}
+  },
+  removeAdmin(name){
+    ['proc','fill'].forEach(sys=>{
+      const emps=D.getEmps(sys);
+      const emp=emps.find(e=>e.name===name);
+      if(emp){emp.isAdmin=false;delete emp.isAdmin;D.saveEmps(emps,sys);}
+    });
+    this.render();toast('✅ ลบ Admin: '+name);
+  },
   render(){
     const el=document.getElementById('sl');if(!el)return;
     const depts=D.getDepts();const tgt=D.getTarget();
@@ -2086,7 +2102,27 @@ const SET={
         </div>
       </div>
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:800;margin-bottom:10px">🔐 Admin PIN</div>
+        <!-- จัดการ Admin -->
+      <div style="font-size:13px;font-weight:800;margin-bottom:10px">👑 Admin</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">พนักงานที่เป็น Admin (login ด้วย PIN 6 หลัก)</div>
+        <div id="admin-list" style="margin-bottom:8px">
+          ${[...D.getEmps('proc'),...D.getEmps('fill')].filter(e=>e.isAdmin).map(e=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg3);border-radius:8px;margin-bottom:4px">
+              <span style="font-size:12px;font-weight:700">👑 ${e.name} <span style="color:var(--text3);font-weight:400">(${e.mainDept||'-'})</span></span>
+              <button onclick="SET.removeAdmin('${e.name}')" style="padding:3px 8px;background:var(--red2);border:none;border-radius:6px;color:#fff;font-size:11px;cursor:pointer">ลบ</button>
+            </div>`).join('')||'<div style="font-size:11px;color:var(--text3);padding:6px">ยังไม่มี Admin</div>'}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="admin-add-sel" style="flex:1;padding:7px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif">
+            <option value="">-- เลือกพนักงาน --</option>
+            ${[...D.getEmps('proc'),...D.getEmps('fill')].filter(e=>!e.isAdmin).map(e=>`<option value="${e.name}|${e.sys||S.sys}">${e.name} (${e.mainDept||'-'})</option>`).join('')}
+          </select>
+          <button onclick="SET.addAdmin()" style="padding:7px 14px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">+ เพิ่ม</button>
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:10px">🔐 Admin PIN</div>
         <div class="fg"><label class="fl">PIN ใหม่ (6 หลัก)</label>
           <input type="password" class="fi" id="nap" maxlength="6" inputmode="numeric"
             style="letter-spacing:4px;text-align:center" placeholder="ใส่ PIN ใหม่"></div>
@@ -2122,7 +2158,12 @@ const SET={
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
-    FB.remove('signs');SCHED.render();DASH.render();DASH.renderPareto();toast('✅ ล้างทั้งหมดแล้ว');
+    FB.remove('signs');
+    PLAN._dayData=null;
+    const ms2=document.getElementById('mixing-summary');
+    if(ms2)ms2.style.display='none';
+    SCHED.render();DASH.render();DASH.renderPareto();
+    toast('✅ ล้างตารางกะแล้ว');
   });},
   addDept(){
     const inp=document.getElementById('new-mat-name');
@@ -2206,131 +2247,80 @@ const PRINT={
   buildOTHTML(mode,sys){
     const now=new Date();
     const dateStr=now.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
-    const tgt=D.getTarget();
-    let wKeys=[];let titleSub='';
-    if(mode==='week'){
-      const selDate=document.getElementById('pr-week-date')?.value;
-      const ws2=selDate?new Date(selDate):S.wkStart;
-      const wk2=wKey(ws2);wKeys=[wk2];
-      const we2=new Date(ws2);we2.setDate(we2.getDate()+5);
-      titleSub='สัปดาห์ที่ '+wNum(ws2)+' ('+dStr(ws2)+' - '+dStr(we2)+')';
+    const s2=sys||S.sys;
+    const depts=D.getDepts(s2).filter(d=>d!==AL);
+    const wKeys=[];
+    if(mode==='wk'){
+      const ws=new Date(S.wkStart);ws.setDate(ws.getDate()+OT.wkOff*7);
+      wKeys.push(wKey(ws));
     } else {
-      const mv=document.getElementById('pr-month-val')?.value;
-      const [yr2,mi2]=mv?mv.split('-').map(Number):[now.getFullYear(),now.getMonth()+1];
-      const allWK=new Set();
-      ['proc','fill'].forEach(s2=>{const all=D.getSched(s2);Object.keys(all).forEach(k=>allWK.add(k));});
-      wKeys=[...allWK].filter(wk3=>{
-        const wp=wk3.split('-');const ws3=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
-        for(let i=0;i<6;i++){const d2=new Date(ws3);d2.setDate(ws3.getDate()+i);if(d2.getMonth()===mi2-1&&d2.getFullYear()===yr2)return true;}return false;
-      });
-      const thM=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-      titleSub=thM[mi2-1]+' '+(yr2+543);
+      const all=D.getSched(s2);Object.keys(all).forEach(k=>{if(k.match(/\d{4}-\d{2}-\d{2}/))wKeys.push(k);});
     }
-    if(!wKeys.length)return '<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล</div>';
-    const sysList=sys==='both'?['proc','fill']:sys==='proc'?['proc']:['fill'];
-    let html=`<div style="border-bottom:3px solid #1e3a5f;padding-bottom:10px;margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between">
-      <div>
-        <div style="font-size:18pt;font-weight:900;color:#1e3a5f;margin-bottom:3px">บันทึกการทำงานล่วงเวลา (OT)</div>
-        <div style="font-size:11pt;color:#333">${sys==='both'?'Process & Filling':sys==='proc'?'แผนก Process':'แผนก Filling'}</div>
-        <div style="font-size:11pt;color:#333">${titleSub}</div>
-      </div>
-      <div style="text-align:right;font-size:10pt;color:#555">
-        <div>พิมพ์วันที่: ${dateStr}</div>
-        <div>ผู้พิมพ์: ${S.user?.name||'Admin'}</div>
-      </div>
-    </div>`;
-    sysList.forEach(s2=>{
-      const sysName=s2==='proc'?'Process':'Filling';
-      const depts=D.getDepts(s2);
-      // รวบรวมพนักงาน OT จัดกลุ่มตามวัน
-      let tH=0,oH=0;
-      const dayRows={}; // {di: {dayN, ds, shifts: {sh: [{dept,name,hrs,sg,sigImg}]}}}
-      wKeys.forEach(wk4=>{
-        const sched=D.getSched(s2)[wk4]||{};
-        const wp=wk4.split('-');const ws4=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
-        for(let di=0;di<6;di++){
-          const d2=new Date(ws4);d2.setDate(ws4.getDate()+di);
-          const ds2=dStr(d2);const dayN=DAYS[di];
-          SHS.forEach(sh=>{
-            depts.forEach(dept=>{
-              (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
-                const h=w.ot?(w.otHrs||4):0;tH+=8+h;if(!w.ot)return;oH+=h;
-                if(!dayRows[di])dayRows[di]={dayN,ds:ds2,shifts:{}};
-                if(!dayRows[di].shifts[sh])dayRows[di].shifts[sh]=[];
-                const sgKey=wk4+'_'+w.name+'_'+dept+'_'+di+'_'+sh;
-                const sg=D.getSign(sgKey);
-                const emp=D.getEmps(s2).find(e=>e.name===w.name);
-                dayRows[di].shifts[sh].push({dept,name:w.name,hrs:w.otHrs||4,sg,sigImg:emp?.signature||null});
-              });
+    let rows=[];
+    let rowNum=0;
+    wKeys.forEach(wk4=>{
+      const sched=D.getSched(s2)[wk4]||{};
+      const wp=wk4.split('-');const ws4=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+      for(let di=0;di<6;di++){
+        const d2=new Date(ws4);d2.setDate(ws4.getDate()+di);
+        const ds2=dStr(d2);const dayN=DAYS[di];
+        SHS.forEach(sh=>{
+          depts.forEach(dept=>{
+            (sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).forEach(w=>{
+              if(!w.ot)return;
+              rowNum++;
+              const sgKey=wk4+'_'+w.name+'_'+dept+'_'+di+'_'+sh;
+              const sg=D.getSign(sgKey);
+              const emp=D.getEmps(s2).find(e=>e.name===w.name);
+              // คำนวณเวลา
+              const shStartH={morning:6,afternoon:14,night:22}[sh]||6;
+              const isPreOT=w.otBefore;
+              const otHrs=Math.round(w.otHrs||4);
+              let tStart,tEnd;
+              if(isPreOT&&sh==='morning'){tStart='06:00';tEnd='18:00';}
+              else if(isPreOT&&sh==='night'){tStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';tEnd='06:00';}
+              else{const effEndH={morning:14,afternoon:22,night:30}[sh]||14;tStart=String(shStartH).padStart(2,'0')+':00';tEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';}
+              rows.push({rowNum,name:w.name,dept,dayN,ds2,sh,otHrs,tStart,tEnd,sg,sigImg:emp?.signature||null});
             });
           });
-        }
-      });
-      if(!oH)return;
-      const pct=tH>0?Math.round(oH/tH*100):0;const isOver=pct>tgt;
-      html+=`<div style="margin-bottom:20px;page-break-inside:avoid">
-        <!-- Section Header -->
-        <div style="background:#1e3a5f;color:#fff;padding:8px 14px;border-radius:6px 6px 0 0;font-size:13pt;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-          ${sysName}
-        </div>
-        <!-- Summary -->
-        <div style="background:#f0f4ff;border:1px solid #b0c0e8;border-top:none;padding:10px 14px;display:flex;gap:20px;align-items:center;margin-bottom:12px;border-radius:0 0 6px 6px">
-          <div style="text-align:center"><div style="font-size:18pt;font-weight:900;color:#1e3a5f">${oH}</div><div style="font-size:9pt;color:#555">ชม. OT</div></div>
-          <div style="width:1px;background:#b0c0e8;align-self:stretch"></div>
-          <div style="text-align:center"><div style="font-size:18pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'}">${pct}%</div><div style="font-size:9pt;color:#555">OT%</div></div>
-          <div style="width:1px;background:#b0c0e8;align-self:stretch"></div>
-          <div style="text-align:center"><div style="font-size:18pt;font-weight:900;color:#333">${tgt}%</div><div style="font-size:9pt;color:#555">Target</div></div>
-          <div style="width:1px;background:#b0c0e8;align-self:stretch"></div>
-          <div style="text-align:center"><div style="font-size:12pt;font-weight:900;color:${isOver?'#dc2626':'#16a34a'}">${isOver?'⚠️ เกิน':'✅ ปกติ'}</div><div style="font-size:9pt;color:#555">สถานะ</div></div>
-        </div>
-        <!-- แยกตามวัน -->
-        ${Object.entries(dayRows).map(([di,day])=>`
-          <div style="border:2px solid #1e3a5f;border-radius:6px;margin-bottom:10px;overflow:hidden;page-break-inside:avoid">
-            <!-- Day Header -->
-            <div style="background:#2c4a8f;color:#fff;padding:7px 12px;font-size:12pt;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-              ${day.dayN} ${day.ds}
-            </div>
-            ${Object.entries(day.shifts).map(([sh,emps2])=>`
-              <!-- Shift -->
-              <div style="background:#f0f4ff;padding:5px 12px;font-size:10pt;font-weight:700;color:#1e3a5f;border-top:1px solid #b0c0e8;border-bottom:1px solid #b0c0e8">
-                ${SHTH[sh]}
-              </div>
-              <table style="width:100%;border-collapse:collapse;font-size:10pt">
-                <thead>
-                  <tr style="background:#e8eeff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-                    <th style="width:30pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700">#</th>
-                    <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left;font-weight:700">ชื่อ-นามสกุล</th>
-                    <th style="width:80pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left;font-weight:700">แผนก</th>
-                    <th style="width:40pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700">ชม.</th>
-                    <th style="width:120pt;border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700">ลายมือชื่อ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${emps2.map((e2,ei)=>`<tr style="background:${ei%2===0?'#fff':'#f5f7ff'}">
-                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000;text-align:center">${ei+1}</td>
-                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000;font-weight:700">${e2.name}</td>
-                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000">${e2.dept}</td>
-                    <td style="border:1px solid #8090b0;padding:7px 8px;color:#000;text-align:center;font-weight:700">${e2.hrs}</td>
-                    <td style="border:1px solid #8090b0;padding:7px 8px;text-align:center;height:45pt">
-                      ${e2.sigImg?`<img src="${e2.sigImg}" style="max-height:40pt;max-width:115pt;object-fit:contain">`:e2.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${e2.sg}</span>`:''}
-                    </td>
-                  </tr>`).join('')}
-                </tbody>
-              </table>
-            `).join('')}
-          </div>
-        `).join('')}
-        <!-- ลงนาม -->
-        <div style="border-top:2px solid #1e3a5f;padding-top:12px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-          ${['ผู้จัดทำ: '+(S.user?.name||'Admin'),'ผู้ตรวจสอบ','ผู้อนุมัติ'].map(lbl=>`
-            <div style="border:1px solid #aaa;border-radius:4px;padding:10px;text-align:center">
-              <div style="height:50px"></div>
-              <div style="border-top:1px solid #aaa;padding-top:6px;font-size:9pt;color:#000">${lbl}</div>
-            </div>`).join('')}
-        </div>
-      </div>`;
+        });
+      }
     });
-    return html;
+    if(!rows.length){
+      document.getElementById('pr-ot-preview').innerHTML='<div style="text-align:center;padding:20px;color:#999">ไม่มีข้อมูล OT</div>';
+      return;
+    }
+    const tbl=`<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#e8eeff">
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:24pt">#</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">ชื่อ</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">แผนก</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">วัน</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">กะ</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">เวลา</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">OT</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:90pt">ลายเซ็น</th>
+      </tr></thead><tbody>
+      ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f5f7ff'}">
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${r.rowNum}</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000;font-weight:700">${r.name}</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000">${r.dept}</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center">${r.dayN} ${r.ds2}</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center">${SHTH[r.sh]}</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center;font-weight:700">${r.tStart}–${r.tEnd}</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center;font-weight:700;color:#b45309">${r.otHrs} ชม.</td>
+        <td style="border:1px solid #8090b0;padding:8px;color:#000;text-align:center;height:50pt">
+          ${r.sigImg?`<img src="${r.sigImg}" style="max-height:40pt;max-width:80pt;object-fit:contain">`:r.sg?`<span style="font-family:'Brush Script MT',cursive;font-size:14pt;color:#1e3a5f">${r.sg}</span>`:''}
+        </td>
+      </tr>`).join('')}
+      </tbody></table>`;
+    const prev=document.getElementById('pr-ot-preview');
+    if(prev)prev.innerHTML=`
+      <div style="font-family:'Sarabun',sans-serif;font-size:10pt;color:#000">
+        <div style="font-size:14pt;font-weight:900;margin-bottom:4px">ใบยินยอมทำงานล่วงเวลา (OT)</div>
+        <div style="font-size:10pt;color:#666;margin-bottom:12px">${dateStr} — ${s2==='proc'?'Process':'Filling'}</div>
+        ${tbl}
+      </div>`;
   },
   confirmOT(){
     const mode=document.getElementById('pr-mode')?.value||'week';
@@ -2428,16 +2418,49 @@ const PRINT={
     window.print();
   },
   sched(){
-    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};const depts=D.getDepts();const ws=S.wkStart;
+    const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
+    const depts=D.getDepts();const ws=S.wkStart;
+    // รวบรวมพนักงานทุกคนในสัปดาห์นี้
+    let rows=[];
+    DAYS.forEach((dayLabel,di)=>{
+      const d2=new Date(ws);d2.setDate(ws.getDate()+di);
+      const dateStr=`${dayLabel} ${d2.getDate()}/${d2.getMonth()+1}`;
+      SHS.forEach(sh=>{
+        depts.forEach(dept=>{
+          const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
+          ws2.forEach(w=>{
+            rows.push({dateStr,di,sh,dept,name:w.name,ot:w.ot,otHrs:w.otHrs||4,otBefore:w.otBefore,isLeave:w.isLeave});
+          });
+        });
+        // AL
+        const alWs=sched[AL]?.[di]?.[sh]||sched[AL]?.[String(di)]?.[sh]||[];
+        alWs.forEach(w=>{rows.push({dateStr,di,sh,dept:AL,name:w.name,ot:false,isLeave:true});});
+      });
+    });
+    let tbl=`<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#e8eeff">
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:28pt">#</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">ชื่อ</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">วัน</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">กะ</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:left">แผนก</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">OT</th>
+        <th style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;width:80pt">หมายเหตุ</th>
+      </tr></thead><tbody>
+      ${rows.map((r,i)=>`<tr style="background:${i%2===0?'#fff':'#f5f7ff'}">
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${i+1}</td>
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;font-weight:700">${r.name}</td>
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${r.dateStr}</td>
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center">${SHTH[r.sh]}</td>
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000">${r.dept}</td>
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000;text-align:center;font-weight:700;color:${r.ot?'#b45309':'#000'}">${r.ot?(r.otHrs+'ชม.'):(r.isLeave?'ลา':'-')}</td>
+        <td style="border:1px solid #8090b0;padding:6px 8px;color:#000"></td>
+      </tr>`).join('')}
+      </tbody></table>`;
     document.getElementById('print-area').innerHTML=`
       <div class="pr-title">ตารางกะ — ${S.sys==='proc'?'Process':'Filling'}</div>
       <div style="font-size:11pt;color:#666;margin-bottom:8px">สัปดาห์ที่ ${wNum(ws)}: ${dStr(ws)}</div>
-      <table><thead><tr><th>กะ / แผนก</th>${DAYS.map((d,di)=>{const d2=new Date(ws);d2.setDate(ws.getDate()+di);return`<th>${d}<br>${d2.getDate()}/${d2.getMonth()+1}</th>`;}).join('')}</tr></thead>
-      <tbody>${SHS.map(sh=>depts.map(dept=>`<tr><td style="font-weight:700;background:#f8f8f8">${SHTH[sh]}<br><small>${dept}</small></td>${Array.from({length:6},(_,di)=>{
-        const ws2=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
-        return`<td>${ws2.map(w=>`${w.name}${w.ot?' <b>(OT)</b>':''}`).join('<br>')}</td>`;
-      }).join('')}</tr>`).join('')).join('')}
-      </tbody></table>`;
+      ${tbl}`;
     window.print();
   }
 };
@@ -2577,7 +2600,30 @@ const SCHED={
       }
       html+=`<button onclick="SCHED.removeW('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(220,38,38,.15);color:var(--red2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif">\ud83d\uddd1\ufe0f \u0e25\u0e1a\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e01\u0e30</button>`;
     }
-    if((isMe||isAdmin)&&w.ot&&!sg)html+=`<button onclick="SCHED.sign('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(22,163,74,.15);color:var(--green2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;margin-top:8px">\u270d\ufe0f \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT</button>`;
+    if((isMe||isAdmin)&&w.ot&&!sg){
+      const otHrs=w.otHrs||4;
+      const reasons=D.getReasons()||[];
+      const otLog=D.getOTLog(S.sys)||[];
+      const wkStr=wKey(S.wkStart);
+      const usedHrs=otLog.filter(l=>l.name===name&&l.wk===wkStr).reduce((a,l)=>a+(l.hrs||4),0);
+      const maxOT=(D.getMaxOT()||3)*4; // max total OT hrs/week
+      const remaining=Math.max(0,maxOT-usedHrs);
+      html+=`<div style="background:rgba(245,158,11,.1);border:1.5px solid rgba(245,158,11,.4);border-radius:10px;padding:12px;margin-top:8px">
+        <div style="font-size:12px;font-weight:900;color:var(--amber);margin-bottom:4px">⚠️ ยืนยันการทำ OT</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">
+          OT วันนี้: <b>${otHrs} ชม.</b> &nbsp;|&nbsp;
+          สะสมสัปดาห์นี้: <b>${usedHrs} ชม.</b> &nbsp;|&nbsp;
+          คงเหลือได้: <b style="color:${remaining<otHrs?'var(--red2)':'var(--green2)'}">${remaining} ชม.</b>
+        </div>
+        ${remaining<otHrs?`<div style="font-size:11px;color:var(--red2);font-weight:800;margin-bottom:8px">⚠️ เกิน OT ${otHrs-remaining} ชม. — กรุณาระบุเหตุผล</div>`:''}
+        <select id="ot-reason-sel" style="width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
+          ${reasons.map(r=>`<option value="${r}">${r}</option>`).join('')}
+          <option value="__other__">อื่นๆ (ระบุ)</option>
+        </select>
+        <input id="ot-reason-txt" type="text" placeholder="รายละเอียดเพิ่มเติม" style="width:100%;padding:7px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:8px;box-sizing:border-box">
+        <button onclick="SCHED.sign('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:var(--green);color:#fff;font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif">✍️ ยืนยันและเซ็นชื่อ</button>
+      </div>`;
+    }
     if(sg)html+=`<div style="background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:8px;margin-top:8px;text-align:center"><div style="font-size:11px;color:var(--green2)">\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u0e41\u0e25\u0e49\u0e27</div><div style="font-family:'Brush Script MT',cursive;font-size:18px;color:var(--blue2);margin-top:4px">${sg}</div></div>`;
     html+='</div></div>';
     mo.innerHTML=html;mo.onclick=e=>{if(e.target===mo)closeMo('mo-w');};openMo('mo-w');
@@ -2608,7 +2654,24 @@ const SCHED={
   },
   sign(name,dept,di,sh){
     if(!S.user?.isAdmin&&S.user?.emp?.name!==name){toast('\u274c \u0e40\u0e0b\u0e47\u0e19\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e15\u0e31\u0e27\u0e40\u0e2d\u0e07');return;}
-    const wk=wKey(S.wkStart);D.saveSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh,name);this.render();toast('\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u2014 '+name);
+    const wk=wKey(S.wkStart);
+    // บันทึกลายเซ็น (ใช้รูปจาก emp ถ้ามี หรือชื่อ)
+    const emp=D.getEmps().find(e=>e.name===name);
+    const sigVal=emp?.signature||name;
+    D.saveSign(wk+'_'+name+'_'+dept+'_'+di+'_'+sh,sigVal);
+    // บันทึก reason + hours ลง otLog
+    const sched2=D.getSched()[wk]||{};
+    const ws2=(sched2[dept]?.[di]?.[sh]||sched2[dept]?.[String(di)]?.[sh]||[]);
+    const w2=ws2.find(x=>x.name===name);
+    const otHrs2=w2?.otHrs||4;
+    const reasonSel=document.getElementById('ot-reason-sel');
+    const reasonTxt=document.getElementById('ot-reason-txt');
+    const reason=(reasonSel?.value==='__other__'?reasonTxt?.value:reasonSel?.value)||'ไม่ระบุ';
+    const otLog=D.getOTLog(S.sys)||[];
+    const wkStr=wKey(S.wkStart);
+    otLog.push({name,dept,di,sh,hrs:otHrs2,reason,wk:wkStr,date:new Date().toISOString()});
+    D.saveOTLog(otLog,S.sys);
+    this.render();toast('\u2705 \u0e22\u0e34\u0e19\u0e22\u0e2d\u0e21 OT \u2014 '+name);
   },
   removeW(name,dept,di,sh){
     if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
