@@ -2667,8 +2667,8 @@ const SCHED={
             const isPreOT=w.otBefore;
             const otHrs=Math.round(w.otHrs||4);
             let displayStart,displayEnd;
-            if(sh==='night'&&w.ot){
-              // กะดึก OT = เข้าก่อนเสมอ 18:00-06:00
+            if(w.sr){const sp=w.sr.split('-');displayStart=String(sp[0]).padStart(2,'0')+':00';displayEnd=String(sp[1]).padStart(2,'0')+':00';}
+            else if(sh==='night'&&w.ot){
               displayStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';
               displayEnd='06:00';
             } else if(isPreOT&&sh==='morning'){
@@ -2721,10 +2721,20 @@ const SCHED={
       html+=`<button onclick="SCHED.toggleOT('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:${w.ot?'rgba(245,158,11,.2)':'rgba(37,99,235,.15)'};color:${w.ot?'var(--amber)':'var(--blue2)'};font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;margin-bottom:6px">${w.ot?'\ud83d\udfe1 \u0e1b\u0e34\u0e14 OT':'\u26a1 \u0e40\u0e1b\u0e34\u0e14 OT'}</button>`;
       if(w.ot){
         if(sh==='afternoon'){
-          html+=`<select onchange="SCHED.setSR('${ne}','${dept}',${di},this.value)" style="width:100%;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
+          html+=`<select onchange="SCHED.setSR('${ne}','${dept}',${di},this.value,'${sh}')" style="width:100%;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
             <option value="14-22" ${(w.sr||'14-22')==='14-22'?'selected':''}>14:00-22:00 (OT 4\u0e0a\u0e21.)</option>
             <option value="10-22" ${w.sr==='10-22'?'selected':''}>10:00-22:00 (OT 8\u0e0a\u0e21.)</option>
             <option value="14-02" ${w.sr==='14-02'?'selected':''}>14:00-02:00 (OT 8\u0e0a\u0e21.)</option>
+          </select>`;
+        }else if(sh==='morning'){
+          html+=`<select onchange="SCHED.setSR('${ne}','${dept}',${di},this.value,'${sh}')" style="width:100%;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
+            <option value="06-18" ${(w.sr||'06-18')==='06-18'?'selected':''}>06:00-18:00 (OT 4ชม.)</option>
+            <option value="06-14" ${w.sr==='06-14'?'selected':''}>06:00-14:00 (ปกติ ไม่ OT)</option>
+          </select>`;
+        }else if(sh==='night'){
+          html+=`<select onchange="SCHED.setSR('${ne}','${dept}',${di},this.value,'${sh}')" style="width:100%;padding:8px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'Sarabun',sans-serif;margin-bottom:6px">
+            <option value="18-06" ${(w.sr||'18-06')==='18-06'?'selected':''}>18:00-06:00 (OT 4ชม.)</option>
+            <option value="22-06" ${w.sr==='22-06'?'selected':''}>22:00-06:00 (ปกติ ไม่ OT)</option>
           </select>`;
         }else{
           html+=`<div style="display:flex;gap:6px;margin-bottom:6px">${[2,3,4].map(h=>`<button onclick="SCHED.setH('${ne}','${dept}',${di},'${sh}',${h});closeMo('mo-w')" style="flex:1;padding:8px;border:none;border-radius:8px;background:${(w.otHrs||4)===h?'var(--amber)':'var(--bg3)'};color:${(w.otHrs||4)===h?'#000':'var(--text2)'};font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">${h}\u0e0a\u0e21.</button>`).join('')}</div>`;
@@ -2779,10 +2789,25 @@ const SCHED={
     const w=(sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).find(x=>x.name===name);
     if(w){w.otHrs=h;all[wk]=sched;D.saveSched(all);this.render();}
   },
-  setSR(name,dept,di,range){
+  setSR(name,dept,di,range,sh2){
     const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
-    const w=(sched[dept]?.[di]?.['afternoon']||sched[dept]?.[String(di)]?.['afternoon']||[]).find(x=>x.name===name);
-    if(w){w.sr=range;if(range!=='14-22'){w.ot=true;w.otHrs=4;}all[wk]=sched;D.saveSched(all);this.render();closeMo('mo-w');toast('\u2705 \u0e2d\u0e31\u0e1e\u0e40\u0e14\u0e17\u0e0a\u0e48\u0e27\u0e07\u0e40\u0e27\u0e25\u0e32');}
+    // ค้นหาใน sh ที่ส่งมา หรือทุก shift
+    let w=null;let foundSh=sh2||'afternoon';
+    if(sh2){w=(sched[dept]?.[di]?.[sh2]||sched[dept]?.[String(di)]?.[sh2]||[]).find(x=>x.name===name);}
+    else{['morning','afternoon','night'].forEach(s=>{if(!w){const ws=sched[dept]?.[di]?.[s]||sched[dept]?.[String(di)]?.[s]||[];const found=ws.find(x=>x.name===name);if(found){w=found;foundSh=s;}}});}
+    if(w){
+      w.sr=range;
+      // ถ้าเลือก range ปกติ (ไม่ OT) → ปิด OT
+      const normalRanges=['14-22','06-14','22-06'];
+      w.ot=!normalRanges.includes(range);
+      if(w.ot){
+        const sp=range.split('-');const h1=parseInt(sp[0]);const h2=parseInt(sp[1]);
+        const totalHrs=h2>h1?(h2-h1):(24-h1+h2);
+        // OT = ส่วนที่เกินจากกะปกติ (8ชม.)
+        w.otHrs=Math.max(totalHrs-8,0)||4;
+      }
+      all[wk]=sched;markUnsaved();D.saveSched(all);this.render();closeMo('mo-w');toast('✅ อัพเดทเวลาแล้ว');
+    }
   },
   sign(name,dept,di,sh){
     if(!S.user?.isAdmin&&S.user?.emp?.name!==name){toast('\u274c \u0e40\u0e0b\u0e47\u0e19\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e15\u0e31\u0e27\u0e40\u0e2d\u0e07');return;}
