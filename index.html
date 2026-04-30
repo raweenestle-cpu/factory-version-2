@@ -1730,8 +1730,10 @@ const PLAN={
 
         // จำนวนคนที่ต้องการ (ไม่นับ Oreo Coating ซึ่งมีคนประจำ)
         const nonOreoDepts=procDepts.filter(d=>d!=='Oreo Coating');
-        const needPpl=units>=2?12:9; // เช้า (non-Oreo)
-        const nightPpl=9; // ดึก (non-Oreo)
+        const cfg2=D.getMixingCfg?D.getMixingCfg():{};
+        const pplPerShift=units>=2?(cfg2.mix2people||9):(cfg2.mix1people||6);
+        const needPpl=pplPerShift; // กะละ pplPerShift คน ทุกกะ
+        const nightPpl=pplPerShift; // กะดึกใช้จำนวนเดียวกัน
 
         // แยกตามกะที่ถูกกำหนด
         const byShift={morning:[],afternoon:[],night:[]};
@@ -1844,11 +1846,10 @@ const PLAN={
         // กะเช้า cover 6:00-14:00 = 8 ชม.
         // ถ้า hoursNeeded > 8 → ต้องมีคนต่อ
 
-        // ===== OT: เลือก balance ที่สุด =====
-        // hoursNeeded: ชม.ที่ต้องผลิต เริ่ม 06:00
-        // กะเช้า 06:00-14:00 (8 ชม.) + กะบ่าย 14:00-22:00 (8 ชม.) = 16 ชม.
-        // OT: ดึงกะบ่าย OT ก่อน (14:00→18:00 เต็มที่) แล้วค่อย pre-OT ดึก
-        if(hoursNeeded>8){
+        // ===== OT: เกิดเฉพาะเมื่อ hoursNeeded > 24 ชม. =====
+        // 3 กะครอบ 24 ชม. ปกติ → ไม่ต้อง OT
+        // ถ้า > 24 ชม. → ต้องการ OT เพิ่ม
+        if(hoursNeeded>24){
           const endTime=6+hoursNeeded; // เช่น 14ชม.→20:00, 16ชม.→22:00
           const maxOTDays=D.getMaxOT()||3;
           const otLog=D.getOTLog(S.sys)||[];
@@ -2598,7 +2599,7 @@ const SCHED={
           html+=`<div style="display:flex;gap:6px;margin-bottom:6px">${[2,3,4].map(h=>`<button onclick="SCHED.setH('${ne}','${dept}',${di},'${sh}',${h});closeMo('mo-w')" style="flex:1;padding:8px;border:none;border-radius:8px;background:${(w.otHrs||4)===h?'var(--amber)':'var(--bg3)'};color:${(w.otHrs||4)===h?'#000':'var(--text2)'};font-size:12px;font-weight:800;font-family:'Sarabun',sans-serif">${h}\u0e0a\u0e21.</button>`).join('')}</div>`;
         }
       }
-      html+=`<button onclick="SCHED.removeW('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(220,38,38,.15);color:var(--red2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif">\ud83d\uddd1\ufe0f \u0e25\u0e1a\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e01\u0e30</button>`;
+      html+=`<button onclick="SCHED.removeW('${ne}','${dept}',${di},'${sh}');closeMo('mo-w')" style="display:block;width:100%;padding:9px;border-radius:8px;border:none;background:rgba(220,38,38,.15);color:var(--red2);font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif">🗑️ ลบออกจากกะ</button>`;
     }
     if((isMe||isAdmin)&&w.ot&&!sg){
       const otHrs=w.otHrs||4;
@@ -2680,7 +2681,7 @@ const SCHED={
     const idx=arr.findIndex(w=>w.name===name);if(idx>=0){arr.splice(idx,1);all[wk]=sched;D.saveSched(all);this.render();toast('\ud83d\uddd1\ufe0f \u0e25\u0e1a '+name);}
   },
   openAdd(dept,di,sh){
-    if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
+    if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin');return;}
     const emps=D.getEmps();const wk=wKey(S.wkStart);const all=D.getSched();const sched=all[wk]||{};
     const already=new Set((sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[]).map(w=>w.name));
     const mo=document.getElementById('mo-w');
@@ -2747,12 +2748,19 @@ const SCHED={
     D.getDepts().forEach(d=>{for(let di=0;di<6;di++)SHS.forEach(sh=>(sched[d]?.[di]?.[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));});
         const tgt=D.getTarget();const pct=tH>0?Math.round(oH/tH*100):0;
     const doSave=()=>{D.saveSched(all);FB.set(S.sys+'/sched/'+wk,sched);markSaved();toast('\u2705 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08');DASH.render();};
-    if(oH>1){this.showOTReason(pct,tgt,doSave);}
+    if(oH>0){this.showOTReason(pct,tgt,oH,doSave);}
     else{doSave();}
   },
-  showOTReason(pct,tgt,onSave){
+  showOTReason(pct,tgt,totalOTHrs,onSave){
     const reasons=D.getReasons();let rows=[{reason:reasons[0]||'',hours:0}];
+    const totalHrs=totalOTHrs;
     const renderR=()=>{
+      const usedHrs=rows.reduce((a,r)=>a+(parseInt(r.hours)||0),0);
+      const remHrs=totalHrs-usedHrs;
+      const remEl=document.getElementById('or-remaining');
+      if(remEl)remEl.innerHTML=remHrs===0
+        ?'✅ ครบแล้ว! พร้อมบันทึก'
+        :`⏳ ยังเหลือ: <span style="color:${remHrs>0?'var(--red2)':'var(--amber)'}">${remHrs}</span> ชม.`;
       document.getElementById('or-rows').innerHTML=rows.map((r,i)=>`<div class="ot-rrow">
         <select onchange="window._or[${i}].reason=this.value">${reasons.map(re=>`<option value="${re}" ${r.reason===re?'selected':''}>${re}</option>`).join('')}</select>
         <input type="number" value="${r.hours}" min="0" max="24" oninput="window._or[${i}].hours=parseInt(this.value)||0">
@@ -2763,19 +2771,31 @@ const SCHED={
     window._or=rows;window._rr=renderR;
     const mo=document.getElementById('mo-or');
     mo.innerHTML=`<div class="md"><div class="md-handle"></div><div class="md-hdr"><div class="md-title">\u26a0\ufe0f OT \u0e40\u0e01\u0e34\u0e19 Target</div><button class="md-close" onclick="closeMo('mo-or')">\u2715</button></div><div class="md-body">
-      <div class="ot-warn"><div class="ot-warn-t">OT ${pct}% \u0e40\u0e01\u0e34\u0e19 Target ${tgt}%</div><div style="font-size:12px;color:var(--text2)">\u0e01\u0e23\u0e38\u0e13\u0e32\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25</div></div>
+      <div class="ot-warn">
+        <div class="ot-warn-t">OT ${pct}% — รวม ${totalOTHrs} ชม.</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">กระจายชั่วโมงให้ครบ ${totalOTHrs} ชม. ถึงจะบันทึกได้</div>
+        <div style="margin-top:8px;font-size:13px;font-weight:900" id="or-remaining">
+          ⏳ ยังเหลือ: <span style="color:var(--red2)">${totalOTHrs}</span> ชม.
+        </div>
+      </div>
       <div id="or-rows"></div>
       <button class="ot-add-r" onclick="window._or.push({reason:'${reasons[0]||''}',hours:0});window._rr()">+ \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25</button>
     </div><div class="md-foot"><button class="btn-cancel" onclick="closeMo('mo-or')">\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01</button><button class="btn-confirm" onclick="SCHED.saveOR(${pct})">\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01</button></div></div>`;
-    openMo('mo-or');renderR();this._onSave=onSave;
+    openMo('mo-or');renderR();this._onSave=onSave;this._totalOTHrs=totalOTHrs;
   },
   saveOR(pct){
-    const reasons=window._or.filter(r=>r.reason&&r.hours>0);
-    const log=D.getOTLog();const wk=wKey(S.wkStart);
-    const idx=log.findIndex(l=>l.wk===wk&&l.sys===S.sys);
-    const entry={wk,sys:S.sys,pct,date:new Date().toISOString(),reasons};
-    if(idx>=0)log[idx]=entry;else log.push(entry);
-    D.saveOTLog(log);closeMo('mo-or');if(this._onSave)this._onSave();DASH.renderPareto();
+    const usedHrs=window._or.reduce((a,r)=>a+(parseInt(r.hours)||0),0);
+    const totalHrs=this._totalOTHrs||0;
+    if(usedHrs<totalHrs){
+      toast('⚠️ ยังกระจายไม่ครบ ยังเหลือ '+(totalHrs-usedHrs)+' ชม.');return;
+    }
+    if(usedHrs>totalHrs){
+      toast('⚠️ กระจายเกิน '+(usedHrs-totalHrs)+' ชม. กรุณาแก้ไข');return;
+    }
+    const log=D.getOTLog(S.sys)||[];
+    window._or.forEach(r=>{if(r.reason&&r.hours>0)log.push({reason:r.reason,hrs:r.hours,pct,wk:wKey(S.wkStart),date:new Date().toISOString()});});
+    D.saveOTLog(log,S.sys);closeMo('mo-or');
+    if(this._onSave)this._onSave();
   },
   clearWk(){
     if(!S.user?.isAdmin){toast('\u274c \u0e40\u0e09\u0e1e\u0e32\u0e30 Admin');return;}
