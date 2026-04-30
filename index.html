@@ -2643,14 +2643,22 @@ const SCHED={
             const isPreOT=w.otBefore;
             const otHrs=Math.round(w.otHrs||4);
             let displayStart,displayEnd;
-            if(isPreOT&&sh==='morning'){displayStart='06:00';displayEnd='18:00';}
-            else if(isPreOT&&sh==='night'){displayStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';displayEnd='06:00';}
-            else{const effEndH={morning:14,afternoon:22,night:30}[sh]||14;displayStart=String(shStartH).padStart(2,'0')+':00';displayEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';}
+            if(sh==='night'&&w.ot){
+              // กะดึก OT = เข้าก่อนเสมอ 18:00-06:00
+              displayStart=String((22-otHrs+24)%24).padStart(2,'0')+':00';
+              displayEnd='06:00';
+            } else if(isPreOT&&sh==='morning'){
+              displayStart='06:00';displayEnd='18:00';
+            } else {
+              const effEndH={morning:14,afternoon:22,night:30}[sh]||14;
+              displayStart=String(shStartH).padStart(2,'0')+':00';
+              displayEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';
+            }
             const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
             return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
               <span style="font-size:11px;font-weight:800">${w.name}</span>
-              ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span><span style="font-size:11px">✍️</span>`:''}
-              ${sg?'✅':''}
+              ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span>`:''} 
+              ${sg?'✅':(w.ot?'✍️':'')}
             </span>`;
           }).join('')}${S.user?.isAdmin?`<button class="aw-btn" onclick="SCHED.openAdd('${dept}',${di},'${sh}')">+</button>`:''}</td>`;
         });
