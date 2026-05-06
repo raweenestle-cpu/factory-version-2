@@ -782,7 +782,18 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
 const FB_URL='https://factory-schedule-f342c-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_PATH='factory_v2';
 let fbDb=null;
-function initFB(){try{fbDb=firebase.initializeApp({databaseURL:FB_URL},'fac_v2').database();console.log('✅ FB v2');}catch(e){console.log('FB:',e);}}
+function initFB(){
+  try{
+    // ถ้า app ถูก init แล้วให้ใช้ตัวเดิม
+    const existing=firebase.apps.find(a=>a.name==='fac_v2');
+    const app=existing||firebase.initializeApp({databaseURL:FB_URL},'fac_v2');
+    fbDb=app.database();
+    console.log('✅ Firebase connected');
+  }catch(e){
+    console.log('Firebase error:',e.message);
+    fbDb=null;
+  }
+}
 const FB={
   set(p,v){if(!fbDb)return Promise.resolve();return fbDb.ref(FB_PATH+'/'+p).set(v).catch(e=>console.log(e));},
   get(p){if(!fbDb)return Promise.resolve(null);return fbDb.ref(FB_PATH+'/'+p).once('value').then(s=>s.val()).catch(()=>null);},
@@ -3848,7 +3859,8 @@ function checkRest(name,di,sh,sched){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  if(!fbDb){setTimeout(()=>{APP.init();},500);return;}
+  initFB();
+  if(!fbDb){setTimeout(()=>{initFB();APP.init();},1000);return;}
   APP.init();
   LEAVE.updBadge();
   LEAVE.archivePast();
