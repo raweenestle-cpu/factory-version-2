@@ -2220,6 +2220,11 @@ const SET={
     const maxOT=D.getMaxOT();const reasons=D.getReasons();
     const isFill=S.sys==='fill';
     el.innerHTML=`<div style="padding:14px">
+      ${S.user?.isAdmin?`<div style="background:var(--card);border:1px solid #16a34a;border-radius:var(--radius);padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:900;color:#15803d;margin-bottom:8px">☁️ Sync ข้อมูลขึ้น Firebase</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:10px">กดเพื่อ upload ข้อมูลทั้งหมดจากมือถือเครื่องนี้ขึ้น Firebase ให้ทุกเครื่องใช้งานได้</div>
+        <button onclick="forceSync()" style="width:100%;padding:10px;background:#16a34a;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">☁️ Upload ข้อมูลทั้งหมดขึ้น Firebase</button>
+      </div>`:''}
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:800;margin-bottom:10px">⚡ OT Settings</div>
         <div class="fg"><label class="fl">OT Target (%)</label>
@@ -3850,6 +3855,25 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 ;
+
+function forceSync(){
+  if(!fbDb){toast('❌ Firebase ไม่ได้เชื่อมต่อ');return;}
+  toast('⏳ กำลัง upload ขึ้น Firebase...');
+  let count=0;
+  ['proc','fill'].forEach(sys=>{
+    const emps=D.getEmps(sys);
+    if(emps.length>0){D.saveEmps(emps,sys);count++;}
+    const sched=D.getSched(sys);
+    Object.keys(sched).forEach(wk=>{if(sched[wk]){FB.set(sys+'/sched/'+wk,sched[wk]);count++;}});
+    const plan=D.getPlan(sys);
+    if(Object.keys(plan).length>0){FB.set(sys+'/plan',plan);count++;}
+    const otlog=D.getOTLog(sys);
+    if(otlog.length>0){D.saveOTLog(otlog,sys);count++;}
+    const vol=LS.get('vol_'+sys,null);
+    if(vol!==null){FB.set(sys+'/volume',vol);count++;}
+  });
+  setTimeout(()=>toast('✅ Upload สำเร็จ '+count+' รายการ'),1500);
+}
 </script>
 
 </body>
