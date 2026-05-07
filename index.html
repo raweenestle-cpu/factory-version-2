@@ -451,7 +451,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
 
   <div class="page active" id="pg-dash">
     <div class="dash-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div><h2>📊 Dashboard</h2><p id="dash-debug" style="font-size:10px;color:gray;margin:0"></p><p id="dwl">สัปดาห์นี้</p></div>
+      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p></div>
       <button onclick="APP.toggleDesktop()" id="view-mode-btn"
         style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;flex-shrink:0">
         <span id="view-mode-icon">🖥️</span>
@@ -1394,7 +1394,7 @@ const APP={
     });
     FB.on('signs',v=>{if(v)LS.set('signs',v);});
     FB.on('product_master',v=>{if(v){LS.set('product_master',v);PROD.render();}});
-    FB.on('fill/volume',v=>{if(v)LS.set('vol_fill',v);});
+    FB.on('fill/volume',v=>{if(v){LS.set('fill_volume',v);if(S.sys==='fill')PLAN.render();}});
     FB.on('proc/volume',v=>{if(v)LS.set('vol_proc',v);});
     FB.on('config/mixing_cfg',v=>{if(v)LS.set('mixing_cfg',v);});
     FB.on('config/mix_stock',v=>{if(v!=null)LS.set('mix_stock',v);});
@@ -1503,50 +1503,31 @@ const DASH={
     this.renderPareto();
     const ws=S.wkStart,we=new Date(ws);we.setDate(we.getDate()+5);
     document.getElementById('dwl').textContent='สัปดาห์ที่ '+wNum(ws)+' ('+dStr(ws)+' - '+dStr(we)+')';
-    // debug: แสดงจำนวน records ใน sched
-    const _sp=Object.keys(LS.get('sched_proc',{})).length;
-    const _sf=Object.keys(LS.get('sched_fill',{})).length;
-    const _sl=Object.keys(LS.get('lsvc_data',{})).length;
-    const _yr=new Date().getFullYear();
-    const _mo=new Date().getMonth();
-    const _sp_keys=Object.keys(LS.get('sched_proc',{})).join(',');
-    const _gotp=this.getOT('proc',_yr,_mo);
-    const _gotf=this.getOT('fill',_yr,_mo);
-    const _gotl=LSVC.getOT(_yr,_mo);
-    const _dbg=document.getElementById('dash-debug');
-    const _sl_keys=Object.keys(LS.get('lsvc_data',{})).join(',');
-    if(_dbg)_dbg.textContent='proc_keys:'+_sp_keys+' lsvc_keys:'+_sl_keys+' yr='+_yr+' mo='+_mo+' proc='+_gotp+'% fill='+_gotf+'% lsvc='+_gotl+'%';
   },
   renderChart(type){
     try{
     const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const yr=new Date().getFullYear(); // ปี ค.ศ. จริง ไม่ใช่ S.yr ที่บวก 543
+    const yr=new Date().getFullYear();
+    const curMo=new Date().getMonth();
+    const tgt=D.getTarget()||25;
+    const ids={proc:'pp',fill:'fp',lsvc:'lsp',total:'tp'};
+    const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
+    const pe=document.getElementById(ids[type]);if(!pe)return;
+    const ce=document.getElementById(cids[type]);if(!ce)return;
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
     else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
     else{
-      // Total = average ของทั้ง 3 ระบบที่มีข้อมูล
       data=Array.from({length:12},(_,mi)=>{
-        const vals=[
-          this.getOT('proc',yr,mi),
-          this.getOT('fill',yr,mi),
-          LSVC.getOT(yr,mi)
-        ].filter(v=>v!=null);
+        const vals=[this.getOT('proc',yr,mi),this.getOT('fill',yr,mi),LSVC.getOT(yr,mi)].filter(v=>v!=null);
         return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
       });
     }
-    const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
-    const latest=[...data].reverse().find(v=>v!=null);
-    const ids={proc:'pp',fill:'fp',lsvc:'lsp',total:'tp'};
-    const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
-    const pe=document.getElementById(ids[type]);
-    if(pe){pe.textContent=latest!=null?latest+'%':'-';pe.className='dc-val '+(latest==null?'ot-none':latest>tgt?'ot-over':'ot-ok');}
-    const ce=document.getElementById(cids[type]);if(!ce)return;
+    const cur=data[curMo];
+    pe.textContent=cur!=null?cur+'%':'-';
+    pe.className='dc-val'+(cur==null?' ot-none':cur>tgt?' ot-hi':' ot-ok');
     const mx=Math.max(...data.filter(v=>v!=null),tgt,1);
-    const now=new Date();const curMo=now.getFullYear()===yr?now.getMonth():-1;
-
-    // กราฟแท่งสวยงาม พร้อม label เดือน
     ce.style.cssText='display:flex;align-items:flex-end;gap:2px;height:70px;width:100%;padding-bottom:16px;position:relative;overflow:visible;cursor:pointer';
     ce.onclick=()=>this.openChart(type);
     ce.innerHTML=data.map((v,mi)=>{
