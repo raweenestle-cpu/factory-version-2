@@ -844,7 +844,7 @@ const AL='AL';
 const SHST={morning:6*60,afternoon:14*60,night:22*60};
 const SHEN={morning:14*60,afternoon:22*60,night:30*60};
 
-let S={sys:'proc',user:null,wkStart:getMonday(new Date()),yr:new Date().getFullYear()+543};
+let S={sys:'proc',user:null,wkStart:getMonday(new Date()),yr:new Date().getFullYear()};
 let _unsaved=false;
 
 function getMonday(d){const dt=new Date(d);const dy=dt.getDay();dt.setDate(dt.getDate()+(dy===0?-6:1-dy));dt.setHours(0,0,0,0);return dt;}
@@ -1483,7 +1483,7 @@ const DASH={
       const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
       const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
       let inM=false;
-      for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()+543===yr&&d2.getMonth()===mi){inM=true;break;}}
+      for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mi){inM=true;break;}}
       if(!inM)return;
       let wt=0,wo=0;
       Object.keys(wd).forEach(d=>{
@@ -1507,7 +1507,7 @@ const DASH={
   renderChart(type){
     try{
     const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const yr=S.yr;
+    const yr=new Date().getFullYear(); // ปี ค.ศ. จริง ไม่ใช่ S.yr ที่บวก 543
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
@@ -1557,7 +1557,7 @@ const DASH={
   openChart(type){
     const MONTHS_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
     const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const yr=S.yr;
+    const yr=new Date().getFullYear(); // ปี ค.ศ. จริง ไม่ใช่ S.yr ที่บวก 543
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
