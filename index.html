@@ -3168,11 +3168,12 @@ const SCHED={
     const ws=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
     const w=ws.find(x=>x.name===name);if(!w)return;
     if(!w.ot){
+      // เช็ค OT ไม่เกิน 3 วัน/สัปดาห์
       const max=D.getMaxOT();let cnt=0;
       D.getDepts().forEach(d=>{for(let di2=0;di2<6;di2++)SHS.forEach(s=>{const f=(sched[d]?.[di2]?.[s]||sched[d]?.[String(di2)]?.[s]||[]).find(x=>x.name===name&&x.ot);if(f)cnt++;});});
-      if(cnt>=max){alert2('\ud83d\udeab OT \u0e40\u0e15\u0e47\u0e21\u0e41\u0e25\u0e49\u0e27!\
-\
-'+name+' \u0e17\u0e33 OT \u0e04\u0e23\u0e1a '+max+' \u0e27\u0e31\u0e19\u0e41\u0e25\u0e49\u0e27','\u274c');return;}
+      if(cnt>=max){alert2('🚫 OT เต็มแล้ว!\n\n'+name+' ทำ OT ครบ '+max+' วันแล้ว','❌');return;}
+      // เช็คพัก 12 ชม. ก่อนทำ OT
+      if(!checkRest(name,di,sh,sched)){alert2('😴 พักครบ 12 ชั่วโมง!\n\n'+name+' ยังพักไม่ครบก่อนกะนี้','❌');return;}
     }
     w.ot=!w.ot;if(!w.ot)w.otHrs=4;
     all[wk]=sched;markUnsaved();D.saveSched(all);this.render();toast(w.ot?'\u2705 \u0e40\u0e1b\u0e34\u0e14 OT':'\u2705 \u0e1b\u0e34\u0e14 OT');
