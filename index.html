@@ -468,7 +468,13 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
         <div class="dc-sub" id="fc">0 คน</div><div class="dc-chart"><div class="mini-bars" id="fch"></div></div>
       </div>
       <div class="dash-card full" style="--accent:var(--amber)">
-        <div class="dc-label">Line Service OT%</div></div><div class="dash-card" onclick="DASH.openChart('lsvc')"><div id="lsch" style="flex:1;position:relative;overflow:hidden"></div><div id="lp" class="dc-val">-</div><div class="dc-label">Total OT%</div><div class="dc-val ot-none" id="tp">-</div>
+        <div class="dc-val ot-none" id="lsp">-</div>
+        <div class="dc-label">Line Service OT%</div>
+        <div class="dc-chart" style="height:80px"><div class="mini-bars" id="lschart" style="flex:1;position:relative;overflow:hidden"></div></div>
+      </div>
+      <div class="dash-card full" style="--accent:var(--teal)" onclick="DASH.openChart('total')">
+        <div class="dc-val ot-none" id="tp">-</div>
+        <div class="dc-label">Total OT%</div><div class="dc-val ot-none" id="tp">-</div>
         <div class="dc-sub" id="tc">รวม 0 คน</div>
         <div class="dc-chart" style="height:80px"><div class="mini-bars" id="tch"></div></div>
       </div>
@@ -476,7 +482,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     <div class="pareto-card">
       <div class="pareto-hdr">
         <h3>📈 Pareto — เหตุผล OT เกิน</h3>
-        <select id="pp-period" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif">
+        <select id="pp-sys" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif;margin-right:4px"><option value="all">ทุกระบบ</option><option value="proc">Process</option><option value="fill">Filling</option><option value="lsvc">Line Service</option></select><select id="pp-period" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif">
           <option value="week">สัปดาห์นี้</option><option value="month" selected>เดือนนี้</option><option value="year">ปีนี้</option>
         </select>
       </div>
@@ -1218,14 +1224,96 @@ const LSVC={
     const workHrs=parseInt(document.getElementById('lsvc-workhrs')?.value||0);
     const otHrs=parseInt(document.getElementById('lsvc-othrs')?.value||0);
     const note=document.getElementById('lsvc-note')?.value?.trim()||'';
-    if(otHrs>1&&!note){toast('❌ กรุณาระบุหมายเหตุเนื่องจาก OT เกิน 1 ชม.');return;}
     if(otCount>total){toast('❌ จำนวนคน OT มากกว่าพนักงานทั้งหมด');return;}
+    if(otHrs<1){
+      this._doSave(total,otCount,workHrs,otHrs,[]);
+      return;
+    }
+    // เปิด popup กระจาย OT ตาม reason
+    this._pending={total,otCount,workHrs,otHrs};
+    this._openDistrib(otHrs);
+  },
+
+  _openDistrib(otHrs){
+    const reasons=D.getReasons();
+    let rows=[{reason:reasons[0]||'',hours:0}];
+    const renderR=()=>{
+      const used=rows.reduce((s,r)=>s+(r.hours||0),0);
+      const rem=otHrs-used;
+      document.getElementById('lsvc-or-remaining').innerHTML=
+        rem===0?'<span style="color:var(--green2)">✅ ครบแล้ว!</span>'
+        :`⏳ ยังเหลือ: <span style="color:var(--red2)">${rem}</span> ชม.`;
+      document.getElementById('lsvc-or-rows').innerHTML=rows.map((r,i)=>`
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <select onchange="window._lsvcRows[${i}].reason=this.value" style="flex:1;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Sarabun',sans-serif;font-size:12px">
+            ${reasons.map(r=>`<option value="${r}" ${r===rows[i].reason?'selected':''}>${r}</option>`).join('')}
+          </select>
+          <input type="number" value="${r.hours}" min="0" max="${otHrs}"
+            onchange="window._lsvcRows[${i}].hours=parseInt(this.value)||0;window._lsvcRenderR()"
+            style="width:70px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);text-align:center">
+          <button onclick="window._lsvcRows.splice(${i},1);window._lsvcRenderR()"
+            style="padding:6px 10px;background:rgba(239,68,68,.15);border:none;border-radius:8px;color:var(--red2);cursor:pointer">✕</button>
+        </div>`).join('');
+      const canSave=rem===0;
+      document.getElementById('lsvc-save-btn').disabled=!canSave;
+      document.getElementById('lsvc-save-btn').style.opacity=canSave?'1':'0.5';
+    };
+    window._lsvcRows=rows;
+    window._lsvcRenderR=renderR;
+    const mo=document.getElementById('mo-or');
+    if(!mo)return;
+    mo.innerHTML=`<div class="md"><div class="md-handle"></div>
+      <div class="md-hdr">
+        <div class="md-title">⚠️ กระจาย OT Line Service</div>
+        <button class="md-close" onclick="closeMo('mo-or')">✕</button>
+      </div>
+      <div class="md-body">
+        <div class="ot-warn">
+          <div class="ot-warn-t">OT รวม ${otHrs} ชม.</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">กระจายชั่วโมงให้ครบ ${otHrs} ชม.</div>
+          <div style="margin-top:8px;font-size:13px;font-weight:900" id="lsvc-or-remaining">⏳ ยังเหลือ: <span style="color:var(--red2)">${otHrs}</span> ชม.</div>
+        </div>
+        <div id="lsvc-or-rows"></div>
+        <button class="ot-add-r" onclick="window._lsvcRows.push({reason:'${reasons[0]||''}',hours:0});window._lsvcRenderR()">+ เพิ่มเหตุผล</button>
+      </div>
+      <div class="md-foot">
+        <button id="lsvc-save-btn" onclick="LSVC._confirmDistrib()" disabled
+          style="width:100%;padding:12px;background:var(--blue);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer;opacity:0.5">
+          💾 บันทึก Line Service OT
+        </button>
+      </div>
+    </div>`;
+    openMo('mo-or');
+    renderR();
+  },
+
+  _confirmDistrib(){
+    const p=this._pending;if(!p)return;
+    const rows=window._lsvcRows||[];
+    this._doSave(p.total,p.otCount,p.workHrs,p.otHrs,rows);
+    closeMo('mo-or');
+  },
+
+  _doSave(total,otCount,workHrs,otHrs,reasons){
     const yr=new Date().getFullYear();const mo=new Date().getMonth();
     const key=yr+'-'+(mo+1);
     const data=LS.get('lsvc_data',{});
-    data[key]={total,otCount,otHrs,workHrs,note,updatedAt:new Date().toISOString()};
+    data[key]={total,otCount,otHrs,workHrs,reasons,updatedAt:new Date().toISOString()};
     LS.set('lsvc_data',data);
     FB.set('lsvc_data',data);
+    // save ลง otlog_lsvc
+    if(reasons.length>0){
+      const log=LS.get('otlog_lsvc',[]);
+      const entry={
+        date:new Date().toISOString(),
+        reasons,
+        otHrs,
+        sys:'lsvc'
+      };
+      log.push(entry);
+      LS.set('otlog_lsvc',log);
+      FB.set('lsvc/otlog',log);
+    }
     DASH.render();
     this.render();
     toast('✅ บันทึกข้อมูล Line Service แล้ว');
@@ -1430,8 +1518,8 @@ const DASH={
     }
     const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
     const latest=[...data].reverse().find(v=>v!=null);
-    const ids={proc:'pp',fill:'fp',lsvc:'lp',total:'tp'};
-    const cids={proc:'pch',fill:'fch',lsvc:'lsch',total:'tch'};
+    const ids={proc:'pp',fill:'fp',lsvc:'lsp',total:'tp'};
+    const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
     const pe=document.getElementById(ids[type]);
     if(pe){pe.textContent=latest!=null?latest+'%':'-';pe.className='dc-val '+(latest==null?'ot-none':latest>tgt?'ot-over':'ot-ok');}
     const ce=document.getElementById(cids[type]);if(!ce)return;
@@ -1564,7 +1652,11 @@ const DASH={
   },
   renderPareto(){
     const per=document.getElementById('pp-period')?.value||'month';
-    const logs=[...D.getOTLog('proc'),...D.getOTLog('fill')];
+    const lsvcSys=document.getElementById('pp-sys')?.value||'all';
+    let logs=[];
+    if(lsvcSys==='proc'||lsvcSys==='all')logs=[...logs,...D.getOTLog('proc')];
+    if(lsvcSys==='fill'||lsvcSys==='all')logs=[...logs,...D.getOTLog('fill')];
+    if(lsvcSys==='lsvc'||lsvcSys==='all')logs=[...logs,...(LS.get('otlog_lsvc',[])||[])];
     const now=new Date();
     const flt=logs.filter(l=>{
       if(!l.date)return false;const d=new Date(l.date);
