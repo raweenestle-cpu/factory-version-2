@@ -1507,8 +1507,14 @@ const DASH={
     const _sp=Object.keys(LS.get('sched_proc',{})).length;
     const _sf=Object.keys(LS.get('sched_fill',{})).length;
     const _sl=Object.keys(LS.get('lsvc_data',{})).length;
+    const _yr=new Date().getFullYear();
+    const _mo=new Date().getMonth();
+    const _sp_keys=Object.keys(LS.get('sched_proc',{})).join(',');
+    const _gotp=this.getOT('proc',_yr,_mo);
+    const _gotf=this.getOT('fill',_yr,_mo);
+    const _gotl=LSVC.getOT(_yr,_mo);
     const _dbg=document.getElementById('dash-debug');
-    if(_dbg)_dbg.textContent='sched: proc='+_sp+' fill='+_sf+' lsvc='+_sl+' yr='+new Date().getFullYear();
+    if(_dbg)_dbg.textContent='keys:'+_sp_keys+' yr='+_yr+' mo='+_mo+' proc='+_gotp+'% fill='+_gotf+'% lsvc='+_gotl+'%';
   },
   renderChart(type){
     try{
