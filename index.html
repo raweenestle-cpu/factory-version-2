@@ -1513,36 +1513,14 @@ const DASH={
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
     else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
     else{
-      // Total = ชม.OT รวม 3 แผนก / ชม.ทำงานรวม 3 แผนก
+      // Total = average ของทั้ง 3 ระบบที่มีข้อมูล
       data=Array.from({length:12},(_,mi)=>{
-        // proc + fill: ดึงจาก sched จริง
-        let totalH=0,otH=0;
-        ['proc','fill'].forEach(sys=>{
-          const depts=D.getDepts(sys);if(!depts||!depts.length)return;
-          const all=LS.get('sched_'+sys,{});
-          Object.entries(all).forEach(([wk,wd])=>{
-            if(!wd)return;
-            const wp=wk.split('-');if(wp.length<3)return;
-            const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
-            const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
-            let inM=false;
-            for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mi){inM=true;break;}}
-            if(!inM)return;
-            Object.keys(wd).forEach(d=>{
-              if(typeof wd[d]!=='object')return;
-              for(let di=0;di<6;di++){
-                const day=wd[d]?.[di]||wd[d]?.[String(di)];if(!day)return;
-                SHS.forEach(sh=>(day[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;totalH+=8+h;otH+=h;}));
-              }
-            });
-          });
-        });
-        // lsvc: ดึงจาก lsvc_data
-        const lData=LS.get('lsvc_data',{});
-        const lKey=yr+'-'+(mi+1);
-        const lv=lData[lKey];
-        if(lv&&lv.workHrs){totalH+=lv.workHrs+(lv.otHrs||0);otH+=(lv.otHrs||0);}
-        return totalH>0?Math.round(otH/totalH*100):null;
+        const vals=[
+          this.getOT('proc',yr,mi),
+          this.getOT('fill',yr,mi),
+          LSVC.getOT(yr,mi)
+        ].filter(v=>v!=null);
+        return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
       });
     }
     const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
@@ -1585,36 +1563,14 @@ const DASH={
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
     else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
     else{
-      // Total = ชม.OT รวม 3 แผนก / ชม.ทำงานรวม 3 แผนก
+      // Total = average ของทั้ง 3 ระบบที่มีข้อมูล
       data=Array.from({length:12},(_,mi)=>{
-        // proc + fill: ดึงจาก sched จริง
-        let totalH=0,otH=0;
-        ['proc','fill'].forEach(sys=>{
-          const depts=D.getDepts(sys);if(!depts||!depts.length)return;
-          const all=LS.get('sched_'+sys,{});
-          Object.entries(all).forEach(([wk,wd])=>{
-            if(!wd)return;
-            const wp=wk.split('-');if(wp.length<3)return;
-            const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
-            const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
-            let inM=false;
-            for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mi){inM=true;break;}}
-            if(!inM)return;
-            Object.keys(wd).forEach(d=>{
-              if(typeof wd[d]!=='object')return;
-              for(let di=0;di<6;di++){
-                const day=wd[d]?.[di]||wd[d]?.[String(di)];if(!day)return;
-                SHS.forEach(sh=>(day[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;totalH+=8+h;otH+=h;}));
-              }
-            });
-          });
-        });
-        // lsvc: ดึงจาก lsvc_data
-        const lData=LS.get('lsvc_data',{});
-        const lKey=yr+'-'+(mi+1);
-        const lv=lData[lKey];
-        if(lv&&lv.workHrs){totalH+=lv.workHrs+(lv.otHrs||0);otH+=(lv.otHrs||0);}
-        return totalH>0?Math.round(otH/totalH*100):null;
+        const vals=[
+          this.getOT('proc',yr,mi),
+          this.getOT('fill',yr,mi),
+          LSVC.getOT(yr,mi)
+        ].filter(v=>v!=null);
+        return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
       });
     }
     const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
