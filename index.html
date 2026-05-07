@@ -451,7 +451,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
 
   <div class="page active" id="pg-dash">
     <div class="dash-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p></div>
+      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p><select id="chart-period" onchange="DASH.render()" style="margin-top:4px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif"><option value="year">📅 รายเดือน (ทั้งปี)</option><option value="month" selected>📆 รายสัปดาห์ (เดือนนี้)</option></select></div>
       <button onclick="APP.toggleDesktop()" id="view-mode-btn"
         style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;flex-shrink:0">
         <span id="view-mode-icon">🖥️</span>
@@ -1488,6 +1488,28 @@ const APP={
   }
 };
 const DASH={
+  getOTWeek(sys,wkKey){
+    // คำนวณ OT% ของสัปดาห์เดียว
+    const depts=D.getDepts(sys);if(!depts||!depts.length)return null;
+    const all=LS.get('sched_'+sys,{});
+    const wd=all[wkKey];if(!wd)return null;
+    let tH=0,oH=0;
+    Object.keys(wd).forEach(d=>{
+      if(typeof wd[d]!=='object')return;
+      for(let di=0;di<6;di++){
+        const day=wd[d]?.[di]||wd[d]?.[String(di)];if(!day)return;
+        SHS.forEach(sh=>(day[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;tH+=8+h;oH+=h;}));
+      }
+    });
+    return tH>0?Math.round(oH/tH*100):null;
+  },
+  getLSVCOTWeek(wkKey){
+    const data=LS.get('lsvc_data',{});
+    const v=data[wkKey];if(!v||!v.total)return null;
+    const tH=(v.workHrs||0)+(v.otHrs||0);
+    const oH=v.otHrs||0;
+    return tH>0?Math.round(oH/tH*100):null;
+  },
   getOT(sys,yr,mi){
     const depts=D.getDepts(sys);if(!depts||!depts.length)return null;
     const all=LS.get('sched_'+sys,{});
@@ -1529,27 +1551,65 @@ const DASH={
     const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
     const pe=document.getElementById(ids[type]);if(!pe)return;
     const ce=document.getElementById(cids[type]);if(!ce)return;
-    let data=[];
-    if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
-    else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
-    else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
-    else{
-      data=Array.from({length:12},(_,mi)=>{
-        const vals=[this.getOT('proc',yr,mi),this.getOT('fill',yr,mi),LSVC.getOT(yr,mi)].filter(v=>v!=null);
+    const periodEl=document.getElementById('chart-period');
+    const mode=periodEl?periodEl.value:'year';
+    let data=[],labels=[],curIdx=0;
+
+    if(mode==='month'){
+      // รายสัปดาห์ของเดือนปัจจุบัน
+      const allSchedKeys=Object.keys(LS.get('sched_proc',{})||{}).concat(Object.keys(LS.get('sched_fill',{})||{})).concat(Object.keys(LS.get('lsvc_data',{})||{}));
+      // หา wkKeys ที่อยู่ในเดือนปัจจุบัน
+      const wkSet=new Set();
+      // สร้าง wkKeys ของเดือนนี้ (4-5 สัปดาห์)
+      const firstDay=new Date(yr,curMo,1);
+      const lastDay=new Date(yr,curMo+1,0);
+      let d=new Date(firstDay);
+      // หา Monday แรกของเดือน
+      function getMonday2(dt){const dd=new Date(dt);dd.setDate(dd.getDate()-((dd.getDay()||7)-1));return dd;}
+      d=getMonday2(firstDay);
+      while(d<=lastDay){
+        const wk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+        wkSet.add(wk);
+        d=new Date(d);d.setDate(d.getDate()+7);
+      }
+      const wkKeys=[...wkSet].sort();
+      labels=wkKeys.map(k=>{const wp=k.split('-');return 'W'+wNum(new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2])));});
+      const today=new Date();
+      curIdx=wkKeys.findIndex(k=>{const wp=k.split('-');const mn=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));const me=new Date(mn);me.setDate(mn.getDate()+6);return today>=mn&&today<=me;});
+      if(curIdx<0)curIdx=wkKeys.length-1;
+
+      if(type==='proc')data=wkKeys.map(wk=>this.getOTWeek('proc',wk));
+      else if(type==='fill')data=wkKeys.map(wk=>this.getOTWeek('fill',wk));
+      else if(type==='lsvc')data=wkKeys.map(wk=>this.getLSVCOTWeek(wk));
+      else data=wkKeys.map(wk=>{
+        const vals=[this.getOTWeek('proc',wk),this.getOTWeek('fill',wk),this.getLSVCOTWeek(wk)].filter(v=>v!=null);
         return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
       });
+    } else {
+      // รายเดือน (ทั้งปี) — mode เดิม
+      labels=MONTHS;
+      curIdx=curMo;
+      if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
+      else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
+      else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
+      else{
+        data=Array.from({length:12},(_,mi)=>{
+          const vals=[this.getOT('proc',yr,mi),this.getOT('fill',yr,mi),LSVC.getOT(yr,mi)].filter(v=>v!=null);
+          return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null;
+        });
+      }
     }
-    const cur=data[curMo];
+    const cur=data[curIdx];
     pe.textContent=cur!=null?cur+'%':'-';
     pe.className='dc-val'+(cur==null?' ot-none':cur>tgt?' ot-hi':' ot-ok');
     const mx=Math.max(...data.filter(v=>v!=null),tgt,1);
     ce.style.cssText='display:flex;align-items:flex-end;gap:2px;height:70px;width:100%;padding-bottom:16px;position:relative;overflow:visible;cursor:pointer';
     ce.onclick=()=>this.openChart(type);
     ce.innerHTML=data.map((v,mi)=>{
-      const isCur=mi===curMo;
+      const isCur=mi===curIdx;
       const col=v==null?'var(--border)':v>tgt?'var(--red2)':'var(--green2)';
       const h=v==null?4:Math.max(v/mx*90,4);
-      const label=MONTHS[mi];
+      const label=labels[mi]||MONTHS[mi]||mi;
       return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;position:relative;min-width:0">
         ${v!=null?`<div style="font-size:7px;font-weight:800;color:${col};margin-bottom:1px;white-space:nowrap">${v}%</div>`:'<div style="font-size:7px;color:transparent">0</div>'}
         <div style="width:100%;height:${h}%;background:${col};border-radius:2px 2px 0 0;min-height:3px;${isCur?'box-shadow:0 0 4px '+col:''};transition:height .3s"></div>
@@ -1588,7 +1648,7 @@ const DASH={
     const now=new Date();const curMo=now.getFullYear()===yr?now.getMonth():-1;
 
     const bars=data.map((v,mi)=>{
-      const isCur=mi===curMo;
+      const isCur=mi===curIdx;
       const col=v==null?'rgba(100,116,139,.3)':v>tgt?'#EF4444':'#22C55E';
       const bgCol=v==null?'rgba(100,116,139,.1)':v>tgt?'rgba(239,68,68,.08)':'rgba(34,197,94,.08)';
       const h=v==null?2:Math.max(v/mx*100,2);
