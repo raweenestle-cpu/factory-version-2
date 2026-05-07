@@ -82,7 +82,7 @@ input,select,textarea{font-family:'Sarabun',sans-serif}
 .mini-bar.ok{background:var(--green2)}
 .mini-bar.empty{background:var(--border)}
 .tgt-line{position:absolute;border-top:1.5px dashed var(--amber);left:0;right:0;pointer-events:none}
-.ot-over{color:var(--red2)}.ot-ok{color:var(--green2)}.ot-none{color:var(--text3)}
+.ot-over{color:var(--red2)}.ot-ok{color:var(--green2)}.ot-hi{color:var(--red2)}.ot-none{color:var(--text3)}
 .pareto-card{margin:0 14px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)}
 .pareto-hdr{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .pareto-hdr h3{font-size:13px;font-weight:800}
@@ -1175,26 +1175,37 @@ const LSVC={
     const cur=data[wk]||{total:0,otCount:0,otHrs:0,workHrs:0,reasons:[]};
     const pct=cur.total>0?Math.round(cur.otCount/cur.total*100):0;
 
-    // ประวัติย้อนหลัง 8 สัปดาห์
+    // ประวัติย้อนหลัง — แสดงทุก key ที่มีข้อมูล
+    const tgt2=D.getTarget()||25;
     let hist='';
-    for(let i=7;i>=0;i--){
-      const ws2=new Date(S.wkStart);ws2.setDate(ws2.getDate()+(this.wkOff-i)*7);
-      const k=wKey(ws2);
+    const sortedKeys=Object.keys(data).sort().reverse().slice(0,12);
+    sortedKeys.forEach(k=>{
       const v=data[k];
-      if(!v||!v.total)continue;
+      if(!v||!v.total)return;
       const p=v.total>0?Math.round(v.otCount/v.total*100):0;
-      const we2=new Date(ws2);we2.setDate(ws2.getDate()+5);
-      hist+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:11px;font-weight:700;color:var(--text)">สัปดาห์ที่ ${wNum(ws2)}: ${dStr(ws2)}</div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <span style="font-size:11px;color:var(--text2)">OT ${v.otCount}/${v.total} คน</span>
-          <span style="font-size:11px;color:var(--text2)">${v.otHrs} ชม.</span>
-          <span style="font-size:13px;font-weight:900;color:${p>30?'var(--red2)':'var(--green2)'}">${p}%</span>
+      const wp=k.split('-');
+      let dateLabel=k;
+      if(wp.length===3){
+        const ws2=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+        dateLabel='สัปดาห์ที่ '+wNum(ws2)+': '+dStr(ws2);
+      } else if(wp.length===2){
+        const MTH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+        dateLabel='เดือน '+MTH[parseInt(wp[1])-1]+' '+wp[0];
+      }
+      const col=p>tgt2?'var(--red2)':'var(--green2)';
+      const reasons=(v.reasons||[]).map(r=>`<span style="font-size:10px;background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--text2);margin:2px">${r.reason} ${r.hours}ชม.</span>`).join('');
+      hist+=`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:12px;font-weight:700;color:var(--text)">${dateLabel}</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:11px;color:var(--text2)">${v.otCount}/${v.total} คน · ${v.otHrs||0} ชม.</span>
+            <span style="font-size:14px;font-weight:900;color:${col}">${p}%</span>
+          </div>
         </div>
+        ${reasons?`<div style="display:flex;flex-wrap:wrap;margin-top:4px">${reasons}</div>`:''}
       </div>`;
-    }
-
-    el.innerHTML=`<div style="padding:14px">
+    });
+        el.innerHTML=`<div style="padding:14px">
       <!-- week nav -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:var(--bg2);padding:8px 12px;border-radius:10px">
         <button onclick="LSVC.prevWk()" style="padding:6px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer">◀</button>
