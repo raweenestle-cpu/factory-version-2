@@ -1994,6 +1994,7 @@ const PLAN={
         return{di,totalLiter,hasOreo};
       });
       // คำนวณ mixing แบบง่าย ไม่ recursive
+      let stock=parseFloat(LS.get('mix_stock',0)||0); // stock ตั้งต้น
       this._dayData=dayData.map((d,idx2)=>{
         const cap1=cfg.cap1||4500; // kg/hr ชุด 1
         const cap2=cfg.cap2||3500; // kg/hr ชุด 2
