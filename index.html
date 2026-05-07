@@ -3168,10 +3168,10 @@ const SCHED={
     const ws=sched[dept]?.[di]?.[sh]||sched[dept]?.[String(di)]?.[sh]||[];
     const w=ws.find(x=>x.name===name);if(!w)return;
     if(!w.ot){
-      // เช็ค OT ไม่เกิน 3 วัน/สัปดาห์
-      const max=D.getMaxOT();let cnt=0;
-      D.getDepts().forEach(d=>{for(let di2=0;di2<6;di2++)SHS.forEach(s=>{const f=(sched[d]?.[di2]?.[s]||sched[d]?.[String(di2)]?.[s]||[]).find(x=>x.name===name&&x.ot);if(f)cnt++;});});
-      if(cnt>=max){alert2('🚫 OT เต็มแล้ว!\n\n'+name+' ทำ OT ครบ '+max+' วันแล้ว','❌');return;}
+      // เช็ค OT ไม่เกิน 3 วัน/สัปดาห์ — นับวัน ไม่ใช่ shift
+      const max=D.getMaxOT();const otDays=new Set();
+      D.getDepts().forEach(d=>{for(let di2=0;di2<6;di2++){const hasOT=SHS.some(s=>(sched[d]?.[di2]?.[s]||sched[d]?.[String(di2)]?.[s]||[]).some(x=>x.name===name&&x.ot));if(hasOT)otDays.add(di2);}});
+      if(otDays.size>=max){alert2('🚫 OT เต็มแล้ว!\n\n'+name+' ทำ OT ครบ '+max+' วันแล้ว','❌');return;}
       // เช็คพัก 12 ชม. ก่อนทำ OT
       if(!checkRest(name,di,sh,sched)){alert2('😴 พักครบ 12 ชั่วโมง!\n\n'+name+' ยังพักไม่ครบก่อนกะนี้','❌');return;}
     }
