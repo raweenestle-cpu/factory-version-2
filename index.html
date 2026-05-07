@@ -2288,9 +2288,13 @@ const PLAN={
         // จำนวนคนที่ต้องการ (ไม่นับ Oreo Coating ซึ่งมีคนประจำ)
         const nonOreoDepts=procDepts.filter(d=>d!=='Oreo Coating');
         const cfg2=D.getMixingCfg?D.getMixingCfg():{};
-        const pplPerShift=units>=2?(cfg2.mix2people||9):(cfg2.mix1people||6);
-        const needPpl=pplPerShift; // กะละ pplPerShift คน ทุกกะ
-        const nightPpl=pplPerShift; // กะดึกใช้จำนวนเดียวกัน
+        // อ่านจำนวนคนต่อกะจาก shiftPeople ใน _dayData
+        const _sp=dayInfo?dayInfo.shiftPeople:null;
+        const morningPpl=(_sp&&_sp.morning)||cfg2.mix1people||6;
+        const afternoonPpl=(_sp&&_sp.afternoon)||cfg2.mix1people||6;
+        const nightPpl2=(_sp&&_sp.night)||cfg2.mix1people||6;
+        const needPpl=morningPpl; // กะเช้า (ใช้เป็น default)
+        const nightPpl=nightPpl2;
 
         // แยกตามกะที่ถูกกำหนด
         const byShift={morning:[],afternoon:[],night:[]};
@@ -2321,7 +2325,7 @@ const PLAN={
         nonOreoDepts.forEach(dept=>{
           const deptMorn=morningPool.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptMorn.forEach(e=>{
-            if(morningAssigned.length<needPpl&&!usedEmps.has(e.name)){
+            if(morningAssigned.length<morningPpl&&!usedEmps.has(e.name)){
               sched2[dept][di].morning.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
               morningAssigned.push(e);usedEmps.add(e.name);
             }
