@@ -1068,11 +1068,11 @@ const D={
   saveDisplayMode(v){LS.set('prod_display',v);FB.set('config/prod_display',v);},
   getMixingCfg(){return LS.get('mixing_cfg',{
     threshold:10000,  // ลิตร/วัน ที่ต้องเปิด 2 ชุด
-    mix1people:6,     // คน Mixing 1 ชุด
-    mix2people:9,     // คน Mixing 2 ชุด
+    mix1people:6,     // คน Mixing 1 ชุด (3 กะ กะละ 6)
+    mix2people:9,     // คน Mixing 2 ชุด (3 กะ กะละ 9)
     oreoLine:'Sandwich', // Line ที่ผลิต Oreo
-    cap2:3000,        // ลิตร/ชม. Mixing ชุดเสริม (2)
-    cap1:4000,        // ลิตร/ชม. Mixing ชุดหลัก (1)
+    cap2:3500,        // kg/hr Mixing ชุดเสริม (2)
+    cap1:4500,        // kg/hr Mixing ชุดหลัก (1)
     startMon:'08:00', // เวลาเริ่ม Mixing วันจันทร์
     breakH:2,         // ชม. หยุดพักกลางสัปดาห์
     bufferH:2         // ชม. Buffer ปลายสัปดาห์
@@ -1994,34 +1994,78 @@ const PLAN={
         return{di,totalLiter,hasOreo};
       });
       // คำนวณ mixing แบบง่าย ไม่ recursive
-      this._dayData=dayData.map((d,idx)=>{
-        const workH=d.di===0?16:d.di===3?(24-breakH):d.di===5?(24-bufferH):24;
-        const nextDay=dayData[idx+1];
-        // วันจันทร์ (di=0) บวก stock จากสัปดาห์ที่แล้ว
-        const stockBonus=d.di===0?mixStock:0;
-        // วันเสาร์ (di=5) ต้องผลิตอย่างน้อย 30,000 ลิตรเพิ่ม
-        const satBonus=d.di===5?MIN_SAT_LITER:0;
-        const demandLiter=nextDay?nextDay.totalLiter:bufferH*cap2;
-        const needed=Math.max(0,demandLiter+satBonus-stockBonus);
+      this._dayData=dayData.map((d,idx2)=>{
+        const cap1=cfg.cap1||4500; // kg/hr ชุด 1
+        const cap2=cfg.cap2||3500; // kg/hr ชุด 2
+        const nextDay=dayData[idx2+1];
+
+        // demand = Filling วันถัดไป (หรือวันนี้ถ้าเป็นวันเสาร์)
+        // วันเสาร์: demand = Filling วันเสาร์ + stock สำรองขั้นต่ำ 30,000 kg (ถ้าเวลาเหลือ)
+        const isSat=d.di===5;
+        const todayDemand=d.totalLiter; // demand วันนี้ที่ Filling ต้องการ
+        const nextDemand=nextDay?nextDay.totalLiter:0;
+
+        // stock สำรองขั้นต่ำวันจันทร์
+        const MIN_STOCK=30000;
+
+        // วันเสาร์: ผลิตให้ครบ demand วันเสาร์ก่อน ถ้าเหลือสำรองวันจันทร์
+        let targetKg=0;
+        if(isSat){
+          // ต้องการ = demand วันเสาร์ - stock ที่เหลือ
+          const needed=Math.max(0,todayDemand-stock);
+          targetKg=needed; // ผลิตให้ครบวันเสาร์ก่อน
+          // เวลาที่มี = 24 ชม.
+          const maxKg1=cap1*24; // ถ้าใช้ 1 ชุดตลอด 24 ชม.
+          // ถ้าผลิตครบวันเสาร์แล้วยังมีเวลา → สำรองวันจันทร์
+          const hoursForSat=needed/cap1;
+          if(hoursForSat<24){
+            const hoursLeft=24-hoursForSat;
+            const extraKg=hoursLeft*cap1;
+            if(extraKg>0){
+              targetKg=needed+Math.min(extraKg,MIN_STOCK);
+            }
+          }
+        } else {
+          // วันปกติ: demand = Filling วันถัดไป - stock ที่เหลือ
+          targetKg=Math.max(0,nextDemand-stock);
+        }
+
         let units=0,hoursNeeded=0,totalP=0;
-        if(needed>0){
-          const h1=needed/cap2; // ชม.ที่ต้องผลิตด้วย 1 ชุด
-          const maxH1=16; // 2 กะ = 16 ชม. (เช้า+บ่าย) สูงสุดสำหรับ 1 ชุด
-          if(h1<=maxH1){
-            // 1 ชุด — ใช้กะปกติก่อน OT ทีหลัง
+        if(targetKg>0){
+          // ลอง 1 ชุดก่อน
+          const h1=targetKg/cap1;
+          if(h1<=8){
+            // 1 ชุด ไม่เกิน 8 ชม. — ไม่มี OT พิเศษ
             units=1;
             hoursNeeded=Math.round(h1*10)/10;
-            totalP=cfg.mix1people||9;
+            totalP=cfg.mix1people||6;
           } else {
-            // 2 ชุด — needed มากเกินกว่า 2 กะจะรับได้
-            const h2=needed/(cap1+cap2);
-            units=2;
-            hoursNeeded=Math.round(Math.min(h2,workH)*10)/10;
-            totalP=cfg.mix2people||12;
+            // ต้องการมากกว่า 1 ชุด 8 ชม.
+            // ลอง 2 ชุด: ผลิตได้ (cap1+cap2)*t kg ใน t ชม.
+            const h2=targetKg/(cap1+cap2);
+            if(h2<=8){
+              // 2 ชุด ไม่เกิน 8 ชม. — OT แค่ช่วงสั้น
+              units=2;
+              hoursNeeded=Math.round(h2*10)/10;
+              totalP=cfg.mix2people||9;
+            } else {
+              // ต้องการนานกว่า 8 ชม. 2 ชุด
+              units=2;
+              hoursNeeded=Math.round(Math.min(h2,24)*10)/10;
+              totalP=cfg.mix2people||9;
+            }
           }
         }
+
+        // คำนวณ stock หลังผลิต
+        const produced=units===1?cap1*hoursNeeded:(cap1+cap2)*hoursNeeded;
+        const stockAfter=isSat?
+          Math.max(0,stock+produced-todayDemand): // เสาร์: stock + ผลิต - demand วันเสาร์
+          Math.max(0,stock+produced-todayDemand); // ปกติ: stock + ผลิต - demand วันนี้
+        stock=stockAfter;
+
         const oreoP=d.hasOreo&&units>0?1:0;
-        return{...d,demandLiter,needed,units,hoursNeeded,totalP:totalP+oreoP,oreoP,
+        return{...d,targetKg,units,hoursNeeded,totalP:totalP+oreoP,oreoP,
           shiftPeople:{morning:totalP,afternoon:totalP,night:totalP}};
       });
       toast('✅ โหลดแผน Filling แล้ว');
