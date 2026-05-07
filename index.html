@@ -1068,8 +1068,8 @@ const D={
   saveDisplayMode(v){LS.set('prod_display',v);FB.set('config/prod_display',v);},
   getMixingCfg(){return LS.get('mixing_cfg',{
     threshold:10000,  // ลิตร/วัน ที่ต้องเปิด 2 ชุด
-    mix1people:9,     // คน Mixing 1 ชุด
-    mix2people:12,    // คน Mixing 2 ชุด
+    mix1people:6,     // คน Mixing 1 ชุด
+    mix2people:9,     // คน Mixing 2 ชุด
     oreoLine:'Sandwich', // Line ที่ผลิต Oreo
     cap2:3000,        // ลิตร/ชม. Mixing ชุดเสริม (2)
     cap1:4000,        // ลิตร/ชม. Mixing ชุดหลัก (1)
@@ -1337,14 +1337,18 @@ const LSVC={
     let totalH=0,otH=0;
     Object.entries(data).forEach(([k,v])=>{
       if(!v||!v.total)return;
-      // k เป็น format '2026-04-28' (wKey format)
-      const wp=k.split('-');if(wp.length<3)return;
-      const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
-      if(isNaN(rd.getTime()))return;
-      // หา Monday ของสัปดาห์นั้น
-      const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
+      const wp=k.split('-');
       let inM=false;
-      for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mo){inM=true;break;}}
+      if(wp.length===2){
+        // format '2026-5' (yr-month)
+        if(parseInt(wp[0])===yr&&parseInt(wp[1])-1===mo)inM=true;
+      } else if(wp.length===3){
+        // format '2026-04-28' (wkKey)
+        const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+        if(isNaN(rd.getTime()))return;
+        const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
+        for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mo){inM=true;break;}}
+      }
       if(!inM)return;
       if(v.workHrs){totalH+=v.workHrs+(v.otHrs||0);otH+=(v.otHrs||0);}
       else if(v.total){totalH+=v.total*8+(v.otHrs||0);otH+=(v.otHrs||0);}
@@ -2089,7 +2093,6 @@ const PLAN={
       const allSched2=D.getSched();
       if(!allSched2[wk2])allSched2[wk2]={};
       const sched2=allSched2[wk2];
-      Object.keys(sched2).forEach(k=>delete sched2[k]);
 
       const procDepts=D.getDepts('proc').filter(d=>d!==AL);
       const leaveData2=D.getLeave();
@@ -2105,7 +2108,7 @@ const PLAN={
       for(let di=0;di<6;di++) if(!sched2[AL][di])sched2[AL][di]={morning:[],afternoon:[],night:[]};
 
       // กรองเฉพาะ proc emps
-      const procEmps=emps.filter(e=>(e.sys||'fill')==='proc'||(e.mainDept&&procDepts.includes(e.mainDept)));
+      const procEmps=emps.filter(e=>e.sys==='proc');
 
       this._dayData.forEach(dayInfo=>{
         const di=dayInfo.di;
@@ -2178,7 +2181,7 @@ const PLAN={
         nonOreoDepts.forEach(dept=>{
           const deptMorn=morningPool.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptMorn.forEach(e=>{
-            if(morningAssigned.length<needPpl){
+            if(morningAssigned.length<needPpl&&!usedEmps.has(e.name)){
               sched2[dept][di].morning.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
               morningAssigned.push(e);usedEmps.add(e.name);
             }
