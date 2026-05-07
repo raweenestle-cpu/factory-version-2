@@ -1996,79 +1996,88 @@ const PLAN={
       });
       // คำนวณ mixing แบบง่าย ไม่ recursive
       let stock=parseFloat(LS.get('mix_stock',0)||0); // stock ตั้งต้น
+      const capMain=cfg.cap2||3500;  // ชุดหลัก kg/hr
+      const capExtra=cfg.cap1||4500; // ชุดเพิ่ม kg/hr
+      const pplMain=cfg.mix1people||6;   // คน Mixing ชุดหลัก
+      const pplBoth=cfg.mix2people||9;   // คน Mixing เมื่อเปิด 2 ชุด
+
       this._dayData=dayData.map((d,idx2)=>{
-        const cap1=cfg.cap1||4500; // kg/hr ชุด 1
-        const cap2=cfg.cap2||3500; // kg/hr ชุด 2
-        const nextDay=dayData[idx2+1];
-
-        // demand = Filling วันถัดไป (หรือวันนี้ถ้าเป็นวันเสาร์)
-        // วันเสาร์: demand = Filling วันเสาร์ + stock สำรองขั้นต่ำ 30,000 kg (ถ้าเวลาเหลือ)
         const isSat=d.di===5;
-        const todayDemand=d.totalLiter; // demand วันนี้ที่ Filling ต้องการ
+        const todayDemand=d.totalLiter;
+        const nextDay=dayData[idx2+1];
         const nextDemand=nextDay?nextDay.totalLiter:0;
-
-        // stock สำรองขั้นต่ำวันจันทร์
         const MIN_STOCK=30000;
 
-        // วันเสาร์: ผลิตให้ครบ demand วันเสาร์ก่อน ถ้าเหลือสำรองวันจันทร์
+        // คำนวณ demand รวมที่ต้องผลิตวันนี้
         let targetKg=0;
         if(isSat){
-          // ต้องการ = demand วันเสาร์ - stock ที่เหลือ
+          // วันเสาร์: ผลิตให้ครบ demand วันเสาร์ก่อน แล้วสำรอง stock วันจันทร์
           const needed=Math.max(0,todayDemand-stock);
-          targetKg=needed; // ผลิตให้ครบวันเสาร์ก่อน
-          // เวลาที่มี = 24 ชม.
-          const maxKg1=cap1*24; // ถ้าใช้ 1 ชุดตลอด 24 ชม.
-          // ถ้าผลิตครบวันเสาร์แล้วยังมีเวลา → สำรองวันจันทร์
-          const hoursForSat=needed/cap1;
-          if(hoursForSat<24){
-            const hoursLeft=24-hoursForSat;
-            const extraKg=hoursLeft*cap1;
-            if(extraKg>0){
-              targetKg=needed+Math.min(extraKg,MIN_STOCK);
-            }
+          targetKg=needed;
+          const hrsForSat=needed/capMain;
+          if(hrsForSat<24){
+            const extra=(24-hrsForSat)*capMain;
+            if(extra>0)targetKg=needed+Math.min(extra,MIN_STOCK);
           }
         } else {
-          // วันปกติ: demand = Filling วันถัดไป - stock ที่เหลือ
           targetKg=Math.max(0,nextDemand-stock);
         }
 
-        // ผลิตทุกวันเสมอ — ถ้า stock พอแล้วให้สำรองวันถัดๆ ไป
-        // หา demand รวมที่ต้องสำรองจนถึงสัปดาห์ถัดไป
+        // ถ้า stock พอแล้ว → ผลิตสำรองวันถัดๆ ไป
         if(targetKg<=0){
-          // stock พอวันถัดไปแล้ว — ผลิตสำรองวันถัดถัดไป
           let futureNeed=0;
           for(let f=idx2+2;f<dayData.length;f++) futureNeed+=dayData[f].totalLiter;
-          // ผลิตอย่างน้อย 1 ชม. 1 ชุด เพื่อสะสม stock
-          targetKg=Math.min(cap1*8, Math.max(cap1*1, futureNeed-stock));
-          if(targetKg<0)targetKg=cap1*1; // อย่างน้อย 1 ชม.
-        }
-        let units=1,hoursNeeded=0,totalP=cfg.mix1people||6;
-        if(targetKg>0){
-          const h1=targetKg/cap1;
-          if(h1<=8){
-            // 1 ชุด ≤ 8 ชม.
-            units=1;
-            hoursNeeded=Math.round(h1*10)/10;
-            totalP=cfg.mix1people||6;
-          } else {
-            // 2 ชุด
-            const h2=targetKg/(cap1+cap2);
-            units=2;
-            hoursNeeded=Math.round(Math.min(h2,24)*10)/10;
-            totalP=cfg.mix2people||9;
-          }
+          targetKg=Math.min(capMain*8,Math.max(capMain*1,futureNeed-stock));
+          if(targetKg<0)targetKg=capMain*1;
         }
 
-        // คำนวณ stock หลังผลิต
-        const produced=units===1?cap1*hoursNeeded:(cap1+cap2)*hoursNeeded;
-        const stockAfter=isSat?
-          Math.max(0,stock+produced-todayDemand): // เสาร์: stock + ผลิต - demand วันเสาร์
-          Math.max(0,stock+produced-todayDemand); // ปกติ: stock + ผลิต - demand วันนี้
+        // === คำนวณกะที่ต้องเปิดชุดเพิ่ม ===
+        // ชุดหลักเดิน 3 กะเสมอ = capMain*24 kg/วัน
+        const prodMain3shift=capMain*24; // ผลิตได้ด้วยชุดหลักอย่างเดียว
+
+        // กะที่ประหยัดที่สุดในการเปิดชุดเพิ่ม = กะบ่าย (14:00-22:00)
+        // เพราะต่อเนื่องจากเช้า ลดการ setup
+        const shiftPpl={morning:pplMain, afternoon:pplMain, night:pplMain};
+        let extraShifts=[]; // กะที่ต้องเปิดชุดเพิ่ม
+        let totalProduced=prodMain3shift;
+        let hoursExtra=0;
+
+        if(targetKg>prodMain3shift){
+          // ต้องการมากกว่าที่ชุดหลักผลิตได้ → เปิดชุดเพิ่ม
+          const extraNeeded=targetKg-prodMain3shift;
+          const hrsNeeded=extraNeeded/capExtra;
+
+          if(hrsNeeded<=8){
+            // เปิดชุดเพิ่มกะบ่ายอย่างเดียวพอ
+            extraShifts=['afternoon'];
+            hoursExtra=Math.round(hrsNeeded*10)/10;
+            shiftPpl.afternoon=pplBoth;
+          } else if(hrsNeeded<=16){
+            // เปิดชุดเพิ่มกะบ่าย + กะดึก
+            extraShifts=['afternoon','night'];
+            hoursExtra=Math.round(Math.min(hrsNeeded,16)*10)/10;
+            shiftPpl.afternoon=pplBoth;
+            shiftPpl.night=pplBoth;
+          } else {
+            // เปิดชุดเพิ่มทั้ง 3 กะ
+            extraShifts=['morning','afternoon','night'];
+            hoursExtra=Math.round(Math.min(hrsNeeded,24)*10)/10;
+            shiftPpl.morning=pplBoth;
+            shiftPpl.afternoon=pplBoth;
+            shiftPpl.night=pplBoth;
+          }
+          totalProduced=prodMain3shift+(capExtra*hoursExtra);
+        }
+
+        const units=extraShifts.length>0?2:1;
+        const hoursNeeded=hoursExtra; // ชม.ที่เปิดชุดเพิ่ม
+        const oreoP=d.hasOreo&&units>0?1:0;
+
+        const stockAfter=Math.max(0,stock+totalProduced-todayDemand);
         stock=stockAfter;
 
-        const oreoP=d.hasOreo&&units>0?1:0;
-        return{...d,targetKg,units,hoursNeeded,totalP:totalP,oreoP,
-          shiftPeople:{morning:totalP,afternoon:totalP,night:totalP}};
+        return{...d,targetKg,units,hoursNeeded,extraShifts,totalP:pplMain,oreoP,
+          shiftPeople:shiftPpl};
       });
       toast('✅ โหลดแผน Filling แล้ว');
       this.renderMixSummary();
@@ -4243,14 +4252,15 @@ function checkRest(name,di,sh,sched){
 document.addEventListener('DOMContentLoaded',()=>{
   // รอ Firebase SDK โหลดครบก่อน
   function tryInit(retry=0){
-    if(typeof firebase==='undefined'||!firebase.initializeApp){
-      if(retry<10){setTimeout(()=>tryInit(retry+1),300);}
-      else{console.log('Firebase SDK not loaded');}
+    // เช็คว่า Firebase SDK โหลดครบทั้ง app และ database
+    if(typeof firebase==='undefined'||!firebase.initializeApp||!firebase.database){
+      if(retry<40){setTimeout(()=>tryInit(retry+1),500);}
+      else{toast('⚠️ Firebase โหลดไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต');console.error('Firebase SDK not loaded after retries');}
       return;
     }
     initFB();
     if(!fbDb){
-      if(retry<5){setTimeout(()=>tryInit(retry+1),500);}
+      if(retry<10){setTimeout(()=>tryInit(retry+1),500);}
       return;
     }
     APP.init();
