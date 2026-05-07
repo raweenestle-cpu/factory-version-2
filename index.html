@@ -451,7 +451,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
 
   <div class="page active" id="pg-dash">
     <div class="dash-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p><select id="chart-period" onchange="DASH.render()" style="margin-top:4px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif"><option value="year">📅 รายเดือน (ทั้งปี)</option><option value="month" selected>📆 รายสัปดาห์ (เดือนนี้)</option></select></div>
+      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p><select id="chart-period" onchange="DASH.render();DASH.renderPareto()" style="margin-top:4px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif"><option value="year">📅 รายเดือน (ทั้งปี)</option><option value="month" selected>📆 รายสัปดาห์ (เดือนนี้)</option></select></div>
       <button onclick="APP.toggleDesktop()" id="view-mode-btn"
         style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;flex-shrink:0">
         <span id="view-mode-icon">🖥️</span>
@@ -482,7 +482,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     <div class="pareto-card">
       <div class="pareto-hdr">
         <h3>📈 Pareto — เหตุผล OT เกิน</h3>
-        <select id="pp-sys" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif;margin-right:4px"><option value="all">ทุกระบบ</option><option value="proc">Process</option><option value="fill">Filling</option><option value="lsvc">Line Service</option></select><select id="pp-period" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif">
+        <select id="pp-sys" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif;margin-right:4px"><option value="all">ทุกระบบ</option><option value="proc">Process</option><option value="fill">Filling</option><option value="lsvc">Line Service</option></select><select id="pp-period" style="display:none" onchange="DASH.renderPareto()" style="padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif">
           <option value="week">สัปดาห์นี้</option><option value="month" selected>เดือนนี้</option><option value="year">ปีนี้</option>
         </select>
       </div>
@@ -1705,7 +1705,7 @@ const DASH={
     openMo('mo-w');
   },
   renderPareto(){
-    const per=document.getElementById('pp-period')?.value||'month';
+    const per=(document.getElementById('chart-period')?.value==='year'?'year':'month');
     const lsvcSys=document.getElementById('pp-sys')?.value||'all';
     let logs=[];
     if(lsvcSys==='proc'||lsvcSys==='all')logs=[...logs,...D.getOTLog('proc')];
