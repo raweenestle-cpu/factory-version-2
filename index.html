@@ -2108,7 +2108,7 @@ const PLAN={
       for(let di=0;di<6;di++) if(!sched2[AL][di])sched2[AL][di]={morning:[],afternoon:[],night:[]};
 
       // กรองเฉพาะ proc emps
-      const procEmps=emps.filter(e=>e.sys==='proc');
+      const procEmps=emps.filter(e=>(e.sys||'proc')==='proc');
 
       this._dayData.forEach(dayInfo=>{
         const di=dayInfo.di;
