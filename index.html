@@ -1020,7 +1020,7 @@ const D={
     const obj={};clean.forEach(emp=>{obj[emp.name.replace(/[.#$\[\]]/g,'_')]=emp;});
     FB.set(sys+'/emps',obj);
   },
-  getTarget(sys=S.sys){return LS.get('target_'+sys,15);},
+  getTarget(sys=S.sys){return LS.get('target_'+sys,null)||null;},
   saveTarget(v,sys=S.sys){LS.set('target_'+sys,v);FB.set(sys+'/target',v);},
   getMaxOT(){return LS.get('max_ot',3);},
   saveMaxOT(v){LS.set('max_ot',v);FB.set('config/max_ot',v);},
@@ -1176,7 +1176,7 @@ const LSVC={
     const pct=cur.total>0?Math.round(cur.otCount/cur.total*100):0;
 
     // ประวัติย้อนหลัง — แสดงทุก key ที่มีข้อมูล
-    const tgt2=D.getTarget()||25;
+    const tgt2=D.getTarget()||0;
     let hist='';
     const sortedKeys=Object.keys(data).sort().reverse().slice(0,12);
     sortedKeys.forEach(k=>{
@@ -1559,7 +1559,7 @@ const DASH={
     const _tmo=this.getTargetMo();
     const yr=_tmo.getFullYear();
     const curMo=_tmo.getMonth();
-    const tgt=D.getTarget()||25;
+    const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='lsvc'?'proc':type);
     const ids={proc:'pp',fill:'fp',lsvc:'lsp',total:'tp'};
     const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
     const pe=document.getElementById(ids[type]);if(!pe)return;
@@ -2031,30 +2031,30 @@ const PLAN={
           targetKg=Math.max(0,nextDemand-stock);
         }
 
-        let units=0,hoursNeeded=0,totalP=0;
+        // ผลิตทุกวันเสมอ — ถ้า stock พอแล้วให้สำรองวันถัดๆ ไป
+        // หา demand รวมที่ต้องสำรองจนถึงสัปดาห์ถัดไป
+        if(targetKg<=0){
+          // stock พอวันถัดไปแล้ว — ผลิตสำรองวันถัดถัดไป
+          let futureNeed=0;
+          for(let f=idx2+2;f<dayData.length;f++) futureNeed+=dayData[f].totalLiter;
+          // ผลิตอย่างน้อย 1 ชม. 1 ชุด เพื่อสะสม stock
+          targetKg=Math.min(cap1*8, Math.max(cap1*1, futureNeed-stock));
+          if(targetKg<0)targetKg=cap1*1; // อย่างน้อย 1 ชม.
+        }
+        let units=1,hoursNeeded=0,totalP=cfg.mix1people||6;
         if(targetKg>0){
-          // ลอง 1 ชุดก่อน
           const h1=targetKg/cap1;
           if(h1<=8){
-            // 1 ชุด ไม่เกิน 8 ชม. — ไม่มี OT พิเศษ
+            // 1 ชุด ≤ 8 ชม.
             units=1;
             hoursNeeded=Math.round(h1*10)/10;
             totalP=cfg.mix1people||6;
           } else {
-            // ต้องการมากกว่า 1 ชุด 8 ชม.
-            // ลอง 2 ชุด: ผลิตได้ (cap1+cap2)*t kg ใน t ชม.
+            // 2 ชุด
             const h2=targetKg/(cap1+cap2);
-            if(h2<=8){
-              // 2 ชุด ไม่เกิน 8 ชม. — OT แค่ช่วงสั้น
-              units=2;
-              hoursNeeded=Math.round(h2*10)/10;
-              totalP=cfg.mix2people||9;
-            } else {
-              // ต้องการนานกว่า 8 ชม. 2 ชุด
-              units=2;
-              hoursNeeded=Math.round(Math.min(h2,24)*10)/10;
-              totalP=cfg.mix2people||9;
-            }
+            units=2;
+            hoursNeeded=Math.round(Math.min(h2,24)*10)/10;
+            totalP=cfg.mix2people||9;
           }
         }
 
