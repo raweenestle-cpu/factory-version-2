@@ -3600,7 +3600,7 @@ const LEAVE={
     D.saveLeaveReq(reqs);
     this.selDates.clear();
     this.render();this.updBadge();
-    toast('✅ ยื่นขอลาแล้ว รอ Admin อนุมัติ');
+    toast('✅ ยื่นขอลาแล้ว รอ Admin อนุมัติ — ดูสถานะที่ปฏิทิน (สีเขียว=อนุมัติ, สีเหลือง=รออนุมัติ)');
   },
   render(){
     const el=document.getElementById('leave-list');if(!el)return;
@@ -3859,12 +3859,24 @@ function checkRest(name,di,sh,sched){
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
-  initFB();
-  if(!fbDb){setTimeout(()=>{initFB();APP.init();},1000);return;}
-  APP.init();
-  LEAVE.updBadge();
-  LEAVE.archivePast();
-  resetSessionTimer();
+  // รอ Firebase SDK โหลดครบก่อน
+  function tryInit(retry=0){
+    if(typeof firebase==='undefined'||!firebase.initializeApp){
+      if(retry<10){setTimeout(()=>tryInit(retry+1),300);}
+      else{console.log('Firebase SDK not loaded');}
+      return;
+    }
+    initFB();
+    if(!fbDb){
+      if(retry<5){setTimeout(()=>tryInit(retry+1),500);}
+      return;
+    }
+    APP.init();
+    LEAVE.updBadge();
+    LEAVE.archivePast();
+    resetSessionTimer();
+  }
+  tryInit();
 });
 
 ;
