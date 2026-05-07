@@ -451,7 +451,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
 
   <div class="page active" id="pg-dash">
     <div class="dash-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p><select id="chart-period" onchange="DASH.render();DASH.renderPareto()" style="margin-top:4px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif"><option value="year">📅 รายเดือน (ทั้งปี)</option><option value="month" selected>📆 รายสัปดาห์ (เดือนนี้)</option></select></div>
+      <div><h2>📊 Dashboard</h2><p id="dwl">สัปดาห์นี้</p><div style="display:flex;align-items:center;gap:8px;margin-top:6px"><button onclick="DASH.prevMo()" style="padding:4px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;cursor:pointer">◀</button><span id="dash-mo-label" style="font-size:13px;font-weight:700;color:var(--text);min-width:120px;text-align:center"></span><button onclick="DASH.nextMo()" style="padding:4px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;cursor:pointer">▶</button></div><select id="chart-period" onchange="DASH.render();DASH.renderPareto()" style="margin-top:4px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:'Sarabun',sans-serif"><option value="year">📅 รายเดือน (ทั้งปี)</option><option value="month" selected>📆 รายสัปดาห์ (เดือนนี้)</option></select></div>
       <button onclick="APP.toggleDesktop()" id="view-mode-btn"
         style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text2);font-size:12px;font-weight:700;font-family:'Sarabun',sans-serif;cursor:pointer;flex-shrink:0">
         <span id="view-mode-icon">🖥️</span>
@@ -1488,6 +1488,13 @@ const APP={
   }
 };
 const DASH={
+  _moOff:0,
+  prevMo(){this._moOff--;this.render();this.renderPareto();},
+  nextMo(){this._moOff++;this.render();this.renderPareto();},
+  getTargetMo(){
+    const now=new Date();
+    return new Date(now.getFullYear(),now.getMonth()+this._moOff,1);
+  },
   getOTWeek(sys,wkKey){
     // คำนวณ OT% ของสัปดาห์เดียว
     const depts=D.getDepts(sys);if(!depts||!depts.length)return null;
@@ -1540,12 +1547,18 @@ const DASH={
     this.renderPareto();
     const ws=S.wkStart,we=new Date(ws);we.setDate(we.getDate()+5);
     document.getElementById('dwl').textContent='สัปดาห์ที่ '+wNum(ws)+' ('+dStr(ws)+' - '+dStr(we)+')';
+    // update month nav label
+    const _tmo2=this.getTargetMo();
+    const MONTHS_TH2=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const lbl=document.getElementById('dash-mo-label');
+    if(lbl)lbl.textContent=MONTHS_TH2[_tmo2.getMonth()]+' '+(_tmo2.getFullYear());
   },
   renderChart(type){
     try{
     const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const yr=new Date().getFullYear();
-    const curMo=new Date().getMonth();
+    const _tmo=this.getTargetMo();
+    const yr=_tmo.getFullYear();
+    const curMo=_tmo.getMonth();
     const tgt=D.getTarget()||25;
     const ids={proc:'pp',fill:'fp',lsvc:'lsp',total:'tp'};
     const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
@@ -1706,6 +1719,7 @@ const DASH={
   },
   renderPareto(){
     const per=(document.getElementById('chart-period')?.value==='year'?'year':'month');
+    const _dashMoOff=this._moOff||0;
     const lsvcSys=document.getElementById('pp-sys')?.value||'all';
     let logs=[];
     if(lsvcSys==='proc'||lsvcSys==='all')logs=[...logs,...D.getOTLog('proc')];
@@ -1715,7 +1729,7 @@ const DASH={
     const flt=logs.filter(l=>{
       if(!l.date)return false;const d=new Date(l.date);
       if(per==='week'){const ws=getMonday(now);const we=new Date(ws);we.setDate(we.getDate()+6);return d>=ws&&d<=we;}
-      if(per==='month')return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+      if(per==='month'){const tm=new Date(now.getFullYear(),now.getMonth()+_dashMoOff,1);return d.getMonth()===tm.getMonth()&&d.getFullYear()===tm.getFullYear();}
       return d.getFullYear()===now.getFullYear();
     });
     const cnt={};
