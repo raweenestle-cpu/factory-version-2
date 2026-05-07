@@ -687,16 +687,9 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
   </div>
   <div class="bottomnav">
     <button class="nav-item active" id="nav-dash" onclick="APP.goPage('pg-dash')"><span class="nav-icon">📊</span>Dashboard</button>
-    <button class="nav-item" id="nav-plan" onclick="APP.goPage('pg-plan')"><span class="nav-icon">📋</span>วางแผน</button>
     <button class="nav-item" id="nav-sched" onclick="APP.goPage('pg-sched')"><span class="nav-icon">📅</span>ตารางกะ</button>
-    <button class="nav-item" id="nav-ot" onclick="APP.goPage('pg-ot')"><span class="nav-icon">👤</span>OT</button>
-    <button class="nav-item" id="nav-lsvc" onclick="APP.goPage('pg-lsvc')"><span class="nav-icon">🔧</span>Line Svc</button>
-    <button class="nav-item" id="nav-emp" onclick="APP.goPage('pg-emp')"><span class="nav-icon">👥</span>พนักงาน</button>
-    <button class="nav-item" id="nav-team" onclick="APP.goPage('pg-team',true)"><span class="nav-icon">🔄</span>ทีม</button>
-    <button class="nav-item" id="nav-leave" onclick="APP.goPage('pg-leave')"><span class="nav-icon">📋</span>การลา</button>
-    <button class="nav-item" id="nav-lhist" onclick="APP.goPage('pg-lhist')"><span class="nav-icon">📊</span>ประวัติลา</button>
-    <button class="nav-item" id="nav-products" onclick="APP.goPage('pg-products',true)"><span class="nav-icon">📦</span>Product</button>
-    <button class="nav-item" id="nav-settings" onclick="APP.goPage('pg-settings',true)"><span class="nav-icon">⚙️</span>ตั้งค่า</button>
+    <button class="nav-item" id="nav-leave" onclick="APP.goPage('pg-leave')"><span class="nav-icon">🗓️</span>การลา</button>
+    <button class="nav-item" id="nav-more" onclick="APP.openMore()"><span class="nav-icon">···</span>เพิ่มเติม</button>
   </div>
 </div>
 
@@ -1379,7 +1372,7 @@ const APP={
           if(sys===S.sys){SCHED.render();DASH.render();}
         }
       });
-      FB.on(sys+'/otlog',v=>{if(v){LS.set('otlog_'+sys,v);DASH.render();}});
+      FB.on(sys+'/otlog',v=>{if(v){LS.set('otlog_'+sys,v);DASH.render();DASH.renderPareto();}});
     });
     FB.on('signs',v=>{if(v)LS.set('signs',v);});
     FB.on('product_master',v=>{if(v){LS.set('product_master',v);PROD.render();}});
@@ -1428,6 +1421,7 @@ const APP={
     const cur=document.querySelector('.nav-item.active');
     if(cur){const pg=cur.id.replace('nav-','');const sb=document.getElementById('side-'+pg);if(sb)sb.classList.add('active');}
   },
+  openMore(){openMo('mo-more');},
   goPage(id,adminOnly=false,force=false){
     // sync sidebar
     document.querySelectorAll('.side-item').forEach(b=>b.classList.remove('active'));
@@ -1443,14 +1437,17 @@ const APP={
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
     document.getElementById(id)?.classList.add('active');
-    const nid='nav-'+id.replace('pg-','');
+    // ถ้าไปหน้าที่อยู่ใน more menu ให้ highlight nav-more แทน
+    const morePages=['pg-plan','pg-lsvc','pg-emp','pg-team','pg-lhist','pg-products','pg-settings','pg-ot'];
+    const nid=morePages.includes(id)?'nav-more':'nav-'+id.replace('pg-','');
     document.getElementById(nid)?.classList.add('active');
     if(id==='pg-dash')DASH.render();
     else if(id==='pg-plan')PLAN.render();
     else if(id==='pg-sched')SCHED.render();
-    else if(id==='pg-ot')OT.render();
+    else if(id==='pg-ot'){if(!S.user?.isAdmin){toast('❌ เฉพาะ Admin เท่านั้น');return;}OT.render();}
     else if(id==='pg-emp')EMP.render();
     else if(id==='pg-settings')SET.render();
+    else if(id==='pg-lsvc')LSVC.render();
     else if(id==='pg-team')TEAM.render();
     else if(id==='pg-leave'){LEAVE.render();}
     else if(id==='pg-lhist'){LHIST.render();}
@@ -3107,7 +3104,7 @@ const SCHED={
               displayEnd=String(Math.round(effEndH+otHrs)%24).padStart(2,'0')+':00';
             }
             const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
-            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="SCHED.openW('${ne}','${dept}',${di},'${sh}')">
+            return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="if(S.user?.isAdmin||S.user?.emp?.name==='${ne}')SCHED.openW('${ne}','${dept}',${di},'${sh}')">
               <span style="font-size:11px;font-weight:800">${w.name}</span>
               ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span>`:''} 
               ${sg?'✅':(w.ot?'✍️':'')}
