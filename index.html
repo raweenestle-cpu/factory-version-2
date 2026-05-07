@@ -1503,6 +1503,12 @@ const DASH={
     this.renderPareto();
     const ws=S.wkStart,we=new Date(ws);we.setDate(we.getDate()+5);
     document.getElementById('dwl').textContent='สัปดาห์ที่ '+wNum(ws)+' ('+dStr(ws)+' - '+dStr(we)+')';
+    // debug: แสดงจำนวน records ใน sched
+    const _sp=Object.keys(LS.get('sched_proc',{})).length;
+    const _sf=Object.keys(LS.get('sched_fill',{})).length;
+    const _sl=Object.keys(LS.get('lsvc_data',{})).length;
+    const _dbg=document.getElementById('dash-debug');
+    if(_dbg)_dbg.textContent='sched: proc='+_sp+' fill='+_sf+' lsvc='+_sl+' yr='+new Date().getFullYear();
   },
   renderChart(type){
     try{
