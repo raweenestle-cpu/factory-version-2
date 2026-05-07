@@ -691,6 +691,24 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     <button class="nav-item" id="nav-leave" onclick="APP.goPage('pg-leave')"><span class="nav-icon">🗓️</span>การลา</button>
     <button class="nav-item" id="nav-more" onclick="APP.openMore()"><span class="nav-icon">···</span>เพิ่มเติม</button>
   </div>
+
+  <!-- MORE MENU MODAL -->
+  <div class="mo hide" id="mo-more" style="align-items:flex-end;padding:0" onclick="if(event.target===this)closeMo('mo-more')">
+    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:480px;margin:0 auto;padding:16px 0 32px">
+      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px">
+        <button onclick="closeMo('mo-more');APP.goPage('pg-plan')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">📋</span><span style="font-size:11px;font-weight:700">วางแผน</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-lsvc')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">🔧</span><span style="font-size:11px;font-weight:700">Line Svc</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-emp')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">👥</span><span style="font-size:11px;font-weight:700">พนักงาน</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-team',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">🔄</span><span style="font-size:11px;font-weight:700">ทีม</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-ot')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">👤</span><span style="font-size:11px;font-weight:700">OT</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-lhist')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">📊</span><span style="font-size:11px;font-weight:700">ประวัติลา</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-products',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">📦</span><span style="font-size:11px;font-weight:700">Product</span></button>
+        <button onclick="closeMo('mo-more');APP.goPage('pg-settings',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">⚙️</span><span style="font-size:11px;font-weight:700">ตั้งค่า</span></button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div id="print-area"></div>
@@ -4180,75 +4198,6 @@ function forceSync(){
 }
 </script>
 
-
-  <!-- MORE MENU MODAL -->
-  <div class="mo hide" id="mo-more" style="align-items:flex-end;padding:0" onclick="if(event.target===this)closeMo('mo-more')">
-    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:480px;margin:0 auto;padding:16px 0 32px">
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px">
-        <button onclick="closeMo('mo-more');APP.goPage('pg-plan')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">📋</span><span style="font-size:11px;font-weight:700">วางแผน</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lsvc')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">🔧</span><span style="font-size:11px;font-weight:700">Line Svc</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-emp')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">👥</span><span style="font-size:11px;font-weight:700">พนักงาน</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-team',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">🔄</span><span style="font-size:11px;font-weight:700">ทีม</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-ot',false)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">👤</span><span style="font-size:11px;font-weight:700">OT</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lhist')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">📊</span><span style="font-size:11px;font-weight:700">ประวัติลา</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-products',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">📦</span><span style="font-size:11px;font-weight:700">Product</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-settings',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">⚙️</span><span style="font-size:11px;font-weight:700">ตั้งค่า</span></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MORE MENU MODAL -->
-  <div class="mo hide" id="mo-more" style="align-items:flex-end;padding:0" onclick="if(event.target===this)closeMo('mo-more')">
-    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:480px;margin:0 auto;padding:16px 0 32px">
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px">
-        <button onclick="closeMo('mo-more');APP.goPage('pg-plan')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">📋</span><span style="font-size:11px;font-weight:700">วางแผน</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lsvc')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">🔧</span><span style="font-size:11px;font-weight:700">Line Svc</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-emp')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">👥</span><span style="font-size:11px;font-weight:700">พนักงาน</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-team',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">🔄</span><span style="font-size:11px;font-weight:700">ทีม</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-ot')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">👤</span><span style="font-size:11px;font-weight:700">OT</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lhist')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">📊</span><span style="font-size:11px;font-weight:700">ประวัติลา</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-products',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">📦</span><span style="font-size:11px;font-weight:700">Product</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-settings',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">⚙️</span><span style="font-size:11px;font-weight:700">ตั้งค่า</span></button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MORE MENU MODAL -->
-  <div class="mo hide" id="mo-more" style="align-items:flex-end;padding:0" onclick="if(event.target===this)closeMo('mo-more')">
-    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:480px;margin:0 auto;padding:16px 0 32px">
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px">
-        <button onclick="closeMo('mo-more');APP.goPage('pg-plan')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F4CB;</span><span style="font-size:11px;font-weight:700">&#x0E27;&#x0E32;&#x0E07;&#x0E41;&#x0E1C;&#x0E19;</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lsvc')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F527;</span><span style="font-size:11px;font-weight:700">Line Svc</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-emp')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F465;</span><span style="font-size:11px;font-weight:700">&#x0E1E;&#x0E19;&#x0E31;&#x0E01;&#x0E07;&#x0E32;&#x0E19;</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-team',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F501;</span><span style="font-size:11px;font-weight:700">&#x0E17;&#x0E35;&#x0E21;</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-ot')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F464;</span><span style="font-size:11px;font-weight:700">OT</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lhist')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F4CA;</span><span style="font-size:11px;font-weight:700">&#x0E1B;&#x0E23;&#x0E30;&#x0E27;&#x0E31;&#x0E15;&#x0E34;&#x0E25;&#x0E32;</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-products',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F4E6;</span><span style="font-size:11px;font-weight:700">Product</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-settings',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:'Sarabun',sans-serif;cursor:pointer"><span style="font-size:24px">&#x2699;&#xFE0F;</span><span style="font-size:11px;font-weight:700">&#x0E15;&#x0E31;&#x0E49;&#x0E07;&#x0E04;&#x0E48;&#x0E32;</span></button>
-      </div>
-    </div>
-  </div>
-
-
-  <!-- MORE MENU MODAL -->
-  <div class="mo hide" id="mo-more" style="align-items:flex-end;padding:0" onclick="if(event.target===this)closeMo('mo-more')">
-    <div style="background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:480px;margin:0 auto;padding:16px 0 32px">
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px">
-        <button onclick="closeMo('mo-more');APP.goPage('pg-plan')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F4CB;</span><span style="font-size:11px;font-weight:700">วางแผน</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lsvc')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F527;</span><span style="font-size:11px;font-weight:700">Line Svc</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-emp')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F465;</span><span style="font-size:11px;font-weight:700">พนักงาน</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-team',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F501;</span><span style="font-size:11px;font-weight:700">ทีม</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-ot')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F464;</span><span style="font-size:11px;font-weight:700">OT</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-lhist')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F4CA;</span><span style="font-size:11px;font-weight:700">ประวัติลา</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-products',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x1F4E6;</span><span style="font-size:11px;font-weight:700">Product</span></button>
-        <button onclick="closeMo('mo-more');APP.goPage('pg-settings',true)" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--text);font-family:Sarabun,sans-serif;cursor:pointer"><span style="font-size:24px">&#x2699;&#xFE0F;</span><span style="font-size:11px;font-weight:700">ตั้งค่า</span></button>
-      </div>
-    </div>
-  </div>
 
 </body>
 </html>  id="pg-leave">
