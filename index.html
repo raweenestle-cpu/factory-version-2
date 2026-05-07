@@ -1326,9 +1326,10 @@ const LSVC={
     let totalH=0,otH=0;
     Object.entries(data).forEach(([k,v])=>{
       if(!v||!v.total)return;
-      // k เป็น wkKey format เช่น w2026-3-28
-      const wp=k.replace('w','').split('-');if(wp.length<3)return;
+      // k เป็น format '2026-04-28' (wKey format)
+      const wp=k.split('-');if(wp.length<3)return;
       const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+      if(isNaN(rd.getTime()))return;
       // หา Monday ของสัปดาห์นั้น
       const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
       let inM=false;
@@ -1540,7 +1541,7 @@ const DASH={
     const now=new Date();const curMo=now.getFullYear()===yr?now.getMonth():-1;
 
     // กราฟแท่งสวยงาม พร้อม label เดือน
-    ce.style.cssText='display:flex;align-items:flex-end;gap:2px;height:100%;padding-bottom:18px;position:relative;overflow:visible;cursor:pointer';
+    ce.style.cssText='display:flex;align-items:flex-end;gap:2px;height:70px;width:100%;padding-bottom:16px;position:relative;overflow:visible;cursor:pointer';
     ce.onclick=()=>this.openChart(type);
     ce.innerHTML=data.map((v,mi)=>{
       const isCur=mi===curMo;
