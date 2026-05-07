@@ -1559,7 +1559,8 @@ const DASH={
     const _tmo=this.getTargetMo();
     const yr=_tmo.getFullYear();
     const curMo=_tmo.getMonth();
-    const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='lsvc'?'proc':type);
+    const _t1=D.getTarget('proc')||0,_t2=D.getTarget('fill')||0;
+    const tgt=type==='total'?Math.round((_t1+_t2)/2):D.getTarget(type==='lsvc'?'proc':type)||0;
     const ids={proc:'pp',fill:'fp',lsvc:'lsp',total:'tp'};
     const cids={proc:'pch',fill:'fch',lsvc:'lschart',total:'tch'};
     const pe=document.getElementById(ids[type]);if(!pe)return;
@@ -2066,7 +2067,7 @@ const PLAN={
         stock=stockAfter;
 
         const oreoP=d.hasOreo&&units>0?1:0;
-        return{...d,targetKg,units,hoursNeeded,totalP:totalP+oreoP,oreoP,
+        return{...d,targetKg,units,hoursNeeded,totalP:totalP,oreoP,
           shiftPeople:{morning:totalP,afternoon:totalP,night:totalP}};
       });
       toast('✅ โหลดแผน Filling แล้ว');
