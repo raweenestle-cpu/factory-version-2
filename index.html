@@ -468,7 +468,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
         <div class="dc-sub" id="fc">0 คน</div><div class="dc-chart"><div class="mini-bars" id="fch"></div></div>
       </div>
       <div class="dash-card full" style="--accent:var(--amber)">
-        <div class="dc-label">Total OT%</div><div class="dc-val ot-none" id="tp">-</div>
+        <div class="dc-label">Line Service OT%</div></div><div class="dash-card" onclick="DASH.openChart('lsvc')"><div id="lsch" style="flex:1;position:relative;overflow:hidden"></div><div id="lp" class="dc-val">-</div><div class="dc-label">Total OT%</div><div class="dc-val ot-none" id="tp">-</div>
         <div class="dc-sub" id="tc">รวม 0 คน</div>
         <div class="dc-chart" style="height:80px"><div class="mini-bars" id="tch"></div></div>
       </div>
@@ -558,6 +558,13 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     </div>
     <div class="ot-list" id="otl"></div>
   </div>
+
+  <!-- LINE SERVICE PAGE -->
+  <div class="page hide" id="pg-lsvc">
+    <div class="pg-hdr"><h2>🔧 Line Service OT</h2></div>
+    <div class="pg-body" id="lsvc-body"></div>
+  </div>
+
 
   <div class="page" id="pg-emp">
     <div class="emp-tb">
@@ -677,6 +684,7 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
     <button class="nav-item" id="nav-plan" onclick="APP.goPage('pg-plan')"><span class="nav-icon">📋</span>วางแผน</button>
     <button class="nav-item" id="nav-sched" onclick="APP.goPage('pg-sched')"><span class="nav-icon">📅</span>ตารางกะ</button>
     <button class="nav-item" id="nav-ot" onclick="APP.goPage('pg-ot')"><span class="nav-icon">👤</span>OT</button>
+    <button class="nav-item" id="nav-lsvc" onclick="APP.goPage('pg-lsvc')"><span class="nav-icon">🔧</span>Line Svc</button>
     <button class="nav-item" id="nav-emp" onclick="APP.goPage('pg-emp')"><span class="nav-icon">👥</span>พนักงาน</button>
     <button class="nav-item" id="nav-team" onclick="APP.goPage('pg-team',true)"><span class="nav-icon">🔄</span>ทีม</button>
     <button class="nav-item" id="nav-leave" onclick="APP.goPage('pg-leave')"><span class="nav-icon">📋</span>การลา</button>
@@ -1126,6 +1134,111 @@ const AUTH={
   }
 };
 
+
+
+const LSVC={
+  render(){
+    const el=document.getElementById('lsvc-body');if(!el)return;
+    const isAdmin=S.user?.isAdmin;
+    const yr=new Date().getFullYear();
+    const mo=new Date().getMonth();
+    const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const MONTHS_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const data=LS.get('lsvc_data',{});
+    const key=yr+'-'+(mo+1);
+    const cur=data[key]||{total:0,otCount:0,otHrs:0,workHrs:0,note:''};
+    const pct=cur.total>0?Math.round(cur.otCount/cur.total*100):0;
+
+    // ประวัติย้อนหลัง 6 เดือน
+    let hist='';
+    for(let i=5;i>=0;i--){
+      const d=new Date(yr,mo-i,1);
+      const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      const v=data[k];
+      if(!v)continue;
+      const p=v.total>0?Math.round(v.otCount/v.total*100):0;
+      hist+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--text)">${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="font-size:11px;color:var(--text2)">OT ${v.otCount}/${v.total} คน</span>
+          <span style="font-size:11px;color:var(--text2)">${v.otHrs} ชม.</span>
+          <span style="font-size:13px;font-weight:900;color:${p>30?'var(--red2)':'var(--green2)'}">${p}%</span>
+        </div>
+      </div>`;
+    }
+
+    el.innerHTML=`<div style="padding:14px">
+      <!-- card OT% เดือนนี้ -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;text-align:center">
+        <div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:4px">Line Service OT% เดือนนี้</div>
+        <div style="font-size:36px;font-weight:900;color:${pct>30?'var(--red2)':'var(--green2)'}">${pct}%</div>
+        <div style="font-size:11px;color:var(--text3)">${cur.otCount} / ${cur.total} คน | ${cur.otHrs} ชม. OT</div>
+      </div>
+
+      ${isAdmin?`
+      <!-- ฟอร์มกรอกข้อมูล -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:900;color:var(--text);margin-bottom:12px">📝 กรอกข้อมูล ${MONTHS_FULL[mo]} ${yr}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label class="fl">พนักงานทั้งหมด (คน)</label>
+            <input class="fs" type="number" id="lsvc-total" value="${cur.total}" min="0" style="width:100%">
+          </div>
+          <div>
+            <label class="fl">จำนวนคนที่ทำ OT</label>
+            <input class="fs" type="number" id="lsvc-otcount" value="${cur.otCount}" min="0" style="width:100%">
+          </div>
+          <div>
+            <label class="fl">ชั่วโมงทำงานปกติ</label>
+            <input class="fs" type="number" id="lsvc-workhrs" value="${cur.workHrs}" min="0" style="width:100%">
+          </div>
+          <div>
+            <label class="fl">ชั่วโมง OT รวม</label>
+            <input class="fs" type="number" id="lsvc-othrs" value="${cur.otHrs}" min="0" style="width:100%">
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="fl">หมายเหตุ ${cur.otHrs>1?'<span style="color:var(--red2)">* จำเป็น (OT เกิน 1 ชม.)</span>':''}</label>
+          <input class="fs" type="text" id="lsvc-note" value="${cur.note||''}" placeholder="ระบุเหตุผล OT..." style="width:100%">
+        </div>
+        <button onclick="LSVC.save()" style="width:100%;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">💾 บันทึก</button>
+      </div>`:''}
+
+      <!-- ประวัติย้อนหลัง -->
+      ${hist?`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+        <div style="font-size:13px;font-weight:900;color:var(--text);margin-bottom:8px">📈 ประวัติย้อนหลัง</div>
+        ${hist}
+      </div>`:''}
+    </div>`;
+  },
+
+  save(){
+    const total=parseInt(document.getElementById('lsvc-total')?.value||0);
+    const otCount=parseInt(document.getElementById('lsvc-otcount')?.value||0);
+    const workHrs=parseInt(document.getElementById('lsvc-workhrs')?.value||0);
+    const otHrs=parseInt(document.getElementById('lsvc-othrs')?.value||0);
+    const note=document.getElementById('lsvc-note')?.value?.trim()||'';
+    if(otHrs>1&&!note){toast('❌ กรุณาระบุหมายเหตุเนื่องจาก OT เกิน 1 ชม.');return;}
+    if(otCount>total){toast('❌ จำนวนคน OT มากกว่าพนักงานทั้งหมด');return;}
+    const yr=new Date().getFullYear();const mo=new Date().getMonth();
+    const key=yr+'-'+(mo+1);
+    const data=LS.get('lsvc_data',{});
+    data[key]={total,otCount,otHrs,workHrs,note,updatedAt:new Date().toISOString()};
+    LS.set('lsvc_data',data);
+    FB.set('lsvc_data',data);
+    DASH.render();
+    this.render();
+    toast('✅ บันทึกข้อมูล Line Service แล้ว');
+  },
+
+  getOT(yr,mo){
+    const data=LS.get('lsvc_data',{});
+    const key=yr+'-'+(mo+1);
+    const v=data[key];
+    if(!v||!v.total)return null;
+    return Math.round(v.otCount/v.total*100);
+  }
+};
 const APP={
   init(){
     // restore view mode
@@ -1140,7 +1253,8 @@ const APP={
     const renders=[
       ()=>DASH.render(),()=>PLAN.render(),()=>SCHED.render(),
       ()=>OT.render(),()=>EMP.render(),()=>SET.render(),
-      ()=>LEAVE.render(),()=>LEAVE.updBadge(),()=>LEAVE.archivePast()
+      ()=>LEAVE.render(),()=>LEAVE.updBadge(),()=>LEAVE.archivePast(),
+      ()=>LSVC.render()
     ];
     renders.forEach(fn=>{try{fn();}catch(e){console.log('render error:',e.message);}});
     // re-render หลัง Firebase sync เสร็จ
@@ -1177,6 +1291,7 @@ const APP={
     FB.on('config/ot_reasons',v=>{if(v&&v.length)LS.set('ot_reasons',v);});
     FB.on('team_cfg',v=>{if(v)LS.set('team_cfg',v);});
     FB.on('leave_req',v=>{if(v){LS.set('leave_req',v);LEAVE.render();LEAVE.updBadge();}});
+    FB.on('lsvc_data',v=>{if(v){LS.set('lsvc_data',v);LSVC.render();DASH.render();}});
     FB.on('leave_hist',v=>{if(v)LS.set('leave_hist',v);});
   },
   setSys(sys){
@@ -1267,7 +1382,7 @@ const DASH={
   },
   render(){
     updEmpCnt();
-    ['proc','fill','total'].forEach(t=>this.renderChart(t));
+    ['proc','fill','lsvc','total'].forEach(t=>this.renderChart(t));
     this.renderPareto();
     const ws=S.wkStart,we=new Date(ws);we.setDate(we.getDate()+5);
     document.getElementById('dwl').textContent='สัปดาห์ที่ '+wNum(ws)+' ('+dStr(ws)+' - '+dStr(we)+')';
@@ -1279,15 +1394,44 @@ const DASH={
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
+    else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
     else{
-      const p=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
-      const f=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
-      data=Array.from({length:12},(_,mi)=>{const vs=[p[mi],f[mi]].filter(v=>v!=null);return vs.length?Math.round(vs.reduce((a,b)=>a+b,0)/vs.length):null;});
+      // Total = ชม.OT รวม 3 แผนก / ชม.ทำงานรวม 3 แผนก
+      data=Array.from({length:12},(_,mi)=>{
+        // proc + fill: ดึงจาก sched จริง
+        let totalH=0,otH=0;
+        ['proc','fill'].forEach(sys=>{
+          const depts=D.getDepts(sys);if(!depts||!depts.length)return;
+          const all=LS.get('sched_'+sys,{});
+          Object.entries(all).forEach(([wk,wd])=>{
+            if(!wd)return;
+            const wp=wk.split('-');if(wp.length<3)return;
+            const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+            const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
+            let inM=false;
+            for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mi){inM=true;break;}}
+            if(!inM)return;
+            Object.keys(wd).forEach(d=>{
+              if(typeof wd[d]!=='object')return;
+              for(let di=0;di<6;di++){
+                const day=wd[d]?.[di]||wd[d]?.[String(di)];if(!day)return;
+                SHS.forEach(sh=>(day[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;totalH+=8+h;otH+=h;}));
+              }
+            });
+          });
+        });
+        // lsvc: ดึงจาก lsvc_data
+        const lData=LS.get('lsvc_data',{});
+        const lKey=yr+'-'+(mi+1);
+        const lv=lData[lKey];
+        if(lv&&lv.workHrs){totalH+=lv.workHrs+(lv.otHrs||0);otH+=(lv.otHrs||0);}
+        return totalH>0?Math.round(otH/totalH*100):null;
+      });
     }
     const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
     const latest=[...data].reverse().find(v=>v!=null);
-    const ids={proc:'pp',fill:'fp',total:'tp'};
-    const cids={proc:'pch',fill:'fch',total:'tch'};
+    const ids={proc:'pp',fill:'fp',lsvc:'lp',total:'tp'};
+    const cids={proc:'pch',fill:'fch',lsvc:'lsch',total:'tch'};
     const pe=document.getElementById(ids[type]);
     if(pe){pe.textContent=latest!=null?latest+'%':'-';pe.className='dc-val '+(latest==null?'ot-none':latest>tgt?'ot-over':'ot-ok');}
     const ce=document.getElementById(cids[type]);if(!ce)return;
@@ -1322,10 +1466,39 @@ const DASH={
     let data=[];
     if(type==='proc')data=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
     else if(type==='fill')data=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
+    else if(type==='lsvc')data=Array.from({length:12},(_,mi)=>LSVC.getOT(yr,mi));
     else{
-      const p=Array.from({length:12},(_,mi)=>this.getOT('proc',yr,mi));
-      const f=Array.from({length:12},(_,mi)=>this.getOT('fill',yr,mi));
-      data=Array.from({length:12},(_,mi)=>{const vs=[p[mi],f[mi]].filter(v=>v!=null);return vs.length?Math.round(vs.reduce((a,b)=>a+b,0)/vs.length):null;});
+      // Total = ชม.OT รวม 3 แผนก / ชม.ทำงานรวม 3 แผนก
+      data=Array.from({length:12},(_,mi)=>{
+        // proc + fill: ดึงจาก sched จริง
+        let totalH=0,otH=0;
+        ['proc','fill'].forEach(sys=>{
+          const depts=D.getDepts(sys);if(!depts||!depts.length)return;
+          const all=LS.get('sched_'+sys,{});
+          Object.entries(all).forEach(([wk,wd])=>{
+            if(!wd)return;
+            const wp=wk.split('-');if(wp.length<3)return;
+            const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+            const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
+            let inM=false;
+            for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mi){inM=true;break;}}
+            if(!inM)return;
+            Object.keys(wd).forEach(d=>{
+              if(typeof wd[d]!=='object')return;
+              for(let di=0;di<6;di++){
+                const day=wd[d]?.[di]||wd[d]?.[String(di)];if(!day)return;
+                SHS.forEach(sh=>(day[sh]||[]).forEach(w=>{const h=w.ot?(w.otHrs||4):0;totalH+=8+h;otH+=h;}));
+              }
+            });
+          });
+        });
+        // lsvc: ดึงจาก lsvc_data
+        const lData=LS.get('lsvc_data',{});
+        const lKey=yr+'-'+(mi+1);
+        const lv=lData[lKey];
+        if(lv&&lv.workHrs){totalH+=lv.workHrs+(lv.otHrs||0);otH+=(lv.otHrs||0);}
+        return totalH>0?Math.round(otH/totalH*100):null;
+      });
     }
     const tgt=type==='total'?Math.round((D.getTarget('proc')+D.getTarget('fill'))/2):D.getTarget(type==='proc'?'proc':'fill');
     const mx=Math.max(...data.filter(v=>v!=null),tgt,1);
