@@ -467,10 +467,10 @@ table.pr-tbl, #print-area table.pr-tbl td.center{text-align:center}
         <div class="dc-label">Filling OT%</div><div class="dc-val ot-none" id="fp">-</div>
         <div class="dc-sub" id="fc">0 คน</div><div class="dc-chart"><div class="mini-bars" id="fch"></div></div>
       </div>
-      <div class="dash-card full" style="--accent:var(--amber)">
+      <div class="dash-card" onclick="DASH.openChart('lsvc')" style="--accent:var(--amber)">
         <div class="dc-val ot-none" id="lsp">-</div>
         <div class="dc-label">Line Service OT%</div>
-        <div class="dc-chart" style="height:80px"><div class="mini-bars" id="lschart" style="flex:1;position:relative;overflow:hidden"></div></div>
+        <div class="dc-chart"><div id="lschart" style="flex:1;position:relative;overflow:hidden;height:60px"></div></div>
       </div>
       <div class="dash-card full" style="--accent:var(--teal)" onclick="DASH.openChart('total')">
         <div class="dc-val ot-none" id="tp">-</div>
@@ -1143,29 +1143,39 @@ const AUTH={
 
 
 const LSVC={
+  wkOff:0,
+
+  prevWk(){this.wkOff--;this.render();},
+  nextWk(){this.wkOff++;this.render();},
+
+  getWkStart(){
+    const ws=new Date(S.wkStart);
+    ws.setDate(ws.getDate()+this.wkOff*7);
+    return ws;
+  },
+
   render(){
     const el=document.getElementById('lsvc-body');if(!el)return;
     const isAdmin=S.user?.isAdmin;
-    const yr=new Date().getFullYear();
-    const mo=new Date().getMonth();
-    const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    const MONTHS_FULL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+    const ws=this.getWkStart();
+    const we=new Date(ws);we.setDate(ws.getDate()+5);
+    const wk=wKey(ws);
     const data=LS.get('lsvc_data',{});
-    const key=yr+'-'+(mo+1);
-    const cur=data[key]||{total:0,otCount:0,otHrs:0,workHrs:0,note:''};
+    const cur=data[wk]||{total:0,otCount:0,otHrs:0,workHrs:0,reasons:[]};
     const pct=cur.total>0?Math.round(cur.otCount/cur.total*100):0;
 
-    // ประวัติย้อนหลัง 6 เดือน
+    // ประวัติย้อนหลัง 8 สัปดาห์
     let hist='';
-    for(let i=5;i>=0;i--){
-      const d=new Date(yr,mo-i,1);
-      const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    for(let i=7;i>=0;i--){
+      const ws2=new Date(S.wkStart);ws2.setDate(ws2.getDate()+(this.wkOff-i)*7);
+      const k=wKey(ws2);
       const v=data[k];
-      if(!v)continue;
+      if(!v||!v.total)continue;
       const p=v.total>0?Math.round(v.otCount/v.total*100):0;
+      const we2=new Date(ws2);we2.setDate(ws2.getDate()+5);
       hist+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="font-size:12px;font-weight:700;color:var(--text)">${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>
-        <div style="display:flex;gap:12px;align-items:center">
+        <div style="font-size:11px;font-weight:700;color:var(--text)">สัปดาห์ที่ ${wNum(ws2)}: ${dStr(ws2)}</div>
+        <div style="display:flex;gap:10px;align-items:center">
           <span style="font-size:11px;color:var(--text2)">OT ${v.otCount}/${v.total} คน</span>
           <span style="font-size:11px;color:var(--text2)">${v.otHrs} ชม.</span>
           <span style="font-size:13px;font-weight:900;color:${p>30?'var(--red2)':'var(--green2)'}">${p}%</span>
@@ -1174,9 +1184,19 @@ const LSVC={
     }
 
     el.innerHTML=`<div style="padding:14px">
-      <!-- card OT% เดือนนี้ -->
+      <!-- week nav -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;background:var(--bg2);padding:8px 12px;border-radius:10px">
+        <button onclick="LSVC.prevWk()" style="padding:6px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer">◀</button>
+        <div style="text-align:center">
+          <div style="font-size:13px;font-weight:900;color:var(--text)">สัปดาห์ที่ ${wNum(ws)}</div>
+          <div style="font-size:11px;color:var(--text3)">${dStr(ws)} – ${dStr(we)}</div>
+        </div>
+        <button onclick="LSVC.nextWk()" style="padding:6px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer">▶</button>
+      </div>
+
+      <!-- card OT% สัปดาห์นี้ -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;text-align:center">
-        <div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:4px">Line Service OT% เดือนนี้</div>
+        <div style="font-size:11px;font-weight:800;color:var(--text3);margin-bottom:4px">Line Service OT% สัปดาห์นี้</div>
         <div style="font-size:36px;font-weight:900;color:${pct>30?'var(--red2)':'var(--green2)'}">${pct}%</div>
         <div style="font-size:11px;color:var(--text3)">${cur.otCount} / ${cur.total} คน | ${cur.otHrs} ชม. OT</div>
       </div>
@@ -1184,7 +1204,7 @@ const LSVC={
       ${isAdmin?`
       <!-- ฟอร์มกรอกข้อมูล -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:900;color:var(--text);margin-bottom:12px">📝 กรอกข้อมูล ${MONTHS_FULL[mo]} ${yr}</div>
+        <div style="font-size:13px;font-weight:900;color:var(--text);margin-bottom:12px">📝 กรอกข้อมูลสัปดาห์ที่ ${wNum(ws)}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
             <label class="fl">พนักงานทั้งหมด (คน)</label>
@@ -1203,11 +1223,7 @@ const LSVC={
             <input class="fs" type="number" id="lsvc-othrs" value="${cur.otHrs}" min="0" style="width:100%">
           </div>
         </div>
-        <div style="margin-bottom:10px">
-          <label class="fl">หมายเหตุ ${cur.otHrs>1?'<span style="color:var(--red2)">* จำเป็น (OT เกิน 1 ชม.)</span>':''}</label>
-          <input class="fs" type="text" id="lsvc-note" value="${cur.note||''}" placeholder="ระบุเหตุผล OT..." style="width:100%">
-        </div>
-        <button onclick="LSVC.save()" style="width:100%;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">💾 บันทึก</button>
+        <button onclick="LSVC.save()" style="width:100%;padding:10px;background:var(--blue);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;font-family:'Sarabun',sans-serif;cursor:pointer">💾 บันทึก${cur.otHrs>0?' (ต้องกระจายชั่วโมง OT)':''}</button>
       </div>`:''}
 
       <!-- ประวัติย้อนหลัง -->
@@ -1223,13 +1239,11 @@ const LSVC={
     const otCount=parseInt(document.getElementById('lsvc-otcount')?.value||0);
     const workHrs=parseInt(document.getElementById('lsvc-workhrs')?.value||0);
     const otHrs=parseInt(document.getElementById('lsvc-othrs')?.value||0);
-    const note=document.getElementById('lsvc-note')?.value?.trim()||'';
     if(otCount>total){toast('❌ จำนวนคน OT มากกว่าพนักงานทั้งหมด');return;}
     if(otHrs<1){
       this._doSave(total,otCount,workHrs,otHrs,[]);
       return;
     }
-    // เปิด popup กระจาย OT ตาม reason
     this._pending={total,otCount,workHrs,otHrs};
     this._openDistrib(otHrs);
   },
@@ -1240,10 +1254,10 @@ const LSVC={
     const renderR=()=>{
       const used=rows.reduce((s,r)=>s+(r.hours||0),0);
       const rem=otHrs-used;
-      document.getElementById('lsvc-or-remaining').innerHTML=
-        rem===0?'<span style="color:var(--green2)">✅ ครบแล้ว!</span>'
-        :`⏳ ยังเหลือ: <span style="color:var(--red2)">${rem}</span> ชม.`;
-      document.getElementById('lsvc-or-rows').innerHTML=rows.map((r,i)=>`
+      const remEl=document.getElementById('lsvc-or-remaining');
+      if(remEl)remEl.innerHTML=rem===0?'<span style="color:var(--green2)">✅ ครบแล้ว!</span>':`⏳ ยังเหลือ: <span style="color:var(--red2)">${rem}</span> ชม.`;
+      const rowsEl=document.getElementById('lsvc-or-rows');
+      if(rowsEl)rowsEl.innerHTML=rows.map((r,i)=>`
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <select onchange="window._lsvcRows[${i}].reason=this.value" style="flex:1;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Sarabun',sans-serif;font-size:12px">
             ${reasons.map(r=>`<option value="${r}" ${r===rows[i].reason?'selected':''}>${r}</option>`).join('')}
@@ -1255,18 +1269,14 @@ const LSVC={
             style="padding:6px 10px;background:rgba(239,68,68,.15);border:none;border-radius:8px;color:var(--red2);cursor:pointer">✕</button>
         </div>`).join('');
       const canSave=rem===0;
-      document.getElementById('lsvc-save-btn').disabled=!canSave;
-      document.getElementById('lsvc-save-btn').style.opacity=canSave?'1':'0.5';
+      const btn=document.getElementById('lsvc-save-btn');
+      if(btn){btn.disabled=!canSave;btn.style.opacity=canSave?'1':'0.5';}
     };
     window._lsvcRows=rows;
     window._lsvcRenderR=renderR;
-    const mo=document.getElementById('mo-or');
-    if(!mo)return;
+    const mo=document.getElementById('mo-or');if(!mo)return;
     mo.innerHTML=`<div class="md"><div class="md-handle"></div>
-      <div class="md-hdr">
-        <div class="md-title">⚠️ กระจาย OT Line Service</div>
-        <button class="md-close" onclick="closeMo('mo-or')">✕</button>
-      </div>
+      <div class="md-hdr"><div class="md-title">⚠️ กระจาย OT Line Service</div><button class="md-close" onclick="closeMo('mo-or')">✕</button></div>
       <div class="md-body">
         <div class="ot-warn">
           <div class="ot-warn-t">OT รวม ${otHrs} ชม.</div>
@@ -1289,44 +1299,47 @@ const LSVC={
 
   _confirmDistrib(){
     const p=this._pending;if(!p)return;
-    const rows=window._lsvcRows||[];
-    this._doSave(p.total,p.otCount,p.workHrs,p.otHrs,rows);
+    this._doSave(p.total,p.otCount,p.workHrs,p.otHrs,window._lsvcRows||[]);
     closeMo('mo-or');
   },
 
   _doSave(total,otCount,workHrs,otHrs,reasons){
-    const yr=new Date().getFullYear();const mo=new Date().getMonth();
-    const key=yr+'-'+(mo+1);
+    const ws=this.getWkStart();
+    const wk=wKey(ws);
     const data=LS.get('lsvc_data',{});
-    data[key]={total,otCount,otHrs,workHrs,reasons,updatedAt:new Date().toISOString()};
+    data[wk]={total,otCount,otHrs,workHrs,reasons,wk,updatedAt:new Date().toISOString()};
     LS.set('lsvc_data',data);
-    FB.set('lsvc_data',data);
-    // save ลง otlog_lsvc
+    FB.set('lsvc/data',data);
     if(reasons.length>0){
       const log=LS.get('otlog_lsvc',[]);
-      const entry={
-        date:new Date().toISOString(),
-        reasons,
-        otHrs,
-        sys:'lsvc'
-      };
-      log.push(entry);
+      log.push({date:ws.toISOString(),reasons,otHrs,sys:'lsvc',wk});
       LS.set('otlog_lsvc',log);
       FB.set('lsvc/otlog',log);
     }
     DASH.render();
     this.render();
-    toast('✅ บันทึกข้อมูล Line Service แล้ว');
+    toast('✅ บันทึกข้อมูล Line Service สัปดาห์ที่ '+wNum(ws)+' แล้ว');
   },
 
   getOT(yr,mo){
     const data=LS.get('lsvc_data',{});
-    const key=yr+'-'+(mo+1);
-    const v=data[key];
-    if(!v||!v.total)return null;
-    return Math.round(v.otCount/v.total*100);
+    let totalH=0,otH=0;
+    Object.entries(data).forEach(([k,v])=>{
+      if(!v||!v.total)return;
+      // k เป็น wkKey format เช่น w2026-3-28
+      const wp=k.replace('w','').split('-');if(wp.length<3)return;
+      const rd=new Date(parseInt(wp[0]),parseInt(wp[1])-1,parseInt(wp[2]));
+      // หา Monday ของสัปดาห์นั้น
+      const dw=rd.getDay();const mn=new Date(rd);mn.setDate(rd.getDate()-(dw===0?6:dw-1));
+      let inM=false;
+      for(let dd=0;dd<6;dd++){const d2=new Date(mn);d2.setDate(mn.getDate()+dd);if(d2.getFullYear()===yr&&d2.getMonth()===mo){inM=true;break;}}
+      if(!inM)return;
+      if(v.workHrs){totalH+=v.workHrs+(v.otHrs||0);otH+=(v.otHrs||0);}
+      else if(v.total){totalH+=v.total*8+(v.otHrs||0);otH+=(v.otHrs||0);}
+    });
+    return totalH>0?Math.round(otH/totalH*100):null;
   }
-};
+};;
 const APP={
   init(){
     // restore view mode
@@ -2571,13 +2584,16 @@ const SET={
   chgPin(){const p=document.getElementById('nap').value.trim();if(p.length!==6||isNaN(p)){toast('❌ ต้องเป็นตัวเลข 6 หลัก');return;}D.savePin(p);document.getElementById('nap').value='';toast('✅ เปลี่ยนรหัสแล้ว');},
   clearSched(){confirm2('ล้างตารางกะและ OT ทั้งหมด?\nข้อมูลจะหายถาวร',()=>{
     ['proc','fill'].forEach(sys=>{LS.del('sched_'+sys);LS.del('otlog_'+sys);FB.remove(sys+'/sched');FB.remove(sys+'/otlog');});
+    // ล้าง Line Service ด้วย
+    LS.del('lsvc_data');LS.del('otlog_lsvc');
+    FB.remove('lsvc/data');FB.remove('lsvc/otlog');
     Object.keys(localStorage).filter(k=>k.startsWith('fv2_sg_')).forEach(k=>localStorage.removeItem(k));
     FB.remove('signs');
     PLAN._dayData=null;
     const ms2=document.getElementById('mixing-summary');
     if(ms2)ms2.style.display='none';
-    SCHED.render();DASH.render();DASH.renderPareto();
-    toast('✅ ล้างตารางกะแล้ว');
+    SCHED.render();DASH.render();DASH.renderPareto();LSVC.render();
+    toast('✅ ล้างตารางกะและ Line Service แล้ว');
   });},
   addDept(){
     const inp=document.getElementById('new-mat-name');
