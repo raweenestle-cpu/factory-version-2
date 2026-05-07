@@ -3456,7 +3456,7 @@ const EMP={
   _photo:null,
   render(q=''){
     const emps=D.getEmps();
-    const list=q?emps.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())):emps;
+    const list=q?emps.filter(e=>e.name.toLowerCase().includes(q.toLowerCase())||(S.user?.isAdmin&&e.pin&&e.pin.includes(q))):emps;
     const el=document.getElementById('el');if(!el)return;
     if(!list.length){el.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3)">${q?'\u0e44\u0e21\u0e48\u0e1e\u0e1a':'\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19 \u0e01\u0e14 + \u0e40\u0e1e\u0e34\u0e48\u0e21'}</div>`;updEmpCnt();return;}
     el.innerHTML=list.map(e=>{
@@ -3536,7 +3536,7 @@ const EMP={
     if(!name){toast('\u274c \u0e43\u0e2a\u0e48\u0e0a\u0e37\u0e48\u0e2d');return;}if(!md){toast('\u274c \u0e40\u0e25\u0e37\u0e2d\u0e01\u0e41\u0e1c\u0e19\u0e01\u0e2b\u0e25\u0e31\u0e01');return;}
     const emps=D.getEmps();
     if(idx<0&&(!pin||pin.length!==4)){toast('\u274c PIN \u0e15\u0e49\u0e2d\u0e07 4 \u0e2b\u0e25\u0e31\u0e01');return;}
-    if(idx<0&&emps.find(e=>e.pin===pin)){toast('\u274c PIN \u0e19\u0e35\u0e49\u0e21\u0e35\u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27');return;}
+    const dupEmp=emps.find(e=>e.pin===pin&&(idx<0||emps.indexOf(e)!==idx));if(idx<0&&dupEmp){toast('❌ PIN นี้ถูกใช้งานแล้ว กรุณาเลือก PIN ใหม่');return;}
     const emp=idx>=0?{...emps[idx]}:{av:Math.floor(Math.random()*8)};
     emp.name=name;emp.dept=md;emp.mainDept=md;
     if(s1)emp.sub1=s1;else delete emp.sub1;
