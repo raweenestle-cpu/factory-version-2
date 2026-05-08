@@ -3220,7 +3220,7 @@ const SCHED={
             }
             const timeStr=w.ot?`${displayStart}-${displayEnd}`:'';
             return`<span class="wc ${w.ot?'ot':''} ${sg?'sg':''}" onclick="if(S.user?.isAdmin||S.user?.emp?.name==='${ne}')SCHED.openW('${ne}','${dept}',${di},'${sh}')">
-              <span style="font-size:11px;font-weight:800">${w.name}</span>
+              <span style="font-size:11px;font-weight:800;color:${w.leaveStatus==='approved'?'var(--green2)':w.leaveStatus==='pending'?'var(--amber)':w.sub?'#F59E0B':'inherit'}">${w.name}${w.leaveStatus==='approved'?'🌿':w.leaveStatus==='pending'?'⏳':''}</span>
               ${w.ot?`<span style="display:block;font-size:9px;color:var(--amber);font-weight:700">${timeStr}</span>`:''} 
               ${sg?'✅':(w.ot?'✍️':'')}
             </span>`;
@@ -4316,4 +4316,53 @@ function forceSync(){
 
     <!-- Content -->
     <div id="leave-list" style="flex:1;overflow-y:auto;padding:12px 14px"></div>    setTimeout(function(){try{SCHED.render();DASH.render();PLAN.render();EMP.render();}catch(e){}},2000);
+      const wk2=wKey(S.wkStart);
+      allSched2[wk2]={};
+      const sched2=allSched2[wk2];
+      const procDepts=D.getDepts('proc').filter(d=>d!==AL);
+      const leaveData2=D.getLeave();
+      const teamShifts=TEAM.getCurShifts();
+      const shMap={morning:'morning',afternoon:'afternoon',night:'night'};
+      const hasTeam=procEmps.some(e=>e.team);
+      if(!hasTeam){doneLoad(false,'ยังไม่ได้กำหนดทีม');alert2('⚠️ กรุณาไปที่หน้า 🔄 ทีม แล้วกำหนดทีม A/B/C ให้พนักงานก่อนครับ','❌');return;}
+
+      // init sched structure
+      procDepts.forEach(dept=>{
+        sched2[dept]={};
+        for(let di=0;di<6;di++) sched2[dept][di]={morning:[],afternoon:[],night:[]};
+      });
+      if(!sched2[AL])sched2[AL]={};
+      for(let di=0;di<6;di++){
+        if(!sched2[AL][di])sched2[AL][di]={morning:[],afternoon:[],night:[]};
+      }
+
+      // โหลดคนตามทีม — ไม่มี OT อัตโนมัติ
+      for(let di=0;di<6;di++){
+        const d2=new Date(S.wkStart);d2.setDate(S.wkStart.getDate()+di);
+        const dk=d2.getFullYear()+'-'+String(d2.getMonth()+1).padStart(2,'0')+'-'+String(d2.getDate()).padStart(2,'0');
+        const leaveToday=leaveData2[dk]||[];
+        const leavePending=(D.getLeave('pending')||{})[dk]||[];
+
+        procEmps.forEach(e=>{
+          const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
+          const dept=e.mainDept||procDepts[0];
+          if(!sched2[dept])return;
+
+          const isLeaveApproved=leaveToday.includes(e.name);
+          const isLeavePending=leavePending.includes(e.name);
+
+          if(isLeaveApproved){
+            // อนุมัติแล้ว → AL สีเขียว
+            sched2[AL][di][sh].push({name:e.name,ot:false,leaveStatus:'approved'});
+          } else if(isLeavePending){
+            // รออนุมัติ → AL สีส้ม แต่ยังทำงานได้
+            sched2[AL][di][sh].push({name:e.name,ot:false,leaveStatus:'pending'});
+            sched2[dept][di][sh].push({name:e.name,ot:false,leaveStatus:'pending'});
+          } else {
+            // ปกติ → ใส่กะตามทีม
+            sched2[dept][di][sh].push({name:e.name,ot:false});
+          }
+        });
+      }
+
 
