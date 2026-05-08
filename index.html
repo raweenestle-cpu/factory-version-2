@@ -2341,7 +2341,7 @@ const PLAN={
             const deptAfPre=byShift.afternoon.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
             deptAfPre.forEach(e=>{
               if(preOTCount>=shortfall)return;
-              sched2[dept][di].morning.push({name:e.name,ot:true,otHrs:4,otBefore:true,av:e.av||0});
+              sched2[dept][di].morning.push({name:e.name,ot:false,av:e.av||0});
               morningAssigned.push(e);preOTFromAfternoon.add(e.name);
               usedEmps.add(e.name);preOTCount++;
             });
