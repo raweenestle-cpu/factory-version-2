@@ -2262,7 +2262,7 @@ const PLAN={
           if((leaveData2[e.name]||[]).includes(dk)){
             const empSh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
             if(!sched2[AL][di][empSh].find(w=>w.name===e.name))
-              sched2[AL][di][empSh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
+              sched2[AL][di][empSh].push({name:e.name,ot:false,av:e.av||0,isLeave:true});
           }
         });
 
@@ -2313,7 +2313,7 @@ const PLAN={
           const deptNight=nightPool.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptNight.forEach(e=>{
             if(nightAssigned.length<nightPpl){
-              sched2[dept][di].night.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+              sched2[dept][di].night.push({name:e.name,ot:false,av:e.av||0});
               nightAssigned.push(e);usedEmps.add(e.name);
             }
           });
@@ -2326,7 +2326,7 @@ const PLAN={
           const deptMorn=morningPool.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptMorn.forEach(e=>{
             if(morningAssigned.length<morningPpl&&!usedEmps.has(e.name)){
-              sched2[dept][di].morning.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+              sched2[dept][di].morning.push({name:e.name,ot:false,av:e.av||0});
               morningAssigned.push(e);usedEmps.add(e.name);
             }
           });
@@ -2353,7 +2353,7 @@ const PLAN={
         nonOreoDepts.forEach(dept=>{
           const deptAfter=byShift.afternoon.filter(e=>effectiveDept(e)===dept&&!usedEmps.has(e.name));
           deptAfter.forEach(e=>{
-            sched2[dept][di].afternoon.push({name:e.name,ot:false,otHrs:4,av:e.av||0});
+            sched2[dept][di].afternoon.push({name:e.name,ot:false,av:e.av||0});
             afternoonAssigned.push(e);usedEmps.add(e.name);
           });
         });
@@ -2370,7 +2370,7 @@ const PLAN={
             // ถ้าหาจาก byShift ของกะนั้นได้ → assign ปกติ ไม่มี OT
             if([...oreoMain,...oreoSub][0]){
               const oreo=[...oreoMain,...oreoSub][0];
-              sched2['Oreo Coating'][di][sh].push({name:oreo.name,ot:false,otHrs:4,av:oreo.av||0,
+              sched2['Oreo Coating'][di][sh].push({name:oreo.name,ot:false,av:oreo.av||0,
                 isSub:!oreoMain.find(m=>m.name===oreo.name)});
               usedEmps.add(oreo.name);
               oreoUsed.add(oreo.name);
@@ -2393,7 +2393,7 @@ const PLAN={
                       sched2[d][di][sh]=sched2[d][di][sh].filter(function(w){return w.name!==fallback.name;});
                     }
                   });
-                  sched2['Oreo Coating'][di][sh].push({name:fallback.name,ot:false,otHrs:4,av:fallback.av||0,isSub:true});
+                  sched2['Oreo Coating'][di][sh].push({name:fallback.name,ot:false,av:fallback.av||0,isSub:true});
                   oreoUsed.add(fallback.name);
                   usedEmps.add(fallback.name); // ป้องกันถูก assign ซ้ำอีก
                 }
@@ -2464,7 +2464,7 @@ const PLAN={
             });
             if(subForOreo){
               if(!sched2['Oreo Coating'][di2])sched2['Oreo Coating'][di2]={morning:[],afternoon:[],night:[]};
-              sched2['Oreo Coating'][di2][sh2].push({name:subForOreo.name,ot:false,otHrs:4,av:subForOreo.av||0,isSub:true});
+              sched2['Oreo Coating'][di2][sh2].push({name:subForOreo.name,ot:false,av:subForOreo.av||0,isSub:true});
             }
           });
         });
@@ -2518,7 +2518,7 @@ const PLAN={
         if((leaveData[e.name]||[]).includes(dk)){
           const sh=e.lockShift||(e.team?shMap[teamShifts[e.team]]:null)||'morning';
           if(!sched[AL][di][sh].find(w=>w.name===e.name))
-            sched[AL][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,isLeave:true});
+            sched[AL][di][sh].push({name:e.name,ot:false,av:e.av||0,isLeave:true});
         }
       });
 
@@ -2563,7 +2563,8 @@ const PLAN={
           let assigned=0;
           pool.forEach(e=>{
             if(assigned>=need)return;
-            sched[dept][di][sh].push({name:e.name,ot:false,otHrs:4,av:e.av||0,
+            if(usedEmps.has(e.name))return;
+            sched[dept][di][sh].push({name:e.name,ot:false,av:e.av||0,
               isSub:!mainPool.find(m=>m.name===e.name)});
             usedEmps.add(e.name);
             assigned++;
